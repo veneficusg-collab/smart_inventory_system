@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Form, Button, Container, Row, Col } from "react-bootstrap";
 import Image from "react-bootstrap/Image";
+import logo from "../logo.png"
 
 const LoginForm = () => {
   const [showPassword, setShowPassword] = useState(false);
@@ -16,8 +17,16 @@ const LoginForm = () => {
     <Container fluid className="min-vh-100 d-flex align-items-center">
       <Row className="w-100">
         {/* Empty left column to push form to the right */}
-        <Col lg={6} className=" bg-white d-flex justify-content-center align-items-center" style={{ minHeight: "100vh" }}>
-        <Image src="/logo192.png" className="bg-primary " style={{ width: "300px"}}></Image>
+        <Col
+          lg={6}
+          className="  d-flex justify-content-center align-items-center"
+          style={{ minHeight: "100vh" }}
+        >
+          <Image
+            src={logo}
+            className=" "
+            style={{ width: "300px" }}
+          ></Image>
         </Col>
 
         {/* Right column with form */}
@@ -25,9 +34,20 @@ const LoginForm = () => {
           xs={12}
           lg={6}
           className="d-flex align-items-center justify-content-center"
-          style={{backgroundColor:"green"}}
+          style={{}}
         >
-          <div className="w-100" style={{ maxWidth: "400px", backgroundColor:"black"}}>
+          <div
+            className="w-100"
+            style={{ maxWidth: "400px", backgroundColor: "" }}
+          >
+            <div className="text-center">
+              <Image
+                src={logo}
+                className=" "
+                style={{ width: "50px" }}
+              ></Image>
+            </div>
+
             <div className="text-center mb-4">
               <h2>Log in to your account</h2>
               <p>Welcome back! Please enter your details.</p>
@@ -55,18 +75,17 @@ const LoginForm = () => {
                   required
                 />
               </Form.Group>
-
-              <Form.Group className="mb-3" controlId="showPassword">
-                <Form.Check
-                  type="checkbox"
-                  label="Show Password"
-                  checked={showPassword}
-                  onChange={(e) => setShowPassword(e.target.checked)}
-                />
-              </Form.Group>
-
               <div className="d-flex justify-content-between mb-3">
-                <Button variant="link" size="sm">
+                <Form.Group className="" controlId="showPassword">
+                  <Form.Check
+                    type="checkbox"
+                    label="Show Password"
+                    checked={showPassword}
+                    onChange={(e) => setShowPassword(e.target.checked)}
+                  />
+                </Form.Group>
+
+                <Button variant="link" size="sm" style={{marginTop:"-3px"}}>
                   Forgot password?
                 </Button>
               </div>

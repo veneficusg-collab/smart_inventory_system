@@ -6,9 +6,8 @@ import Col from "react-bootstrap/Col";
 
 const Login = () => {
   return (
-    <Container className="bg-danger " fluid>
+    <Container className="" fluid>
           <LoginForm />
-
     </Container>
   );
 };
