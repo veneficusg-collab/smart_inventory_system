@@ -13,6 +13,9 @@ import AdminDashboard from "../components/Admin-Dashboard";
 import OverallInventory from "../components/overall-inventory";
 import Product from "../components/product-table";
 import Inventory from "../components/Inventory";
+import Reports from "../components/Report";
+import ManageStaff from "../components/Manage-Staff";
+import StaffInfo from "../components/staff-info";
 
 const Dashboard = () => {
   return (
@@ -25,7 +28,10 @@ const Dashboard = () => {
           <Header />
 
             {/* <AdminDashboard /> */}
-           <Inventory />
+           {/* <Inventory /> */}
+           {/* <Reports /> */}
+           {/* <ManageStaff /> */}
+           <StaffInfo />
 
         </Col>
       </Row>
