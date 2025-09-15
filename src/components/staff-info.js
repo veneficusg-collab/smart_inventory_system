@@ -3,12 +3,20 @@ import { Row, Col, Container, Form } from "react-bootstrap";
 import Button from "react-bootstrap/Button";
 import { User, Upload } from "lucide-react";
 import { IoCloseOutline } from "react-icons/io5";
+import { QRCodeSVG } from "qrcode.react";
 
-const StaffInfo = () => {
+const StaffInfo = ({ staffId, setRender }) => {
   const [image, setImage] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
   const [isDragOver, setIsDragOver] = useState(false);
   const fileInputRef = useRef(null);
+  const qrRef = useRef(null);
+  const id = "MIKE ANDRE";
+
+  const [staffName, setStaffName] = useState("");
+  const [position, setPosition] = useState("");
+  const [contactNumber, setContactNumber] = useState("");
+  const [emailAddress, setEmailAddress] = useState("");
 
   const handleImageChange = (file) => {
     if (file && file.type.startsWith("image/")) {
@@ -55,8 +63,27 @@ const StaffInfo = () => {
     }
   };
 
+  const downloadQRCode = () => {
+    const svg = qrRef.current?.querySelector("svg");
+    if (!svg) return;
+
+    const serializer = new XMLSerializer();
+    const svgString = serializer.serializeToString(svg);
+    const blob = new Blob([svgString], { type: "image/svg+xml;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `QRCode_${id}.svg`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
   return (
-    <Container className="bg-white m-4 rounded" style={{ width: "140vh" }}>
+    <Container
+      className="bg-white m-4 rounded"
+      style={{ width: "140vh", height: "86vh" }}
+    >
       <span
         className="mx-1 mt-3 d-inline-block"
         style={{ fontSize: "20px", fontWeight: "bold" }}
@@ -123,36 +150,6 @@ const StaffInfo = () => {
                   )}
                 </div>
 
-                {/* Drag and Drop Area */}
-                <div
-                  className={`border rounded p-4 text-center flex-fill ${
-                    isDragOver
-                      ? "border-primary bg-light"
-                      : "border-secondary border-dashed"
-                  }`}
-                  style={{
-                    maxWidth: "300px",
-                    cursor: "pointer",
-                    transition: "all 0.3s ease",
-                    minHeight: "120px",
-                    display: "flex",
-                    flexDirection: "column",
-                    justifyContent: "center",
-                  }}
-                  onDragOver={handleDragOver}
-                  onDragLeave={handleDragLeave}
-                  onDrop={handleDrop}
-                  onClick={handleClickUpload}
-                >
-                  <Upload size={24} className="text-secondary mb-2 mx-auto" />
-                  <p className="mb-1 text-secondary">
-                    <strong>Click to upload</strong> or drag and drop
-                  </p>
-                  <p className="small text-muted mb-0">
-                    PNG, JPG, GIF up to 10MB
-                  </p>
-                </div>
-
                 {/* Hidden File Input */}
                 <input
                   ref={fileInputRef}
@@ -170,11 +167,19 @@ const StaffInfo = () => {
                 required
                 type="text"
                 placeholder="Enter staff name"
+                input={id}
+                onChange
+                disabled
               />
             </Form.Group>
             <Form.Group className="mb-3">
               <Form.Label>Position</Form.Label>
-              <Form.Control required type="text" placeholder="Enter position" />
+              <Form.Control
+                required
+                type="text"
+                placeholder="Enter position"
+                disabled
+              />
             </Form.Group>
             <Form.Group className="mb-3">
               <Form.Label>Contact Number</Form.Label>
@@ -182,6 +187,7 @@ const StaffInfo = () => {
                 required
                 type="tel"
                 placeholder="Enter contact number"
+                disabled
               />
             </Form.Group>
             <Form.Group className="mb-3">
@@ -190,29 +196,29 @@ const StaffInfo = () => {
                 required
                 type="email"
                 placeholder="Enter email address"
-              />
-            </Form.Group>
-            <Form.Group className="mb-3">
-              <Form.Label>Password</Form.Label>
-              <Form.Control
-                required
-                type="password"
-                placeholder="Enter password"
+                disabled
               />
             </Form.Group>
           </Form>
         </Col>
-        <Col md={6}></Col>
-      </Row>
-      <Row>
-        <Col className="text-center">
-          <div className="d-flex justify-content-end gap-3 mb-3">
-            <Button variant="danger">Delete</Button>
-            <Button variant="secondary">Edit</Button>
-            <Button variant="primary">Save</Button>
-          </div>
+        <Col
+          md={6}
+          className="d-flex flex-column justify-content-center align-items-center gap-3"
+          style={{ minHeight: "400px" }}
+          ref={qrRef}
+        >
+          <QRCodeSVG value={id} size={128} />
+          <Button variant="primary" onClick={downloadQRCode} className="my-5">
+            Download QR Code
+          </Button>
         </Col>
       </Row>
+      <Row></Row>
+      <div className="mt-auto mb-3 me-3 d-flex gap-3 justify-content-end">
+    <Button variant="danger">Delete</Button>
+    <Button variant="secondary">Edit</Button>
+    <Button variant="primary">Save</Button>
+  </div>
     </Container>
   );
 };

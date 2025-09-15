@@ -1,20 +1,45 @@
 import { useState } from "react";
 import { Form, Button, Container, Row, Col } from "react-bootstrap";
 import Image from "react-bootstrap/Image";
-import logo from "../logo.png"
+import logo from "../logo.png";
+import { supabase } from "../supabaseClient";
+import { useNavigate } from "react-router-dom";
+import QrScanner from "./qr-scanner";
+
 
 const LoginForm = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [scannedValue, setScannedValue] = useState("");
+  const navigate = useNavigate();
 
-  const handleSubmit = (e) => {
+  const [qrModal, setQrModal] = useState(false);
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
+
     console.log("Login attempt:", { email, password });
+
+    let { data, error } = await supabase.auth.signInWithPassword({
+      email: email,
+      password: password,
+    });
+    if (error) {
+      console.log(error);
+    } else {
+      navigate("/dashboard");
+    }
   };
 
   return (
     <Container fluid className="min-vh-100 d-flex align-items-center">
+ 
+        <QrScanner
+          show={qrModal}
+          onHide={() => setQrModal(false)}
+          onScan={(value) => setScannedValue(value)}
+        />
       <Row className="w-100">
         {/* Empty left column to push form to the right */}
         <Col
@@ -22,11 +47,7 @@ const LoginForm = () => {
           className="  d-flex justify-content-center align-items-center"
           style={{ minHeight: "100vh" }}
         >
-          <Image
-            src={logo}
-            className=" "
-            style={{ width: "300px" }}
-          ></Image>
+          <Image src={logo} className=" " style={{ width: "300px" }}></Image>
         </Col>
 
         {/* Right column with form */}
@@ -41,11 +62,7 @@ const LoginForm = () => {
             style={{ maxWidth: "400px", backgroundColor: "" }}
           >
             <div className="text-center">
-              <Image
-                src={logo}
-                className=" "
-                style={{ width: "50px" }}
-              ></Image>
+              <Image src={logo} className=" " style={{ width: "50px" }}></Image>
             </div>
 
             <div className="text-center mb-4">
@@ -85,7 +102,7 @@ const LoginForm = () => {
                   />
                 </Form.Group>
 
-                <Button variant="link" size="sm" style={{marginTop:"-3px"}}>
+                <Button variant="link" size="sm" style={{ marginTop: "-3px" }}>
                   Forgot password?
                 </Button>
               </div>
@@ -98,6 +115,7 @@ const LoginForm = () => {
                 variant="outline-secondary"
                 type="button"
                 className="w-100 mb-3"
+                onClick={() => setQrModal(true)}
               >
                 Sign in using QR code
               </Button>
