@@ -10,12 +10,14 @@ import "@fontsource/roboto/700.css";
 
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import ProtectedRoute from "./auth/protected-route";
+import StaffRestock from "./components/Staff-restock";
 
 function App() {
   return (
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<Login />} />
+        <Route path="/test" element={<StaffRestock />} />
         <Route
           path="/dashboard"
           element={

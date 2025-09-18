@@ -10,10 +10,10 @@ import { Link } from "@mui/material";
 import { ClipboardClock, Logs } from "lucide-react";
 import { supabase } from "../supabaseClient";
 
-const Sidebar = ({ setRender }) => {
+const Sidebar = ({ setRender, staffRole }) => {
   const handleLogout = async () => {
     let { error } = await supabase.auth.signOut();
-    if(error){
+    if (error) {
       console.log(error);
     }
   };
@@ -47,64 +47,102 @@ const Sidebar = ({ setRender }) => {
           className="text-start"
           style={{ fontWeight: "300", marginLeft: "10px" }}
         >
-          <Link
-            underline="hover"
-            color="inherit"
-            component="button"
-            onClick={() => setRender("AdminDashboard")}
-          >
-            <div className="d-flex align-items-center my-3">
-              <CiHome />
-              <span className="mx-3">Dashboard</span>
-            </div>
-          </Link>
+          {(staffRole === "Admin" || staffRole === "super_admin") ? (
+            <>
+              <Link
+                underline="hover"
+                color="inherit"
+                component="button"
+                onClick={() => setRender("AdminDashboard")}
+              >
+                <div className="d-flex align-items-center my-3">
+                  <CiHome />
+                  <span className="mx-3">Dashboard</span>
+                </div>
+              </Link>
 
-          <Link
-            underline="hover"
-            color="inherit"
-            component="button"
-            onClick={() => setRender("Inventory")}
-          >
-            <div className="d-flex align-items-center my-3">
-              <MdInventory2 />
-              <span className="mx-3">Inventory</span>
-            </div>
-          </Link>
+              <Link
+                underline="hover"
+                color="inherit"
+                component="button"
+                onClick={() => setRender("Inventory")}
+              >
+                <div className="d-flex align-items-center my-3">
+                  <MdInventory2 />
+                  <span className="mx-3">Inventory</span>
+                </div>
+              </Link>
 
-          <Link
-            underline="hover"
-            color="inherit"
-            component="button"
-            onClick={() => setRender("Reports")}
-          >
-            <div className="d-flex align-items-center my-3">
-              <IoIosStats />
-              <span className="mx-3">Reports</span>
-            </div>
-          </Link>
+              <Link
+                underline="hover"
+                color="inherit"
+                component="button"
+                onClick={() => setRender("Reports")}
+              >
+                <div className="d-flex align-items-center my-3">
+                  <IoIosStats />
+                  <span className="mx-3">Reports</span>
+                </div>
+              </Link>
 
-          <Link
-            underline="hover"
-            color="inherit"
-            component="button"
-            onClick={() => setRender("ManageStaff")}
-          >
-            <div className="d-flex align-items-center my-3">
-              <MdManageAccounts />
-              <span className="mx-3">Manage Staff</span>
-            </div>
-          </Link>
-          <Link
-            underline="hover"
-            color="inherit"
-            component="button"
-            onClick={() => setRender("Logs")}
-          >
-            <div className="d-flex align-items-center my-3">
-              <ClipboardClock style={{ width: "16px" }} />
-              <span className="mx-3">Logs</span>
-            </div>
-          </Link>
+              <Link
+                underline="hover"
+                color="inherit"
+                component="button"
+                onClick={() => setRender("ManageStaff")}
+              >
+                <div className="d-flex align-items-center my-3">
+                  <MdManageAccounts />
+                  <span className="mx-3">Manage Staff</span>
+                </div>
+              </Link>
+
+              <Link
+                underline="hover"
+                color="inherit"
+                component="button"
+                onClick={() => setRender("Logs")}
+              >
+                <div className="d-flex align-items-center my-3">
+                  <ClipboardClock style={{ width: "16px" }} />
+                  <span className="mx-3">Logs</span>
+                </div>
+              </Link>
+            </>
+          ) : (
+            // ✅ Staff role = only Logs
+            <>
+              {/* Middle section */}
+              <div
+                className="d-flex flex-column" // 🔹 makes children stack vertically
+                style={{ marginLeft: "10px"   }}
+              >
+               
+                <Link
+                  underline="hover"
+                  color="inherit"
+                  component="button"
+                  onClick={() => setRender("StaffDashboard")}
+                >
+                  <div className="d-flex align-items-center my-2">
+                    <ClipboardClock style={{ width: "16px" }} />
+                    <span className="mx-3">Dashboard</span>
+                  </div>
+                </Link>
+                 <Link
+                  underline="hover"
+                  color="inherit"
+                  component="button"
+                  onClick={() => setRender("Logs")}
+                >
+                  <div className="d-flex align-items-center my-2">
+                    <ClipboardClock style={{ width: "16px" }} />
+                    <span className="mx-3">Logs</span>
+                  </div>
+                </Link>
+              </div>
+            </>
+          )}
         </div>
       </div>
 
@@ -113,10 +151,6 @@ const Sidebar = ({ setRender }) => {
         className="text-start"
         style={{ fontWeight: "300", marginLeft: "10px" }}
       >
-        <div className="d-flex align-items-center my-3">
-          <FiSettings />
-          <span className="mx-3">Settings</span>
-        </div>
         <Link
           underline="hover"
           color="inherit"

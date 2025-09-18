@@ -1,46 +1,84 @@
+import { useEffect, useState } from "react";
 import { Container } from "react-bootstrap";
 import { LineChart } from "@mui/x-charts";
+import { supabase } from "../supabaseClient";
+
 const StockCharts = () => {
+  const [restockData, setRestockData] = useState(Array(12).fill(0));
+  const [unstockData, setUnstockData] = useState(Array(12).fill(0));
+
   const months = [
-    "Jan",
-    "Feb",
-    "Mar",
-    "Apr",
-    "May",
-    "Jun",
-    "Jul",
-    "Aug",
-    "Sep",
-    "Oct",
-    "Nov",
-    "Dec",
+    "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
   ];
+
+  useEffect(() => {
+    const fetchLogs = async () => {
+      const { data, error } = await supabase.from("logs").select("*");
+      if (error) {
+        console.error("Error fetching logs:", error);
+        return;
+      }
+
+      // Arrays for monthly totals
+      const restock = Array(12).fill(0);
+      const unstock = Array(12).fill(0);
+
+      data.forEach((log) => {
+        if (!log.created_at) return;
+
+        const date = new Date(log.created_at);
+        const monthIndex = date.getMonth(); // 0 = Jan, 11 = Dec
+
+        if (log.product_action === "Restock") {
+          restock[monthIndex] += log.product_quantity || 0;
+        } else if (log.product_action === "Unstock") {
+          unstock[monthIndex] += log.product_quantity || 0;
+        }
+      });
+
+      setRestockData(restock);
+      setUnstockData(unstock);
+    };
+
+    fetchLogs();
+  }, []);
+
   return (
-    <Container className="bg-white mx-2 my-3 rounded p-0" style={{width:"1230px"}}>
-       <LineChart
-      xAxis={[{ 
-        data: months,
-        scaleType: 'point', // Use 'point' for categorical data like months
-      }]}
-      series={[
-        {
-          data: [150, 180, 220, 190, 250, 280, 320, 290, 310, 280, 260, 300],
-          label: 'Stock in',
-          valueFormatter: (value) => (value == null ? 'No data' : `${value} units`),
-        },
-        {
-          data: [80, 95, 110, 105, 130, 145, 160, 155, 170, 165, 140, 175],
-          label: 'Stock out',
-          valueFormatter: (value) => (value == null ? 'No data' : `${value} units`),
-        },
-      ]}
-      height={300}
-      width={1200}
-      margin={{ left: 10, bottom: 50, top: 20, right: 10 }}
-      yAxis={[{
-        label: 'Number of Stocks'
-      }]}
-    />
+    <Container
+      className="bg-white mx-2 my-3 rounded p-0"
+      style={{ width: "1230px" }}
+    >
+      <LineChart
+        xAxis={[
+          {
+            data: months,
+            scaleType: "point",
+          },
+        ]}
+        series={[
+          {
+            data: restockData,
+            label: "Restock",
+            valueFormatter: (value) =>
+              value == null ? "No data" : `${value} units`,
+          },
+          {
+            data: unstockData,
+            label: "Unstock",
+            valueFormatter: (value) =>
+              value == null ? "No data" : `${value} units`,
+          },
+        ]}
+        height={300}
+        width={1200}
+        margin={{ left: 10, bottom: 50, top: 20, right: 10 }}
+        yAxis={[
+          {
+            label: "Number of Stocks",
+          },
+        ]}
+      />
     </Container>
   );
 };

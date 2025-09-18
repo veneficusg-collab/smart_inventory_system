@@ -1,19 +1,19 @@
-import Link from "@mui/material/Link";
 import { Col, Container, Row } from "react-bootstrap";
-import TopSellingProducts from "./top-selling";
-import LowSellingProducts from "./low-selling";
+import TopRestockProducts from "./top-restock";
 import StockCharts from "./stock-charts";
-import LogComponent from "./log-component";
+import TopUnstockProducts from "./top-unstock";
+import TopUnstockCategories from "./top-unstock-category";
+import TopRestockCategories from "./top-restock-category";
 
 const Reports = () => {
   return (
     <Container className="">
-      <Row>
+      <Row> 
         <Col md={6}>
-            <TopSellingProducts />
+            <TopRestockProducts />
         </Col>
         <Col md={6}>
-            <LowSellingProducts />
+            <TopUnstockProducts />
         </Col>
       </Row>
       <Row>
@@ -22,8 +22,11 @@ const Reports = () => {
         </Col>
       </Row>
       <Row>
-        <Col>
-            <LogComponent />
+        <Col md={6}>
+            <TopRestockCategories />
+        </Col>
+        <Col md={6}>
+            <TopUnstockCategories />
         </Col>
       </Row>
     </Container>

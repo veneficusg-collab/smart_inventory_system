@@ -6,15 +6,11 @@ import { supabase } from "../supabaseClient";
 import { useNavigate } from "react-router-dom";
 import QrScanner from "./qr-scanner";
 
-
 const LoginForm = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [scannedValue, setScannedValue] = useState("");
   const navigate = useNavigate();
-
-  const [qrModal, setQrModal] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -32,14 +28,10 @@ const LoginForm = () => {
     }
   };
 
+
   return (
     <Container fluid className="min-vh-100 d-flex align-items-center">
- 
-        <QrScanner
-          show={qrModal}
-          onHide={() => setQrModal(false)}
-          onScan={(value) => setScannedValue(value)}
-        />
+
       <Row className="w-100">
         {/* Empty left column to push form to the right */}
         <Col
@@ -110,21 +102,6 @@ const LoginForm = () => {
               <Button variant="primary" type="submit" className="w-100 mb-2">
                 Sign in
               </Button>
-
-              <Button
-                variant="outline-secondary"
-                type="button"
-                className="w-100 mb-3"
-                onClick={() => setQrModal(true)}
-              >
-                Sign in using QR code
-              </Button>
-
-              <div className="text-center">
-                <Button variant="link" size="sm">
-                  Log in as Staff
-                </Button>
-              </div>
             </Form>
           </div>
         </Col>

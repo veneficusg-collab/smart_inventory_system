@@ -1,7 +1,12 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Modal, Button } from "react-bootstrap";
 import { BrowserQRCodeReader } from "@zxing/browser";
-import { NotFoundException } from "@zxing/library"; // ✅ add this
+import {
+  NotFoundException,
+  ChecksumException,
+  FormatException,
+} from "@zxing/library";
+// ✅ add this
 import { useNavigate } from "react-router-dom";
 import { Alert } from "react-bootstrap";
 
@@ -24,20 +29,26 @@ const QrScanner = ({ show, onHide, onScan }) => {
           if (result) {
             const text = result.getText();
             setQrResult(text);
-            if (onScan) onScan(text); // send QR result back to parent
-            setSuccess("Logged in Successfully!");
-            setTimeout(()=>{
-                navigate("/dashboard");
-            },2000);
+            console.log("✅ QR Scanned:", text);
+            if (onScan) onScan(text);
+
+            // ✅ stop scanner and close modal after success
+            if (controls) controls.stop();
+            if (onHide) onHide();
           }
-          if (err && !(err instanceof NotFoundException)) {
+
+          if (
+            err &&
+            !(err instanceof NotFoundException) &&
+            !(err instanceof ChecksumException) &&
+            !(err instanceof FormatException)
+          ) {
             console.error("QR scan error:", err);
           }
         }
       );
     }
 
-    // cleanup on close
     return () => {
       if (controls) controls.stop();
     };

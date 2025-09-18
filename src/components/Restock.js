@@ -28,6 +28,7 @@ const Restock = ({ setRender, Id }) => {
   const [expiryDate, setExpiryDate] = useState("");
   const [result, onResult] = useState("");
   const [imgUrl, setImgURL] = useState("");
+  const [inputExpiryDate, setInputExpiryDate] = useState("");
   const [expiryDates, setExpiryDates] = useState([]); // now holds objects
 
   const videoRef = useRef(null);
@@ -36,6 +37,10 @@ const Restock = ({ setRender, Id }) => {
   useEffect(() => {
     fetchProduct();
   }, []);
+
+  const toDateString = (date) => {
+    return new Date(date).toISOString().split("T")[0]; // "yyyy-mm-dd"
+  };
 
   const fetchProduct = async () => {
     const { data, error } = await supabase
@@ -77,6 +82,7 @@ const Restock = ({ setRender, Id }) => {
     setSuccess("");
 
     try {
+      // ✅ Get logged in user
       const {
         data: { user },
       } = await supabase.auth.getUser();
@@ -90,55 +96,110 @@ const Restock = ({ setRender, Id }) => {
 
       const staffName = staffData?.[0]?.staff_name || "Unknown";
 
-      // Convert to numbers
-      const qtyToAdd = parseInt(quantity);
-      const currQty = parseInt(currentQuantity) || 0;
-
+      // ✅ Convert input to numbers
+      const qtyToAdd = parseInt(quantity, 10);
       if (isNaN(qtyToAdd) || qtyToAdd <= 0) {
         throw new Error("Enter a valid quantity to restock.");
       }
 
-      const newQuantity = currQty + qtyToAdd;
-
-      const { data, error } = await supabase
+      // ✅ 1. Check if product + expiry already exists
+      const { data: products, error: fetchError } = await supabase
         .from("products")
-        .update({ product_quantity: newQuantity })
+        .select("*")
         .eq("product_ID", productId)
-        .eq("product_expiry", expiryDate)
-        .select();
+        .eq("product_expiry", inputExpiryDate);
 
-      if (error) throw error;
+      if (fetchError) throw fetchError;
 
-      const updatedProduct = data[0]; // 👈 first updated row
+      if (products && products.length > 0) {
+        // ✅ Expiry exists → update quantity
+        const product = products[0];
+        const newQuantity = parseInt(product.product_quantity, 10) + qtyToAdd;
 
-      const { data: logs, error: errorLogs } = await supabase
-        .from("logs")
-        .insert([
+        const { data: updated, error: updateError } = await supabase
+          .from("products")
+          .update({ product_quantity: newQuantity })
+          .eq("product_ID", product.product_ID)
+          .eq("product_expiry", inputExpiryDate)
+          .select();
+
+        if (updateError) throw updateError;
+
+        // ✅ Insert log
+        await supabase.from("logs").insert([
           {
-            product_id: updatedProduct.product_ID,
-            product_name: updatedProduct.product_name,
-            product_quantity: qtyToAdd,
-            product_category: updatedProduct.product_category,
-            product_unit: updatedProduct.product_unit,
-            product_expiry: updatedProduct.product_expiry,
-            product_action: "Restock",
+            product_id: product.product_ID,
+            product_name: product.product_name,
+            product_quantity: qtyToAdd, // log only what was added
+            product_category: product.product_category,
+            product_unit: product.product_unit,
+            product_expiry: inputExpiryDate,
             staff: staffName,
-            product_uuid:updatedProduct.id
+            product_action: "Restock",
+            product_uuid: product.id,
           },
-        ])
-        .select();
+        ]);
 
-      if (errorLogs) throw errorLogs;
+        setSuccess("Quantity updated successfully!");
+      } else {
+        // 🚀 Expiry not found → insert new row
+        const { data: baseProduct, error: baseError } = await supabase
+          .from("products")
+          .select("*")
+          .eq("product_ID", productId)
+          .limit(1)
+          .single();
 
-      setSuccess("Product restocked successfully!");
-      setCurrentQuantity(newQuantity);
+        if (baseError) throw baseError;
+
+        const { data: inserted, error: insertError } = await supabase
+          .from("products")
+          .insert([
+            {
+              product_ID: baseProduct.product_ID,
+              product_name: baseProduct.product_name,
+              product_quantity: qtyToAdd,
+              product_expiry: inputExpiryDate,
+              product_category: baseProduct.product_category,
+              product_price: baseProduct.product_price,
+              product_unit: baseProduct.product_unit,
+              supplier_name: baseProduct.supplier_name,
+              supplier_number: baseProduct.supplier_number,
+              branch: baseProduct.branch,
+            },
+          ])
+          .select();
+
+        if (insertError) throw insertError;
+
+        const newProduct = inserted[0];
+
+        // ✅ Insert log
+        await supabase.from("logs").insert([
+          {
+            product_id: newProduct.product_ID,
+            product_name: newProduct.product_name,
+            product_quantity: qtyToAdd,
+            product_category: newProduct.product_category,
+            product_unit: newProduct.product_unit,
+            product_expiry: inputExpiryDate,
+            staff: staffName,
+            product_action: "Restock",
+            product_uuid: newProduct.id,
+          },
+        ]);
+
+        setSuccess("New expiry batch added successfully!");
+      }
+
+      // ✅ Clear inputs & redirect
       setQuantity(null);
-
       setTimeout(() => {
         setRender("products");
-      }, 3000);
+      }, 1500);
     } catch (err) {
-      setError(err.message);
+      console.error("Error in handleRestockButton:", err.message);
+      setError(err.message || "Something went wrong. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -323,6 +384,26 @@ const Restock = ({ setRender, Id }) => {
                   </Col>
                 </Form.Group>
 
+                <Form.Group
+                  as={Row}
+                  className="mb-3 mt-4"
+                  controlId="formExpiryDate"
+                >
+                  <Form.Label column sm={3} className="text-start">
+                    Expiry Date
+                  </Form.Label>
+                  <Col sm={9}>
+                    <Form.Control
+                      type="date"
+                      size="sm"
+                      value={inputExpiryDate}
+                      onChange={(e) =>
+                        setInputExpiryDate(toDateString(e.target.value))
+                      }
+                    />
+                  </Col>
+                </Form.Group>
+
                 <Form.Group as={Row} className="mb-3 mt-4" controlId="formUnit">
                   <Form.Label column sm={3} className="text-start">
                     Unit
@@ -364,7 +445,6 @@ const Restock = ({ setRender, Id }) => {
                           selected ? selected.product_quantity : null
                         );
                       }}
-                      required
                     >
                       <option value="" disabled>
                         Select expiry date

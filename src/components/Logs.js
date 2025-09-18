@@ -22,21 +22,45 @@ const Logs = () => {
 
   // State for pagination
   const [page, setPage] = useState(0);
-  const [rowsPerPage, setRowsPerPage] = useState(7);
+  const [rowsPerPage, setRowsPerPage] = useState(10);
 
   const fetchLogs = async () => {
     try {
       setLoading(true);
       setError("");
 
-      let { data, error } = await supabase.from("logs").select("*");
+      // ✅ Get the current logged-in user
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) throw new Error("No logged in user found");
 
-      if (error) throw error;
+      // ✅ Fetch staff details (name + role)
+      let { data: staffRows, error: staffError } = await supabase
+        .from("staff")
+        .select("staff_name, staff_position") // make sure you have a `role` column
+        .eq("id", user.id)
+        .single();
+
+      if (staffError) throw staffError;
+
+      let data;
+      if (staffRows.staff_position === "admin" || staffRows.staff_position === "super_admin") {
+        // ✅ Admin sees ALL logs
+        ({ data } = await supabase.from("logs").select("*"));
+      } else {
+        // ✅ Staff sees ONLY their logs
+        ({ data } = await supabase
+          .from("logs")
+          .select("*")
+          .eq("staff", staffRows.staff_name));
+      }
 
       setProducts(data || []);
     } catch (error) {
-      console.error("Error fetching products:", error);
-      setError("Failed to load products. Please try again.");
+      console.error("Error fetching logs:", error);
+      setError("Failed to load logs. Please try again.");
+      setProducts([]);
     } finally {
       setLoading(false);
     }
@@ -101,13 +125,12 @@ const Logs = () => {
             component={Paper}
             className="my-3"
             sx={{ maxHeight: "none" }}
-            style={{ height: "625px" }}
+            style={{ height: "585px" }}
           >
             <Table
-              stickyHeader  
+              stickyHeader
               sx={{ width: "100%" }}
               aria-label="products table"
-
             >
               <TableHead>
                 <TableRow>
@@ -149,17 +172,17 @@ const Logs = () => {
                             },
                           }}
                         >
-                            <TableCell component="th" scope="row">
+                          <TableCell component="th" scope="row">
                             {product.id}
                           </TableCell>
                           <TableCell component="th" scope="row">
                             {product.product_name}
                           </TableCell>
                           <TableCell align="left">
-                            {product.product_quantity}
+                            {product.product_category || "N/A"}
                           </TableCell>
                           <TableCell align="left">
-                            {product.product_category || "N/A"}
+                            {product.product_quantity}
                           </TableCell>
                           <TableCell align="left">
                             {product.product_unit || "N/A"}
@@ -167,14 +190,12 @@ const Logs = () => {
                           <TableCell align="left">
                             {formatDate(product.product_expiry)}
                           </TableCell>
-                           <TableCell align="left">
+                          <TableCell align="left">
                             {product.staff || "N/A"}
                           </TableCell>
                           <TableCell align="left">
                             {product.product_action || "N/A"}
                           </TableCell>
-                          
-                          
                         </TableRow>
                       );
                     })

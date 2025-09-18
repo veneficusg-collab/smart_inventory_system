@@ -16,23 +16,32 @@ import TableHead from "@mui/material/TableHead";
 import TableRow from "@mui/material/TableRow";
 import Paper from "@mui/material/Paper";
 import TablePagination from "@mui/material/TablePagination";
-import { CircularProgress, Alert } from "@mui/material"; // keep these for loader + error
+import { CircularProgress, Alert } from "@mui/material";
 import { supabase } from "../supabaseClient";
 import OverallInventory from "./overall-inventory";
-import ProductInfo from "./Product-Info";
 import { IoMdRefresh } from "react-icons/io";
 import { LuScanBarcode } from "react-icons/lu";
+import { IoIosSearch } from "react-icons/io";
 import BarcodeModal from "./barcode-modal";
+import { IoSearch } from "react-icons/io5";
 
 const Products = ({ setRender, setProduct, setID }) => {
   const [products, setProducts] = useState([]);
+  const [filteredProducts, setFilteredProducts] = useState([]);
   const [productId, setProductId] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [buttonState, setButtonState] = useState("");
 
   const [stockModal, setStockModal] = useState(false);
-  const [renderState, setRenderState ] = useState(false);
+  const [renderState, setRenderState] = useState(false);
   const [barcodeModalShow, setBarcodeModalShow] = useState(false);
+
+  // ✅ only search query remains
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const [page, setPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(7);
 
   // fetch products
   const fetchProducts = async () => {
@@ -48,6 +57,7 @@ const Products = ({ setRender, setProduct, setID }) => {
       if (error) throw error;
 
       setProducts(data || []);
+      setFilteredProducts(data || []);
     } catch (error) {
       console.error("Error fetching products:", error);
       setError("Failed to load products. Please try again.");
@@ -80,9 +90,6 @@ const Products = ({ setRender, setProduct, setID }) => {
     setPage(newPage);
   };
 
-  const [page, setPage] = useState(0);
-  const [rowsPerPage, setRowsPerPage] = useState(7);
-
   const handleChangeRowsPerPage = (event) => {
     setRowsPerPage(parseInt(event.target.value, 10));
     setPage(0);
@@ -102,19 +109,37 @@ const Products = ({ setRender, setProduct, setID }) => {
   };
 
   const handleCheck = (productId) => {
-
-    setID(productId); // object, not array
-    setRender(renderState); // switch immediately
+    setID(productId);
+    setRender(renderState);
   };
 
-  const handleRestock = () =>{
+  const handleRestock = () => {
     setRenderState("restock");
     setStockModal(true);
-  }
-  const handleUnstock = () =>{
+    setButtonState("Restock");
+  };
+  const handleUnstock = () => {
     setRenderState("unstock");
     setStockModal(true);
-  }
+    setButtonState("Unstock");
+  };
+
+  // 🔍 Only search filter remains
+  useEffect(() => {
+    let result = [...products];
+
+    if (searchQuery) {
+      result = result.filter((p) =>
+        Object.values(p)
+          .join(" ")
+          .toLowerCase()
+          .includes(searchQuery.toLowerCase())
+      );
+    }
+
+    setFilteredProducts(result);
+    setPage(0);
+  }, [searchQuery, products]);
 
   if (loading) {
     return (
@@ -136,10 +161,10 @@ const Products = ({ setRender, setProduct, setID }) => {
 
   return (
     <>
-      {/* Restock Modal (React-Bootstrap) */}
+      {/* Restock/Unstock Modal */}
       <Modal show={stockModal} onHide={() => setStockModal(false)} centered>
         <Modal.Header closeButton>
-          <Modal.Title>Restock</Modal.Title>
+          <Modal.Title>{buttonState}</Modal.Title>
         </Modal.Header>
         <Modal.Body>
           <Form.Group as={Row} className="mb-3 mt-4" controlId="formProductId">
@@ -165,8 +190,6 @@ const Products = ({ setRender, setProduct, setID }) => {
             </Col>
           </Form.Group>
         </Modal.Body>
-
-        {/* Footer with right-aligned buttons */}
         <Modal.Footer>
           <Button variant="secondary" onClick={() => setStockModal(false)}>
             Cancel
@@ -177,7 +200,6 @@ const Products = ({ setRender, setProduct, setID }) => {
         </Modal.Footer>
       </Modal>
 
-      {/* ✅ Nested Modal for Barcode */}
       <BarcodeModal
         show={barcodeModalShow}
         setBarcodeModalShow={setBarcodeModalShow}
@@ -190,9 +212,10 @@ const Products = ({ setRender, setProduct, setID }) => {
         fluid
         style={{ width: "140vh" }}
       >
-        <div className="d-flex justify-content-between align-items-center mx-2">
+        {/* Top bar */}
+        <div className="d-flex flex-wrap justify-content-between align-items-center mx-2">
           <span className="mx-1 mt-3 d-inline-block">
-            Product Inventory ({products.length} items){" "}
+            Product Inventory ({filteredProducts.length} items){" "}
             <Button
               className="mx-1 mb-1"
               size="lg"
@@ -202,6 +225,33 @@ const Products = ({ setRender, setProduct, setID }) => {
               <IoMdRefresh />
             </Button>
           </span>
+
+          {/* 🔍 Search bar with icon */}
+          <InputGroup style={{ maxWidth: "600px", marginTop: "15px" }}>
+            <InputGroup.Text
+              style={{
+                background: "none",
+                borderRight: "none",
+                paddingRight: 0,
+              }}
+            >
+              <IoSearch size={18} color="gray" />
+            </InputGroup.Text>
+            <Form.Control
+              size="sm"
+              type="text"
+              placeholder="Search..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              style={{
+                borderLeft: "none",
+                boxShadow: "none", // 🚫 removes blue glow
+                outline: "none", // 🚫 removes black outline
+              }}
+            />
+          </InputGroup>
+
+          {/* Action buttons */}
           <div className="d-flex gap-2 ms-auto">
             <Button
               className="mx-1 mt-3"
@@ -210,7 +260,6 @@ const Products = ({ setRender, setProduct, setID }) => {
             >
               Add Product
             </Button>
-
             <Button
               className="mx-1 mt-3"
               size="sm"
@@ -242,11 +291,7 @@ const Products = ({ setRender, setProduct, setID }) => {
           className="my-3"
           sx={{ maxHeight: 500 }}
         >
-          <Table
-            stickyHeader
-            sx={{ width: "100%" }}
-            aria-label="products table"
-          >
+          <Table stickyHeader>
             <TableHead>
               <TableRow>
                 <TableCell align="left">Product</TableCell>
@@ -260,7 +305,7 @@ const Products = ({ setRender, setProduct, setID }) => {
               </TableRow>
             </TableHead>
             <TableBody>
-              {products.length === 0 ? (
+              {filteredProducts.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={9} align="center" sx={{ py: 4 }}>
                     <div className="text-muted">
@@ -272,7 +317,7 @@ const Products = ({ setRender, setProduct, setID }) => {
                   </TableCell>
                 </TableRow>
               ) : (
-                products
+                filteredProducts
                   .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
                   .map((product) => {
                     const availability = getAvailabilityStatus(
@@ -292,27 +337,20 @@ const Products = ({ setRender, setProduct, setID }) => {
                           },
                         }}
                       >
-                        <TableCell component="th" scope="row">
-                          {product.product_name}
-                        </TableCell>
-                        <TableCell align="left">{product.product_ID}</TableCell>
-                        <TableCell align="left">
+                        <TableCell>{product.product_name}</TableCell>
+                        <TableCell>{product.product_ID}</TableCell>
+                        <TableCell>
                           {product.product_category || "N/A"}
                         </TableCell>
-                        <TableCell align="left">
+                        <TableCell>
                           ₱{product.product_price?.toFixed(2)}
                         </TableCell>
-                        <TableCell align="left">
-                          {product.product_quantity}
-                        </TableCell>
-                        <TableCell align="left">
-                          {product.product_unit || "N/A"}
-                        </TableCell>
-                        <TableCell align="left">
+                        <TableCell>{product.product_quantity}</TableCell>
+                        <TableCell>{product.product_unit || "N/A"}</TableCell>
+                        <TableCell>
                           {formatDate(product.product_expiry)}
                         </TableCell>
                         <TableCell
-                          align="left"
                           style={{
                             color:
                               availability === "In-Stock"
@@ -333,11 +371,11 @@ const Products = ({ setRender, setProduct, setID }) => {
           </Table>
         </TableContainer>
 
-        {products.length > 0 && (
+        {filteredProducts.length > 0 && (
           <TablePagination
             rowsPerPageOptions={[7, 10, 15]}
             component="div"
-            count={products.length}
+            count={filteredProducts.length}
             rowsPerPage={rowsPerPage}
             page={page}
             onPageChange={handleChangePage}
