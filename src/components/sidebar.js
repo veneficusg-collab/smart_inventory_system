@@ -13,9 +13,18 @@ import { supabase } from "../supabaseClient";
 
 const Sidebar = ({ setRender, staffRole }) => {
   const handleLogout = async () => {
-    let { error } = await supabase.auth.signOut();
-    if (error) {
-      console.log(error);
+    try {
+      // 1️⃣ Supabase logout (if user logged in normally)
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
+
+      // 2️⃣ QR-only user session cleanup
+      localStorage.removeItem("user");
+
+      // 3️⃣ Redirect to login page
+      window.location.href = "/";
+    } catch (err) {
+      console.error("Logout error:", err.message);
     }
   };
 
@@ -48,7 +57,7 @@ const Sidebar = ({ setRender, staffRole }) => {
           className="text-start"
           style={{ fontWeight: "300", marginLeft: "10px" }}
         >
-          {(staffRole === "admin" || staffRole === "super_admin") ? (
+          {staffRole === "admin" || staffRole === "super_admin" ? (
             <>
               <Link
                 underline="hover"
@@ -116,9 +125,9 @@ const Sidebar = ({ setRender, staffRole }) => {
               {/* Middle section */}
               <div
                 className="d-flex flex-column" // 🔹 makes children stack vertically
-                style={{ marginLeft: "10px"   }}
+                style={{ marginLeft: "10px" }}
               >
-               <Link
+                <Link
                   underline="hover"
                   color="inherit"
                   component="button"
@@ -143,24 +152,23 @@ const Sidebar = ({ setRender, staffRole }) => {
                 </Link>
 
                 <Link
-                underline="hover"
-                color="inherit"
-                component="button"
-                onClick={() => setRender("Inventory")}
-              >
-                <div className="d-flex align-items-center my-3">
-                  <MdInventory2 />
-                  <span className="mx-3">Inventory</span>
-                </div>
-              </Link>
+                  underline="hover"
+                  color="inherit"
+                  component="button"
+                  onClick={() => setRender("Inventory")}
+                >
+                  <div className="d-flex align-items-center my-3">
+                    <MdInventory2 />
+                    <span className="mx-3">Inventory</span>
+                  </div>
+                </Link>
 
-                 <Link
+                <Link
                   underline="hover"
                   color="inherit"
                   component="button"
                   onClick={() => setRender("Logs")}
                 >
-                  
                   <div className="d-flex align-items-center my-2">
                     <ClipboardClock style={{ width: "16px" }} />
                     <span className="mx-3">Logs</span>

@@ -71,19 +71,38 @@ const POS = () => {
     }
 
     try {
+      // 1️⃣ Try Supabase user
       const {
         data: { user },
       } = await supabase.auth.getUser();
 
-      let { data: staff, error } = await supabase
-        .from("staff")
-        .select("staff_name")
-        .eq("id", user.id)
-        .single();
-      // 1️⃣ Insert transaction
+      let staffName = null;
+
+      if (user) {
+        // Logged in via Supabase
+        let { data: staff, error } = await supabase
+          .from("staff")
+          .select("staff_name")
+          .eq("id", user.id)
+          .single();
+
+        if (error) throw error;
+        staffName = staff.staff_name;
+      } else {
+        // 2️⃣ Fallback: QR login
+        const storedUser = localStorage.getItem("user");
+        if (!storedUser) throw new Error("No logged in user found");
+
+        const parsedUser = JSON.parse(storedUser);
+        staffName = parsedUser.staff_name;
+      }
+
+      // 3️⃣ Insert transaction
       const { data: trx, error: trxError } = await supabase
         .from("transactions")
-        .insert([{ total_amount: total, status: "completed", staff:staff.staff_name }])
+        .insert([
+          { total_amount: total, status: "completed", staff: staffName },
+        ])
         .select()
         .single();
 
@@ -91,7 +110,7 @@ const POS = () => {
 
       const transactionId = trx.id;
 
-      // 2️⃣ Insert transaction_items
+      // 4️⃣ Insert transaction_items
       const itemsData = orders.map((o) => ({
         transaction_id: transactionId,
         product_code: o.product_ID,
@@ -106,7 +125,7 @@ const POS = () => {
 
       if (itemsError) throw itemsError;
 
-      // 3️⃣ Insert transaction_payments
+      // 5️⃣ Insert transaction_payments
       const paymentsData = payments.map((p) => ({
         transaction_id: transactionId,
         method: p.method,
@@ -119,23 +138,21 @@ const POS = () => {
 
       if (paymentsError) throw paymentsError;
 
-      // 4️⃣ Update product quantities with FIFO logic (nearest expiry first)
+      // 6️⃣ FIFO stock update (your existing logic)
       for (const order of orders) {
         let remainingQtyToReduce = order.qty;
 
-        // Fetch all rows for this product_ID, ordered by expiry_date (nearest first)
         const { data: prodRows, error: fetchError } = await supabase
           .from("products")
           .select("id, product_quantity, product_expiry")
           .eq("product_ID", order.product_ID)
-          .order("product_expiry", { ascending: true }); // nearest expiry first
+          .order("product_expiry", { ascending: true });
 
         if (fetchError) throw fetchError;
         if (!prodRows || prodRows.length === 0) {
           throw new Error(`Product with ID ${order.product_ID} not found`);
         }
 
-        // Check if we have enough total stock
         const totalStock = prodRows.reduce(
           (sum, row) => sum + row.product_quantity,
           0
@@ -147,7 +164,6 @@ const POS = () => {
           );
         }
 
-        // Process each row in order of nearest expiry date
         for (const row of prodRows) {
           if (remainingQtyToReduce <= 0) break;
 
@@ -158,22 +174,16 @@ const POS = () => {
 
           const newQtyForThisRow = row.product_quantity - qtyToTakeFromThisRow;
 
-          // Update this specific row
           const { error: updateError } = await supabase
             .from("products")
             .update({ product_quantity: newQtyForThisRow })
-            .eq("id", row.id); // Use the unique row ID
+            .eq("id", row.id);
 
           if (updateError) throw updateError;
 
           remainingQtyToReduce -= qtyToTakeFromThisRow;
-
-          console.log(
-            `Updated product ${order.product_ID}, row ID ${row.id}: ${row.product_quantity} → ${newQtyForThisRow} (expiry: ${row.product_expiry})`
-          );
         }
 
-        // Sanity check - should be 0 if everything went correctly
         if (remainingQtyToReduce > 0) {
           throw new Error(
             `Failed to fully reduce stock for ${order.product_name}. Remaining: ${remainingQtyToReduce}`
@@ -183,8 +193,6 @@ const POS = () => {
 
       alert("Transaction saved successfully!");
       handleReset();
-
-      // 👇 Trigger product refresh after successful transaction
       setRefreshProducts((prev) => prev + 1);
     } catch (err) {
       console.error("Error saving transaction:", err.message);

@@ -36,22 +36,32 @@ const Logs = () => {
       setLoading(true);
       setError("");
 
-      // Get the current logged-in user
+      // 1️⃣ Try Supabase session
       const {
         data: { user },
       } = await supabase.auth.getUser();
-      if (!user) throw new Error("No logged in user found");
 
-      // Fetch staff details (name + role)
-      let { data: staffRows, error: staffError } = await supabase
-        .from("staff")
-        .select("staff_name, staff_position")
-        .eq("id", user.id)
-        .single();
+      let staffRows = null;
+
+      if (user) {
+        // Fetch staff details
+        let { data, error: staffError } = await supabase
+          .from("staff")
+          .select("staff_name, staff_position")
+          .eq("id", user.id)
+          .single();
+
+        if (staffError) throw staffError;
+        staffRows = data;
+      } else {
+        // 2️⃣ Fallback: QR login from localStorage
+        const storedUser = localStorage.getItem("user");
+        if (!storedUser) throw new Error("No logged in user found");
+
+        staffRows = JSON.parse(storedUser);
+      }
 
       setStaffRole(staffRows.staff_position);
-
-      if (staffError) throw staffError;
 
       let data;
       if (
@@ -83,20 +93,29 @@ const Logs = () => {
       setTransactionLoading(true);
       setError("");
 
-      // Get the current logged-in user
+      // 1️⃣ Try Supabase session
       const {
         data: { user },
       } = await supabase.auth.getUser();
-      if (!user) throw new Error("No logged in user found");
 
-      // Fetch staff details (name + role)
-      let { data: staffRows, error: staffError } = await supabase
-        .from("staff")
-        .select("staff_name, staff_position")
-        .eq("id", user.id)
-        .single();
+      let staffRows = null;
 
-      if (staffError) throw staffError;
+      if (user) {
+        let { data, error: staffError } = await supabase
+          .from("staff")
+          .select("staff_name, staff_position")
+          .eq("id", user.id)
+          .single();
+
+        if (staffError) throw staffError;
+        staffRows = data;
+      } else {
+        // 2️⃣ Fallback: QR login from localStorage
+        const storedUser = localStorage.getItem("user");
+        if (!storedUser) throw new Error("No logged in user found");
+
+        staffRows = JSON.parse(storedUser);
+      }
 
       let data;
       if (
@@ -108,18 +127,18 @@ const Logs = () => {
           .from("transactions")
           .select(
             `
-            *,
-            transaction_items (
-              product_code,
-              qty,
-              price,
-              subtotal
-            ),
-            transaction_payments (
-              method,
-              amount
-            )
-          `
+          *,
+          transaction_items (
+            product_code,
+            qty,
+            price,
+            subtotal
+          ),
+          transaction_payments (
+            method,
+            amount
+          )
+        `
           )
           .order("created_at", { ascending: false }));
       } else {
@@ -128,18 +147,18 @@ const Logs = () => {
           .from("transactions")
           .select(
             `
-            *,
-            transaction_items (
-              product_code,
-              qty,
-              price,
-              subtotal
-            ),
-            transaction_payments (
-              method,
-              amount
-            )
-          `
+          *,
+          transaction_items (
+            product_code,
+            qty,
+            price,
+            subtotal
+          ),
+          transaction_payments (
+            method,
+            amount
+          )
+        `
           )
           .eq("staff", staffRows.staff_name)
           .order("created_at", { ascending: false }));

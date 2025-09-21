@@ -6,18 +6,28 @@ import { supabase } from "../supabaseClient";
 const ProtectedRoute = ({ children }) => {
   const [loading, setLoading] = useState(true);
   const [session, setSession] = useState(null);
+  const [qrUser, setQrUser] = useState(null);
 
   useEffect(() => {
-    // Get current session
+    // ✅ Check Supabase Auth session
     supabase.auth.getSession().then(({ data }) => {
       setSession(data.session);
       setLoading(false);
     });
 
-    // Listen for changes (login/logout)
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-    });
+    // ✅ Check QR login session in localStorage
+    const storedUser = localStorage.getItem("user");
+    if (storedUser) {
+      setQrUser(JSON.parse(storedUser));
+      setLoading(false);
+    }
+
+    // ✅ Listen for auth changes
+    const { data: listener } = supabase.auth.onAuthStateChange(
+      (_event, session) => {
+        setSession(session);
+      }
+    );
 
     return () => {
       listener.subscription.unsubscribe();
@@ -26,11 +36,12 @@ const ProtectedRoute = ({ children }) => {
 
   if (loading) return <div>Loading...</div>;
 
-  // If no session, redirect to login
-  if (!session) {
+  // ✅ If no Supabase session AND no QR user → redirect to login
+  if (!session && !qrUser) {
     return <Navigate to="/" />;
   }
 
+  // ✅ Otherwise allow access
   return children;
 };
 

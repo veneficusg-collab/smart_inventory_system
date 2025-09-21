@@ -27,7 +27,7 @@ const Dashboard = () => {
 
   useEffect(() => {
     setDefaultRender();
-  }, [staffRole]); // runs when staffRole updates
+  }, [staffRole]);
 
   const setDefaultRender = () => {
     if (staffRole === "staff") setRender("StaffDashboard");
@@ -35,25 +35,39 @@ const Dashboard = () => {
   };
 
   const fetchCurrentUser = async () => {
+    // 1️⃣ Try Supabase session first
     const {
       data: { user },
     } = await supabase.auth.getUser();
 
-    let { data: staff, error } = await supabase
-      .from("staff")
-      .select("staff_position")
-      .eq("id", user.id)
-      .single();
+    if (user) {
+      // Fetch staff role from Supabase table
+      let { data: staff, error } = await supabase
+        .from("staff")
+        .select("staff_position")
+        .eq("id", user.id)
+        .single();
 
-    if (error) {
-      console.log(error);
+      if (error) {
+        console.log(error);
+      } else {
+        setStaffRole(staff.staff_position);
+        setStaffId(user.id);
+        console.log("Supabase Role:", staff.staff_position);
+      }
     } else {
-      setStaffRole(staff.staff_position); // just the string
-      console.log("Role:", staff.staff_position);
+      // 2️⃣ Fallback: QR login user from localStorage
+      const storedUser = localStorage.getItem("user");
+      if (storedUser) {
+        const qrUser = JSON.parse(storedUser);
+        setStaffRole(qrUser.staff_position);
+        setStaffId(qrUser.id);
+        console.log("QR Role:", qrUser.staff_position);
+      }
     }
   };
 
-  // Admin view
+  // Admin & Staff views
   return (
     <Container fluid className="p-0">
       <Row className="w-100 m-0">
@@ -62,6 +76,7 @@ const Dashboard = () => {
         </Col>
         <Col lg={10} className="p-0" style={{ backgroundColor: "#f2f2f2ff" }}>
           <Header />
+
           {/* Admin Links */}
           {render === "AdminDashboard" && <AdminDashboard />}
           {render === "Inventory" && <Inventory staffRole={staffRole} />}
