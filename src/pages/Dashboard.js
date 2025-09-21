@@ -13,12 +13,13 @@ import StaffRestock from "../components/Staff-restock";
 import { useEffect, useState } from "react";
 import { supabase } from "../supabaseClient";
 import StaffUnstock from "../components/Staff-unstock";
+import POS from "../components/POS";
 
 const Dashboard = () => {
   const [render, setRender] = useState("AdminDashboard");
   const [staffId, setStaffId] = useState("");
   const [staffRole, setStaffRole] = useState("");
-  const [scannedId, setScannedId] = useState('');
+  const [scannedId, setScannedId] = useState("");
 
   useEffect(() => {
     fetchCurrentUser();
@@ -63,7 +64,7 @@ const Dashboard = () => {
           <Header />
           {/* Admin Links */}
           {render === "AdminDashboard" && <AdminDashboard />}
-          {render === "Inventory" && <Inventory />}
+          {render === "Inventory" && <Inventory staffRole={staffRole} />}
           {render === "Reports" && <Reports />}
           {render === "ManageStaff" && (
             <ManageStaff setStaffId={setStaffId} setRender={setRender} />
@@ -84,7 +85,7 @@ const Dashboard = () => {
             <StaffUnstock scannedId={scannedId} setRender={setRender} />
           )}
 
-
+          {render === "POS" && <POS />}
         </Col>
       </Row>
     </Container>

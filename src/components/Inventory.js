@@ -6,7 +6,7 @@ import Restock from "./Restock";
 import Unstock from "./Unstock";
 
 
-const Inventory = () => {
+const Inventory = ({staffRole}) => {
   const [render, setRender] = useState('products');
   const [Id, setID] = useState('');
   const [product, setProduct] = useState(null);
@@ -14,7 +14,7 @@ const Inventory = () => {
     <div>
         
         {render === 'products' ? (
-        <Products setRender={setRender} setProduct={setProduct} setID={setID} />
+        <Products setRender={setRender} setProduct={setProduct} setID={setID} staffRole={staffRole}  />
       ) : render === 'Add-Product' ? (
         <AddProduct setRender={setRender} />
       ) : render === 'product-info' ? (

@@ -25,7 +25,7 @@ import { IoIosSearch } from "react-icons/io";
 import BarcodeModal from "./barcode-modal";
 import { IoSearch } from "react-icons/io5";
 
-const Products = ({ setRender, setProduct, setID }) => {
+const Products = ({ setRender, setProduct, setID, staffRole }) => {
   const [products, setProducts] = useState([]);
   const [filteredProducts, setFilteredProducts] = useState([]);
   const [productId, setProductId] = useState("");
@@ -42,6 +42,11 @@ const Products = ({ setRender, setProduct, setID }) => {
 
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(7);
+
+  useEffect(() => {
+  console.log("staffRole in Products:", staffRole);
+}, [staffRole]);
+
 
   // fetch products
   const fetchProducts = async () => {
@@ -252,7 +257,7 @@ const Products = ({ setRender, setProduct, setID }) => {
           </InputGroup>
 
           {/* Action buttons */}
-          <div className="d-flex gap-2 ms-auto">
+          {(staffRole === 'admin' || staffRole === 'super_admin') && (<div className="d-flex gap-2 ms-auto">
             <Button
               className="mx-1 mt-3"
               size="sm"
@@ -276,7 +281,8 @@ const Products = ({ setRender, setProduct, setID }) => {
             >
               Unstock
             </Button>
-          </div>
+          </div>)}
+          
         </div>
 
         {error && (

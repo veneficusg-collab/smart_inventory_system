@@ -49,9 +49,6 @@ const AddedStocks = () => {
     <Container className="bg-white m-4 rounded p-0">
       <div className="d-flex justify-content-between align-items-center mx-2">
         <span className="mx-1 mt-3 d-inline-block">Restocked Today</span>
-        <a className="mt-3 mx-2" href="#">
-          See All
-        </a>
       </div>
       <div>
         <TableContainer component={Paper} className="my-3">

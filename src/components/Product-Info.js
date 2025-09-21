@@ -11,6 +11,7 @@ import {
   MdArrowBack,
   MdSave,
   MdClose,
+  MdDelete,
 } from "react-icons/md";
 import TableBody from "@mui/material/TableBody";
 import { supabase } from "../supabaseClient";
@@ -69,6 +70,27 @@ const ProductInfo = ({ setRender, product, onUpdateProduct }) => {
     setIsEditing(false);
   };
 
+  const handleDelete = async () => {
+    const confirmDelete = window.confirm(
+      `Are you sure you want to delete "${product.product_name}"?`
+    );
+
+    if (!confirmDelete) return;
+
+    const { error } = await supabase
+      .from("products")
+      .delete()
+      .eq("product_ID", product.product_ID);
+
+    if (error) {
+      console.error("Error deleting product:", error);
+      alert("Failed to delete product.");
+    } else {
+      alert("Product deleted successfully.");
+      setRender("products"); // go back to product list
+    }
+  };
+
   const displayProduct = isEditing ? editedProduct : product;
 
   return (
@@ -89,8 +111,7 @@ const ProductInfo = ({ setRender, product, onUpdateProduct }) => {
             <MdArrowBack />
           </Button>
         </div>
-
-        {/* Edit/Save/Cancel buttons */}
+        {/* Edit/Save/Cancel/Delete buttons */}
         <div className="d-flex gap-2">
           {isEditing ? (
             <>
@@ -106,13 +127,22 @@ const ProductInfo = ({ setRender, product, onUpdateProduct }) => {
               </Button>
             </>
           ) : (
-            <Button
-              variant="outline-secondary"
-              size="sm"
-              onClick={() => setIsEditing(true)}
-            >
-              <MdOutlineModeEdit /> Edit
-            </Button>
+            <>
+              <Button
+                variant="outline-secondary"
+                size="sm"
+                onClick={() => setIsEditing(true)}
+              >
+                <MdOutlineModeEdit /> Edit
+              </Button>
+              <Button
+                variant="outline-danger"
+                size="sm"
+                onClick={handleDelete}
+              >
+                <MdDelete /> Delete
+              </Button>
+            </>
           )}
         </div>
       </div>
@@ -272,51 +302,6 @@ const ProductInfo = ({ setRender, product, onUpdateProduct }) => {
               </div>
             </div>
           </div>
-        </Col>
-      </Row>
-
-      <Row>
-        <Col md={8}>
-          <TableContainer
-            component={Paper}
-            className="my-3"
-            sx={{ maxHeight: 200 }}
-          >
-            <Table
-              stickyHeader
-              sx={{ width: "100%" }}
-              aria-label="simple table"
-            >
-              <TableHead>
-                <TableRow>
-                  <TableCell align="left" sx={{ backgroundColor: "#f5f5f5" }}>
-                    Store Name
-                  </TableCell>
-                  <TableCell align="right" sx={{ backgroundColor: "#f5f5f5" }}>
-                    Stock in hand
-                  </TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                <TableRow>
-                  <TableCell align="left">
-                    <span>Butuan Branch</span>
-                  </TableCell>
-                  <TableCell align="right">
-                    <span>15</span>
-                  </TableCell>
-                </TableRow>
-                <TableRow>
-                  <TableCell align="left">
-                    <span>Davao Branch</span>
-                  </TableCell>
-                  <TableCell align="right">
-                    <span>19</span>
-                  </TableCell>
-                </TableRow>
-              </TableBody>
-            </Table>
-          </TableContainer>
         </Col>
       </Row>
     </Container>

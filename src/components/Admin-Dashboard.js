@@ -1,8 +1,9 @@
 import { Row, Col } from "react-bootstrap";
 import Charts from "./charts";
-import InventorySummary from "./inventory-summary";
-import StaffSummary from "./staff-summary";
-import ReleasedStocks from "./released-stocks";
+import SuggestedPurchase from "./suggested-purchase"
+import AvoidPurchase from "./avoid-purchase"
+import BestSellingToday from "./best-selling-today";
+
 import NearExpiration from "./near-expiration";
 import AddedStocks from "./added-stocks";
 import LowStocks from "./low-stocks";
@@ -19,19 +20,19 @@ const AdminDashboard = () => {
               <Col md={4}>
                 <Row>
                   <Col>
-                    <InventorySummary />
+                    <SuggestedPurchase />
                   </Col>
                 </Row>
                 <Row>
                     <Col>
-                    <StaffSummary />
+                    <AvoidPurchase />
                     </Col>
                 </Row>
               </Col>
             </Row>
             <Row>
                 <Col md={8}>
-                    <ReleasedStocks />
+                    <BestSellingToday />
                 </Col>
                 <Col md={4}>
                     <NearExpiration />

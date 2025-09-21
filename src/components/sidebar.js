@@ -4,7 +4,8 @@ import { CiHome } from "react-icons/ci";
 import { MdInventory2 } from "react-icons/md";
 import { IoIosStats } from "react-icons/io";
 import { MdManageAccounts } from "react-icons/md";
-import { FiSettings } from "react-icons/fi";
+import { RiProductHuntFill } from "react-icons/ri";
+import { AiFillProduct } from "react-icons/ai";
 import { CiLogout } from "react-icons/ci";
 import { Link } from "@mui/material";
 import { ClipboardClock, Logs } from "lucide-react";
@@ -47,7 +48,7 @@ const Sidebar = ({ setRender, staffRole }) => {
           className="text-start"
           style={{ fontWeight: "300", marginLeft: "10px" }}
         >
-          {(staffRole === "Admin" || staffRole === "super_admin") ? (
+          {(staffRole === "admin" || staffRole === "super_admin") ? (
             <>
               <Link
                 underline="hover"
@@ -117,7 +118,18 @@ const Sidebar = ({ setRender, staffRole }) => {
                 className="d-flex flex-column" // 🔹 makes children stack vertically
                 style={{ marginLeft: "10px"   }}
               >
-               
+               <Link
+                  underline="hover"
+                  color="inherit"
+                  component="button"
+                  onClick={() => setRender("POS")}
+                >
+                  <div className="d-flex align-items-center my-2">
+                    <RiProductHuntFill style={{ width: "16px" }} />
+                    <span className="mx-3">POS</span>
+                  </div>
+                </Link>
+
                 <Link
                   underline="hover"
                   color="inherit"
@@ -125,16 +137,30 @@ const Sidebar = ({ setRender, staffRole }) => {
                   onClick={() => setRender("StaffDashboard")}
                 >
                   <div className="d-flex align-items-center my-2">
-                    <ClipboardClock style={{ width: "16px" }} />
-                    <span className="mx-3">Dashboard</span>
+                    <AiFillProduct style={{ width: "16px" }} />
+                    <span className="mx-3">Stocking</span>
                   </div>
                 </Link>
+
+                <Link
+                underline="hover"
+                color="inherit"
+                component="button"
+                onClick={() => setRender("Inventory")}
+              >
+                <div className="d-flex align-items-center my-3">
+                  <MdInventory2 />
+                  <span className="mx-3">Inventory</span>
+                </div>
+              </Link>
+
                  <Link
                   underline="hover"
                   color="inherit"
                   component="button"
                   onClick={() => setRender("Logs")}
                 >
+                  
                   <div className="d-flex align-items-center my-2">
                     <ClipboardClock style={{ width: "16px" }} />
                     <span className="mx-3">Logs</span>

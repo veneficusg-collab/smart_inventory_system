@@ -2,18 +2,18 @@ import { Col, Container, Row } from "react-bootstrap";
 import TopRestockProducts from "./top-restock";
 import StockCharts from "./stock-charts";
 import TopUnstockProducts from "./top-unstock";
-import TopUnstockCategories from "./top-unstock-category";
-import TopRestockCategories from "./top-restock-category";
+import TopSellingProducts from "./top-selling-products";
+import BottomSellingProducts from "./bottom-selling-products";
 
 const Reports = () => {
   return (
     <Container className="">
       <Row> 
         <Col md={6}>
-            <TopRestockProducts />
+            <TopSellingProducts />
         </Col>
         <Col md={6}>
-            <TopUnstockProducts />
+            <BottomSellingProducts />
         </Col>
       </Row>
       <Row>
@@ -23,10 +23,10 @@ const Reports = () => {
       </Row>
       <Row>
         <Col md={6}>
-            <TopRestockCategories />
+            <TopRestockProducts />
         </Col>
         <Col md={6}>
-            <TopUnstockCategories />
+            <TopUnstockProducts />
         </Col>
       </Row>
     </Container>
