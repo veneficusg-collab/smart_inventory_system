@@ -5,37 +5,22 @@ import TableHead from "@mui/material/TableHead";
 import TableRow from "@mui/material/TableRow";
 import TableCell from "@mui/material/TableCell";
 import TableBody from "@mui/material/TableBody";
-import TablePagination from "@mui/material/TablePagination";
 import Box from "@mui/material/Box";
 import AddStaff from "./add-staff";
 import { supabase } from "../supabaseClient";
 
-const ManageStaff = ({setStaffId, setRender }) => {
+const ManageStaff = ({ setStaffId, setRender }) => {
   // Data state
   const [staffData, setStaffData] = useState([]);
   const [currentUser, setCurrentUser] = useState("");
   const [currentUserId, setCurrentUserId] = useState("");
-
-  // Pagination state
-  const [page, setPage] = useState(0);
-  const [rowsPerPage, setRowsPerPage] = useState(8);
 
   // Modal state
   const [modalShow, setModalShow] = useState(false);
 
   const handleRowClicked = (staffID) => {
     setStaffId(staffID);
-    setRender('StaffInfo');
-  }
-
-  // Handle pagination
-  const handleChangePage = (event, newPage) => {
-    setPage(newPage);
-  };
-
-  const handleChangeRowsPerPage = (event) => {
-    setRowsPerPage(parseInt(event.target.value, 8));
-    setPage(0);
+    setRender("StaffInfo");
   };
 
   // Fetch all staff
@@ -69,7 +54,6 @@ const ManageStaff = ({setStaffId, setRender }) => {
       setCurrentUserId(staff?.id || "");
     }
   };
-
 
   // Delete staff handler
   const handleDelete = async (id) => {
@@ -113,9 +97,16 @@ const ManageStaff = ({setStaffId, setRender }) => {
 
       <AddStaff show={modalShow} onHide={() => setModalShow(false)} />
 
-      {/* Table container with flex-grow */}
-      <Box sx={{ flexGrow: 1, overflow: "hidden", margin: "0 8px" }}>
-        <Table style={{ width: "100%" }}>
+      {/* Table container with scroll */}
+      <Box
+        sx={{
+          flexGrow: 1,
+          overflowY: "auto",
+          overflowX: "hidden",
+          margin: "0 8px",
+        }}
+      >
+        <Table stickyHeader style={{ width: "100%" }}>
           <TableHead>
             <TableRow>
               <TableCell align="left">Staff Name</TableCell>
@@ -129,66 +120,49 @@ const ManageStaff = ({setStaffId, setRender }) => {
           </TableHead>
 
           <TableBody>
-  {staffData
-    .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
-    .map((staff) => {
-      const canDelete =
-        currentUser === "super_admin" ||
-        (currentUser === "admin" && staff.staff_position === "staff");
+            {staffData.map((staff) => {
+              const canDelete =
+                currentUser === "super_admin" ||
+                (currentUser === "admin" && staff.staff_position === "staff");
 
-      const isSelf = staff.id === currentUserId;
+              const isSelf = staff.id === currentUserId;
 
-      return (
-        <TableRow
-          key={staff.id}
-          onClick={() => handleRowClicked(staff.id)}
-          sx={{
-            cursor: "pointer",
-            "&:hover": { backgroundColor: "#f5f5f5" },
-          }}
-        >
-          <TableCell align="left">{staff.staff_name}</TableCell>
-          <TableCell align="left">{staff.staff_position}</TableCell>
-          <TableCell align="left">{staff.staff_contact}</TableCell>
-          <TableCell align="left">{staff.staff_email}</TableCell>
-          {(currentUser === "super_admin" || currentUser === "admin") && (
-            <TableCell align="center">
-              {canDelete && !isSelf && (
-                <Button
-                  size="sm"
-                  variant="danger"
-                  onClick={(e) => {
-                    e.stopPropagation(); // prevent row click
-                    handleDelete(staff.id);
+              return (
+                <TableRow
+                  key={staff.id}
+                  onClick={() => handleRowClicked(staff.id)}
+                  sx={{
+                    cursor: "pointer",
+                    "&:hover": { backgroundColor: "#f5f5f5" },
                   }}
                 >
-                  Delete
-                </Button>
-              )}
-            </TableCell>
-          )}
-        </TableRow>
-      );
-    })}
-</TableBody>
-
+                  <TableCell align="left">{staff.staff_name}</TableCell>
+                  <TableCell align="left">{staff.staff_position}</TableCell>
+                  <TableCell align="left">{staff.staff_contact}</TableCell>
+                  <TableCell align="left">{staff.staff_email}</TableCell>
+                  {(currentUser === "super_admin" ||
+                    currentUser === "admin") && (
+                    <TableCell align="center">
+                      {canDelete && !isSelf && (
+                        <Button
+                          size="sm"
+                          variant="danger"
+                          onClick={(e) => {
+                            e.stopPropagation(); // prevent row click
+                            handleDelete(staff.id);
+                          }}
+                        >
+                          Delete
+                        </Button>
+                      )}
+                    </TableCell>
+                  )}
+                </TableRow>
+              );
+            })}
+          </TableBody>
         </Table>
       </Box>
-
-      {/* Pagination */}
-      <TablePagination
-        component="div"
-        count={staffData.length}
-        page={page}
-        onPageChange={handleChangePage}
-        rowsPerPage={rowsPerPage}
-        onRowsPerPageChange={handleChangeRowsPerPage}
-        rowsPerPageOptions={[8]}
-        sx={{
-          borderTop: "1px solid #e0e0e0",
-          marginTop: "auto",
-        }}
-      />
     </Container>
   );
 };
