@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Table from "@mui/material/Table";
 import TableCell from "@mui/material/TableCell";
 import TableContainer from "@mui/material/TableContainer";
@@ -21,6 +21,7 @@ import logo from "../petfood.webp";
 
 const ProductInfo = ({ setRender, product, onUpdateProduct }) => {
   const [isEditing, setIsEditing] = useState(false);
+  const [imageUrl, setImageUrl] = useState(null);
   const [editedProduct, setEditedProduct] = useState({
     product_name: product.product_name || "",
     product_category: product.product_category || "",
@@ -28,7 +29,26 @@ const ProductInfo = ({ setRender, product, onUpdateProduct }) => {
     product_expiry: product.product_expiry || "",
     supplier_name: product.supplier_name || "",
     supplier_number: product.supplier_number || "",
+    product_img: product.product_img || "",
   });
+
+  useEffect(() => {
+    if (product.product_img) {
+      // If it's already a full URL, just use it
+      console.log("product_img from DB:", product.product_img);
+
+      if (product.product_img.startsWith("http")) {
+        setImageUrl(product.product_img);
+      } else {
+        const { data } = supabase.storage
+          .from("Smart-Inventory-System-(Pet Matters)")
+          .getPublicUrl(`products/${product.product_img}`);
+        if (data?.publicUrl) {
+          setImageUrl(data.publicUrl);
+        }
+      }
+    }
+  }, [product]);
 
   const handleInputChange = (field, value) => {
     setEditedProduct((prev) => ({
@@ -43,17 +63,18 @@ const ProductInfo = ({ setRender, product, onUpdateProduct }) => {
 
     const { data, error } = await supabase
       .from("products")
-      .update({ 
+      .update({
         product_name: editedProduct.product_name,
         product_category: editedProduct.product_category,
         product_price: editedProduct.product_price,
         product_quantity: editedProduct.product_quantity,
         supplier_name: editedProduct.supplier_name,
-        supplier_number: editedProduct.supplier_name,
-       })
+        supplier_number: editedProduct.supplier_number,
+        product_img: editedProduct.product_img,
+      })
       .eq("product_ID", product.product_ID)
       .select();
-       console.log(data);
+    console.log(data);
     setIsEditing(false);
   };
 
@@ -135,11 +156,7 @@ const ProductInfo = ({ setRender, product, onUpdateProduct }) => {
               >
                 <MdOutlineModeEdit /> Edit
               </Button>
-              <Button
-                variant="outline-danger"
-                size="sm"
-                onClick={handleDelete}
-              >
+              <Button variant="outline-danger" size="sm" onClick={handleDelete}>
                 <MdDelete /> Delete
               </Button>
             </>
@@ -297,9 +314,11 @@ const ProductInfo = ({ setRender, product, onUpdateProduct }) => {
                 border: "2px dashed #dee2e6",
               }}
             >
-              <div className="text-center text-muted ">
-                <Image src={logo} style={{ height: "180px" }} />
-              </div>
+              {imageUrl ? (
+                <Image src={imageUrl} style={{ height: "180px" }} />
+              ) : (
+                <span className="text-muted">No Image</span>
+              )}
             </div>
           </div>
         </Col>
