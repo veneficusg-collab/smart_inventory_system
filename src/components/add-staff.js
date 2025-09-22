@@ -22,100 +22,112 @@ const AddStaff = (props) => {
   const [successMessage, setSuccessMessage] = useState("");
   const [img, setImg] = useState("");
 
+  const handleLogout = async () => {
+
+    let { error } = await supabase.auth.signOut();
+    window.location.reload();
+  }
+
   const handleAddStaff = async (e) => {
-  e.preventDefault();
+    e.preventDefault();
 
-  if (password !== confirmPassword) {
-    setErrorMessage("Confirm password didn't match!");
-    return;
-  }
-
-  // Hybrid login check
-  let adminId = null;
-  let staffRole = null;
-
-  // 1️⃣ Try Supabase Auth first
-  const {
-    data: { user: supaUser },
-  } = await supabase.auth.getUser();
-
-  if (supaUser) {
-    adminId = supaUser.id;
-
-    const { data: staff, error } = await supabase
-      .from("staff")
-      .select("staff_position")
-      .eq("id", supaUser.id)
-      .single();
-
-    if (error || !staff || staff.staff_position !== "admin") {
-      setErrorMessage("You must be an admin to add staff");
+    if (password !== confirmPassword) {
+      setErrorMessage("Confirm password didn't match!");
       return;
     }
 
-    staffRole = staff.staff_position;
-  } else {
-    // 2️⃣ Fallback: QR login
-    const storedUser = localStorage.getItem("user");
-    if (storedUser) {
-      const qrUser = JSON.parse(storedUser);
-      adminId = qrUser.id;
-      staffRole = qrUser.staff_position;
+    // Hybrid login check
+    let adminId = null;
+    let staffRole = null;
+
+    // 1️⃣ Try Supabase Auth first
+    const {
+      data: { user: supaUser },
+    } = await supabase.auth.getUser();
+
+    // 1️⃣ Supabase Auth session
+    if (supaUser) {
+      adminId = supaUser.id;
+
+      const { data: staff, error } = await supabase
+        .from("staff")
+        .select("staff_position")
+        .eq("id", supaUser.id)
+        .single();
+
+      if (error || !staff) {
+        setErrorMessage("Staff record not found for this user");
+        return;
+      }
+
+      staffRole = staff.staff_position;
+
+      if (staffRole !== "admin" && staffRole !== "super_admin") {
+        setErrorMessage("You must be an admin or super admin to add staff");
+        return;
+      }
+    } else {
+      // 2️⃣ QR login fallback
+      const storedUser = localStorage.getItem("user");
+      if (storedUser) {
+        const qrUser = JSON.parse(storedUser);
+        adminId = qrUser.id;
+        staffRole = qrUser.staff_position;
+      }
     }
-  }
 
-  if (!adminId || staffRole !== "admin") {
-    setErrorMessage("No admin session found! Relogin using Email and Password.");
-    return;
-  }
-
-  // 🚨 IMPORTANT
-  // You cannot call supabase.auth.signUp() with just QR login.
-  // That requires a Supabase Auth session (or service role key).
-  // So at this point you have two choices:
-
-  // ✅ Option A: If you are logged in with Supabase Auth
-  // You can directly call supabase.auth.signUp()
-  if (supaUser) {
-    const { data: signUpData, error: signUpError } =
-      await supabase.auth.signUp({ email, password });
-
-    if (signUpError) {
-      setErrorMessage(signUpError.message);
+    // 3️⃣ Unified role check
+    if (!adminId || (staffRole !== "admin" && staffRole !== "super_admin")) {
+      setErrorMessage(
+        "No admin session found! Relogin using Email and Password."
+      );
       return;
     }
 
-    // Insert into staff table
-    const user = signUpData.user;
-    const staffBarcode = "P" + Math.floor(100000 + Math.random() * 900000);
+    // 🚨 IMPORTANT
+    // You cannot call supabase.auth.signUp() with just QR login.
+    // That requires a Supabase Auth session (or service role key).
+    // So at this point you have two choices:
 
-    const { error: staffError } = await supabase.from("staff").insert([
-      {
-        id: user.id,
-        staff_name: staffName,
-        staff_position: position,
-        staff_contact: contactNumber,
-        staff_email: email,
-        staff_barcode: staffBarcode,
-      },
-    ]);
+    // ✅ Option A: If you are logged in with Supabase Auth
+    // You can directly call supabase.auth.signUp()
+    if (supaUser) {
+      const { data: signUpData, error: signUpError } =
+        await supabase.auth.signUp({ email, password });
 
-    if (staffError) {
-      setErrorMessage(staffError.message);
-      return;
+      if (signUpError) {
+        setErrorMessage(signUpError.message);
+        return;
+      }
+
+      // Insert into staff table
+      const user = signUpData.user;
+      const staffBarcode = "P" + Math.floor(100000 + Math.random() * 900000);
+
+      const { error: staffError } = await supabase.from("staff").insert([
+        {
+          id: user.id,
+          staff_name: staffName,
+          staff_position: position,
+          staff_contact: contactNumber,
+          staff_email: email,
+          staff_barcode: staffBarcode,
+        },
+      ]);
+
+      if (staffError) {
+        setErrorMessage(staffError.message);
+        return;
+      }
+
+      setSuccessMessage("New Staff Added Successfully! Test the new account! Redirecting to Login...");
+      setTimeout(() => handleLogout(), 3000);
     }
 
-    setSuccessMessage("New Staff Added Successfully!");
-    setTimeout(() => window.location.reload(), 3000);
-  }
-
-  // ✅ Option B: If you are logged in with QR
-  // Call your own backend API (with Supabase service role key)
-  // Example: await fetch("/api/add-staff", { method: "POST", body: JSON.stringify({ email, password, staffName, position, contactNumber }) })
-};
-
-
-
+    // ✅ Option B: If you are logged in with QR
+    // Call your own backend API (with Supabase service role key)
+    // Example: await fetch("/api/add-staff", { method: "POST", body: JSON.stringify({ email, password, staffName, position, contactNumber }) })
+  };
 
   const handleImageChange = (file) => {
     if (file && file.type.startsWith("image/")) {
