@@ -18,7 +18,7 @@ const ManageStaff = ({setStaffId, setRender }) => {
 
   // Pagination state
   const [page, setPage] = useState(0);
-  const [rowsPerPage, setRowsPerPage] = useState(10);
+  const [rowsPerPage, setRowsPerPage] = useState(8);
 
   // Modal state
   const [modalShow, setModalShow] = useState(false);
@@ -34,7 +34,7 @@ const ManageStaff = ({setStaffId, setRender }) => {
   };
 
   const handleChangeRowsPerPage = (event) => {
-    setRowsPerPage(parseInt(event.target.value, 10));
+    setRowsPerPage(parseInt(event.target.value, 8));
     setPage(0);
   };
 
@@ -97,7 +97,7 @@ const ManageStaff = ({setStaffId, setRender }) => {
       className="bg-white m-3 rounded p-0"
       style={{
         width: "142vh",
-        height: "81vh",
+        height: "79vh",
         display: "flex",
         flexDirection: "column",
       }}
@@ -129,39 +129,49 @@ const ManageStaff = ({setStaffId, setRender }) => {
           </TableHead>
 
           <TableBody>
-            {staffData.map((staff) => {
-              // Role-based delete permissions
-              const canDelete =
-                currentUser === "super_admin" ||
-                (currentUser === "admin" && staff.staff_position === "staff");
+  {staffData
+    .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
+    .map((staff) => {
+      const canDelete =
+        currentUser === "super_admin" ||
+        (currentUser === "admin" && staff.staff_position === "staff");
 
-              // Prevent self-delete
-              const isSelf = staff.id === currentUserId;
+      const isSelf = staff.id === currentUserId;
 
-              return (
-                <TableRow key={staff.id} onClick={()=>handleRowClicked(staff.id)} sx={{cursor: "pointer", "&:hover": { backgroundColor: "#f5f5f5" }}}>
-                  <TableCell align="left">{staff.staff_name}</TableCell>
-                  <TableCell align="left">{staff.staff_position}</TableCell>
-                  <TableCell align="left">{staff.staff_contact}</TableCell>
-                  <TableCell align="left">{staff.staff_email}</TableCell>
-                  {(currentUser === "super_admin" ||
-                    currentUser === "admin") && (
-                    <TableCell align="center">
-                      {canDelete && !isSelf && (
-                        <Button
-                          size="sm"
-                          variant="danger"
-                          onClick={() =>  (staff.id)}
-                        >
-                          Delete
-                        </Button>
-                      )}
-                    </TableCell>
-                  )}
-                </TableRow>
-              );
-            })}
-          </TableBody>
+      return (
+        <TableRow
+          key={staff.id}
+          onClick={() => handleRowClicked(staff.id)}
+          sx={{
+            cursor: "pointer",
+            "&:hover": { backgroundColor: "#f5f5f5" },
+          }}
+        >
+          <TableCell align="left">{staff.staff_name}</TableCell>
+          <TableCell align="left">{staff.staff_position}</TableCell>
+          <TableCell align="left">{staff.staff_contact}</TableCell>
+          <TableCell align="left">{staff.staff_email}</TableCell>
+          {(currentUser === "super_admin" || currentUser === "admin") && (
+            <TableCell align="center">
+              {canDelete && !isSelf && (
+                <Button
+                  size="sm"
+                  variant="danger"
+                  onClick={(e) => {
+                    e.stopPropagation(); // prevent row click
+                    handleDelete(staff.id);
+                  }}
+                >
+                  Delete
+                </Button>
+              )}
+            </TableCell>
+          )}
+        </TableRow>
+      );
+    })}
+</TableBody>
+
         </Table>
       </Box>
 
@@ -173,7 +183,7 @@ const ManageStaff = ({setStaffId, setRender }) => {
         onPageChange={handleChangePage}
         rowsPerPage={rowsPerPage}
         onRowsPerPageChange={handleChangeRowsPerPage}
-        rowsPerPageOptions={[10, 20, 50]}
+        rowsPerPageOptions={[8]}
         sx={{
           borderTop: "1px solid #e0e0e0",
           marginTop: "auto",
