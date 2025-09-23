@@ -9,12 +9,11 @@ import { supabase } from "../supabaseClient";
 
 const Charts = () => {
   const [dataset, setDataset] = useState([]);
-  const [products, setProducts] = useState([]);
-  const [view, setView] = useState("year"); // "year" or "month"
+  const [products, setProducts] = useState({}); // mapping product_ID -> product_name
+  const [view, setView] = useState("year");
   const [selectedMonth, setSelectedMonth] = useState(null);
-  const [year, setYear] = useState(new Date().getFullYear()); // chosen year
+  const [year, setYear] = useState(new Date().getFullYear());
 
-  // menu state for year picker
   const [anchorEl, setAnchorEl] = useState(null);
   const open = Boolean(anchorEl);
   const handleMenuOpen = (event) => setAnchorEl(event.currentTarget);
@@ -30,9 +29,31 @@ const Charts = () => {
     height: 400,
   };
 
+  // fetch products once
+  useEffect(() => {
+    const fetchProducts = async () => {
+      const { data, error } = await supabase
+        .from("products")
+        .select("product_ID, product_name");
+
+      if (error) {
+        console.error("Error fetching products:", error);
+        return;
+      }
+
+      const mapping = {};
+      data.forEach((p) => {
+        mapping[p.product_ID] = p.product_name;
+      });
+      setProducts(mapping);
+    };
+
+    fetchProducts();
+  }, []);
+
   useEffect(() => {
     fetchYearlyTransactions(year);
-  }, [year]);
+  }, [year, products]);
 
   const fetchYearlyTransactions = async (selectedYear) => {
     const { data, error } = await supabase
@@ -55,17 +76,20 @@ const Charts = () => {
       return;
     }
 
-    const productSet = new Set();
+    const productIDs = new Set();
     data.forEach((t) =>
-      t.transaction_items?.forEach((item) => productSet.add(item.product_code))
+      t.transaction_items?.forEach((item) => productIDs.add(item.product_code))
     );
-    const productList = Array.from(productSet);
-    setProducts(productList);
 
+    const productList = Array.from(productIDs);
+
+    // build monthly skeleton
     const monthlyData = Array.from({ length: 12 }, (_, i) => {
       const row = {
         monthIndex: i,
-        month: new Date(selectedYear, i).toLocaleString("en-US", { month: "short" }),
+        month: new Date(selectedYear, i).toLocaleString("en-US", {
+          month: "short",
+        }),
       };
       productList.forEach((p) => {
         row[p] = 0;
@@ -73,6 +97,7 @@ const Charts = () => {
       return row;
     });
 
+    // fill data
     data.forEach((transaction) => {
       const date = new Date(transaction.created_at);
       if (date.getFullYear() === selectedYear) {
@@ -108,7 +133,7 @@ const Charts = () => {
       return;
     }
 
-    const productList = products;
+    const productList = Object.keys(products);
 
     const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
     const dailyData = Array.from({ length: daysInMonth }, (_, i) => {
@@ -158,10 +183,13 @@ const Charts = () => {
                   selectedMonth
                 ).toLocaleString("en-US", { month: "long" })} ${year}`}
           </span>
-          <div className="d-flex">
+
+          <div className="d-flex align-items-center gap-2 mt-3">
+            {/* 🔹 Back button (only in month view) */}
             {view === "month" && (
               <Button
                 variant="outlined"
+                size="small"
                 onClick={() => fetchYearlyTransactions(year)}
                 sx={{
                   borderColor: "#6c757d !important",
@@ -171,14 +199,12 @@ const Charts = () => {
                     color: "#495057",
                   },
                 }}
-                className="mt-3 mx-1"
-                size="small"
               >
                 Back
               </Button>
             )}
 
-            {/* Year Picker Button */}
+            {/* 🔹 Year button */}
             <Button
               variant="outlined"
               startIcon={<CiCalendar />}
@@ -191,18 +217,10 @@ const Charts = () => {
                   color: "#495057",
                 },
               }}
-              className="mt-3"
               size="small"
             >
               {year}
             </Button>
-            <Menu anchorEl={anchorEl} open={open} onClose={handleMenuClose}>
-              {[2024, 2025, 2026, 2027].map((y) => (
-                <MenuItem key={y} onClick={() => handleYearSelect(y)}>
-                  {y}
-                </MenuItem>
-              ))}
-            </Menu>
           </div>
         </div>
 
@@ -214,13 +232,16 @@ const Charts = () => {
               scaleType: "band",
             },
           ]}
-          series={products.map((p) => ({
-            dataKey: p,
-            label: p,
+          series={Object.keys(products).map((id) => ({
+            dataKey: id, // product_ID or code
+            label: products[id], // show product_name instead of ID
           }))}
           {...chartSetting}
           className="mt-3"
           onItemClick={handleBarClick}
+          slotProps={{
+            legend: { hidden: true }, // hide legend
+          }}
         />
       </div>
     </Container>
