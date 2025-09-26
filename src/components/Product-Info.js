@@ -93,22 +93,57 @@ const ProductInfo = ({ setRender, product, onUpdateProduct }) => {
 
   const handleDelete = async () => {
     const confirmDelete = window.confirm(
-      `Are you sure you want to delete "${product.product_name}"?`
+      `Archive and delete "${product.product_name}"?`
     );
-
     if (!confirmDelete) return;
 
-    const { error } = await supabase
-      .from("products")
-      .delete()
-      .eq("product_ID", product.product_ID);
+    try {
+      // 1) Build archive payload from current product
+      const archiveRecord = {
+        // created_at will be set by DB default if present
+        product_name: product.product_name ?? null,
+        product_code: product.product_ID ?? null, // <-- map to archive.product_code
+        product_category: product.product_category ?? null,
+        product_price: product.product_price ?? null,
+        product_quantity: product.product_quantity ?? null,
+        product_unit: product.product_unit ?? null,
+        product_expiry: product.product_expiry ?? null,
+        product_img: product.product_img ?? null,
+        supplier_name: product.supplier_name ?? null,
+        product_brand: product.product_brand ?? null,
+        supplier_price: product.supplier_price ?? null,
+      };
 
-    if (error) {
-      console.error("Error deleting product:", error);
-      alert("Failed to delete product.");
-    } else {
-      alert("Product deleted successfully.");
+      // 2) Insert into archive FIRST
+      const { error: insertError } = await supabase
+        .from("archive")
+        .insert([archiveRecord]);
+
+      if (insertError) {
+        console.error("Archive insert failed:", insertError);
+        alert("Failed to archive product. Delete cancelled.");
+        return; // Do not proceed to delete if archive failed
+      }
+
+      // 3) Delete from products ONLY after successful archive
+      const { error: deleteError } = await supabase
+        .from("products")
+        .delete()
+        .eq("product_ID", product.product_ID);
+
+      if (deleteError) {
+        console.error("Product delete failed:", deleteError);
+        alert(
+          "Product was archived, but deleting from products failed. Please try again."
+        );
+        return;
+      }
+
+      alert("Product archived and deleted successfully.");
       setRender("products"); // go back to product list
+    } catch (err) {
+      console.error("Unexpected delete error:", err);
+      alert("Something went wrong. Please try again.");
     }
   };
 

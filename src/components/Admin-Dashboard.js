@@ -7,6 +7,7 @@ import BestSellingToday from "./best-selling-today";
 import NearExpiration from "./near-expiration";
 import AddedStocks from "./added-stocks";
 import LowStocks from "./low-stocks";
+import ProfitChart from "./profit-chart";
 
 
 const AdminDashboard = () => {
@@ -15,7 +16,17 @@ const AdminDashboard = () => {
 
               <Row>
               <Col md={8}>
-                <Charts />
+                <Row>
+                    <Col>
+                      <Charts />
+                    </Col>
+                </Row>
+                <Row>
+                    <Col>
+                      <ProfitChart />
+                    </Col>
+                </Row>
+                
               </Col>
               <Col md={4}>
                 <Row>

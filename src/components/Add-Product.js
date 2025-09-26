@@ -30,6 +30,10 @@ const AddProduct = ({ setRender }) => {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
+  // ✅ Product ID check state
+  const [prodIdStatus, setProdIdStatus] = useState("idle"); // 'idle' | 'checking' | 'exists' | 'available'
+  const [prodIdMsg, setProdIdMsg] = useState("");
+
   // ====== BRAND DROPDOWN STATE (NEW) ======
   const [brandList, setBrandList] = useState([]); // available brands
   const [brandLoading, setBrandLoading] = useState(false);
@@ -61,14 +65,47 @@ const AddProduct = ({ setRender }) => {
   }, []);
 
   useEffect(() => {
-    console.log(productName);
-  }, [productName]);
+    if (!productId.trim()) {
+      setProdIdStatus("idle");
+      setProdIdMsg("");
+      return;
+    }
+
+    const delay = setTimeout(async () => {
+      setProdIdStatus("checking");
+      setProdIdMsg("Checking Product ID...");
+
+      const { data, error } = await supabase
+        .from("products")
+        .select("product_ID")
+        .eq("product_ID", productId.trim())
+        .maybeSingle();
+
+      if (error) {
+        console.error("Error checking Product ID:", error);
+        setProdIdStatus("idle");
+        setProdIdMsg("");
+        return;
+      }
+
+      if (data) {
+        setProdIdStatus("exists");
+        setProdIdMsg("❌ Product ID already exists!");
+      } else {
+        setProdIdStatus("available");
+        setProdIdMsg("✅ Product ID is available");
+      }
+    }, 500); // debounce 0.5s
+
+    return () => clearTimeout(delay);
+  }, [productId]);
 
   useEffect(() => {
     const sp = parseFloat(supplierPrice);
     if (!isNaN(sp)) {
-      const tenPercent = sp * 0.1;
-      setBuyingPrice(tenPercent.toFixed(2)); // keep 2 decimal places
+      // ✅ Supplier price + 10%
+      const suggested = sp + sp * 0.1;
+      setBuyingPrice(suggested.toFixed(2));
     } else {
       setBuyingPrice("");
     }
@@ -352,6 +389,11 @@ const AddProduct = ({ setRender }) => {
       // Validation
       if (!productName.trim()) throw new Error("Product name is required");
       if (!productId.trim()) throw new Error("Product ID is required");
+
+      if (prodIdStatus === "exists") {
+        throw new Error("Product ID already exists, please choose another.");
+      }
+
       if (!productBrand.trim()) throw new Error("Product brand is required");
       if (!buyingPrice || buyingPrice <= 0)
         throw new Error("Valid buying price is required");
@@ -380,7 +422,6 @@ const AddProduct = ({ setRender }) => {
         created_at: new Date().toISOString(),
       };
 
-      // Insert product
       const { data: insertedProducts, error: insertError } = await supabase
         .from("products")
         .insert([productData])
@@ -388,43 +429,7 @@ const AddProduct = ({ setRender }) => {
 
       if (insertError) throw insertError;
 
-      const newProduct = insertedProducts[0];
-
-      // Get current user
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
-      // Get staff name
-      const { data: staffData, error: staffError } = await supabase
-        .from("staff")
-        .select("staff_name")
-        .eq("id", user.id);
-
-      if (staffError) throw staffError;
-
-      const staffName = staffData?.[0]?.staff_name || "Unknown";
-
-      // Insert into logs
-      const { error: logsError } = await supabase.from("logs").insert([
-        {
-          product_id: newProduct.id,
-          product_brand: newProduct.product_brand,
-          product_name: newProduct.product_name,
-          product_quantity: newProduct.product_quantity,
-          product_category: newProduct.product_category,
-          product_unit: newProduct.product_unit,
-          product_expiry: newProduct.product_expiry,
-          staff: staffName,
-          product_action: "Add Product",
-        },
-      ]);
-
-      if (logsError) throw logsError;
-
       setSuccess("Product added successfully!");
-
-      // Redirect after 2s
       setTimeout(() => {
         setRender("product");
       }, 2000);
@@ -435,6 +440,42 @@ const AddProduct = ({ setRender }) => {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (!productId.trim()) {
+      setProdIdStatus("idle");
+      setProdIdMsg("");
+      return;
+    }
+
+    const delay = setTimeout(async () => {
+      setProdIdStatus("checking");
+      setProdIdMsg("Checking Product ID...");
+
+      const { data, error } = await supabase
+        .from("products")
+        .select("product_ID")
+        .eq("product_ID", productId.trim())
+        .maybeSingle();
+
+      if (error) {
+        console.error("Error checking Product ID:", error);
+        setProdIdStatus("idle");
+        setProdIdMsg("");
+        return;
+      }
+
+      if (data) {
+        setProdIdStatus("exists");
+        setProdIdMsg("❌ Product ID already exists!");
+      } else {
+        setProdIdStatus("available");
+        setProdIdMsg("✅ Product ID is available");
+      }
+    }, 500); // debounce 0.5s
+
+    return () => clearTimeout(delay);
+  }, [productId]);
 
   // Reset form function
   const resetForm = () => {
@@ -515,10 +556,9 @@ const AddProduct = ({ setRender }) => {
                         type="text"
                         placeholder="Enter product ID"
                         value={productId}
-                        onChange={(e) => setProductId(e.target.value)} // ← Add this
+                        onChange={(e) => setProductId(e.target.value)}
                         required
                       />
-
                       <Button
                         variant="outline-secondary"
                         onClick={() => setBarcodeModalShow(true)}
@@ -526,6 +566,17 @@ const AddProduct = ({ setRender }) => {
                         <LuScanBarcode />
                       </Button>
                     </InputGroup>
+                    {prodIdMsg && (
+                      <div
+                        style={{
+                          fontSize: "0.8rem",
+                          marginTop: "4px",
+                          color: prodIdStatus === "exists" ? "red" : "green",
+                        }}
+                      >
+                        {prodIdMsg}
+                      </div>
+                    )}
                   </Col>
                 </Form.Group>
 
@@ -699,6 +750,27 @@ const AddProduct = ({ setRender }) => {
                     />
                   </Col>
                 </Form.Group>
+                <Form.Group
+                  as={Row}
+                  className="mb-3 mt-4"
+                  controlId="formBuyingPrice"
+                >
+                  <Form.Label column sm={3} className="text-start">
+                    Supplier Price
+                  </Form.Label>
+                  <Col sm={9}>
+                    <Form.Control
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      placeholder="Enter supplier price"
+                      size="sm"
+                      value={supplierPrice}
+                      onChange={(e) => setSupplierPrice(e.target.value)}
+                      required
+                    />
+                  </Col>
+                </Form.Group>
 
                 <Form.Group
                   as={Row}
@@ -726,9 +798,12 @@ const AddProduct = ({ setRender }) => {
                       </Form.Text>
                     ) : (
                       <Form.Text className="text-muted">
-                        Suggested Buying Price (10%):{" "}
-                        {(parseFloat(supplierPrice) * 0.1).toFixed(2)} —
-                        auto-filled above, you can override.
+                        Suggested Buying Price (10% added):{" "}
+                        {(
+                          parseFloat(supplierPrice) +
+                          parseFloat(supplierPrice) * 0.1
+                        ).toFixed(2)}{" "}
+                        — auto-filled above, you can override.
                       </Form.Text>
                     )}
                   </Col>
@@ -898,28 +973,6 @@ const AddProduct = ({ setRender }) => {
                   </Col>
                 </Form.Group>
                 {/* ====== END SUPPLIER # FIELD ====== */}
-
-                <Form.Group
-                  as={Row}
-                  className="mb-3 mt-4"
-                  controlId="formBuyingPrice"
-                >
-                  <Form.Label column sm={3} className="text-start">
-                    Supplier Price
-                  </Form.Label>
-                  <Col sm={9}>
-                    <Form.Control
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      placeholder="Enter supplier price"
-                      size="sm"
-                      value={supplierPrice}
-                      onChange={(e) => setSupplierPrice(e.target.value)}
-                      required
-                    />
-                  </Col>
-                </Form.Group>
               </div>
             </Col>
 

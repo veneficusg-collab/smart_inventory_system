@@ -10,6 +10,8 @@ import { CiLogout } from "react-icons/ci";
 import { Link } from "@mui/material";
 import { ClipboardClock, Logs } from "lucide-react";
 import { supabase } from "../supabaseClient";
+import { HiArchiveBoxXMark } from "react-icons/hi2";
+
 
 const Sidebar = ({ setRender, staffRole }) => {
   const handleLogout = async () => {
@@ -54,8 +56,8 @@ const Sidebar = ({ setRender, staffRole }) => {
         </div>
 
         <div
-          className="text-start"
-          style={{ fontWeight: "300", marginLeft: "10px" }}
+          className="d-flex flex-column"
+          style={{ marginLeft: "10px", gap: "12px" }}
         >
           {staffRole === "admin" || staffRole === "super_admin" ? (
             <>
@@ -106,6 +108,7 @@ const Sidebar = ({ setRender, staffRole }) => {
                   <span className="mx-3">Manage Staff</span>
                 </div>
               </Link>
+            
 
               <Link
                 underline="hover"
@@ -116,6 +119,17 @@ const Sidebar = ({ setRender, staffRole }) => {
                 <div className="d-flex align-items-center my-3">
                   <ClipboardClock style={{ width: "16px" }} />
                   <span className="mx-3">Logs</span>
+                </div>
+              </Link>
+                <Link
+                underline="hover"
+                color="inherit"
+                component="button"
+                onClick={() => setRender("Archive")}
+              >
+                <div className="d-flex align-items-center my-3">
+                  <HiArchiveBoxXMark style={{ width: "16px" }} />
+                  <span className="mx-3">Archive</span>
                 </div>
               </Link>
             </>
@@ -162,6 +176,7 @@ const Sidebar = ({ setRender, staffRole }) => {
                     <span className="mx-3">Inventory</span>
                   </div>
                 </Link>
+                
 
                 <Link
                   underline="hover"
@@ -174,6 +189,17 @@ const Sidebar = ({ setRender, staffRole }) => {
                     <span className="mx-3">Logs</span>
                   </div>
                 </Link>
+                <Link
+                  underline="hover"
+                  color="inherit"
+                  component="button"
+                  onClick={() => setRender("Archive")}
+                >
+                  <div className="d-flex align-items-center my-3">
+                    <HiArchiveBoxXMark style={{ width: "16px" }} />
+                    <span className="mx-3">Archive</span>
+                  </div>
+                </Link>
               </div>
             </>
           )}
@@ -182,8 +208,8 @@ const Sidebar = ({ setRender, staffRole }) => {
 
       {/* Bottom section */}
       <div
-        className="text-start"
-        style={{ fontWeight: "300", marginLeft: "10px" }}
+        className="d-flex flex-column"
+        style={{ marginLeft: "10px", gap: "12px" }}
       >
         <Link
           underline="hover"

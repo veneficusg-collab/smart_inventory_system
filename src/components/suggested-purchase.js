@@ -96,7 +96,7 @@ const SuggestedPurchase = () => {
   return (
     <Container
       className="bg-white mx-3 my-4 rounded p-0"
-      style={{ height: "270px", width:"370px", overflowY: "auto" }} // ✅ same as NearExpiration
+      style={{ height: 312, width:"370px", overflowY: "auto" }} // ✅ same as NearExpiration
     >
       {/* Header */}
       <div className="d-flex justify-content-between align-items-center mx-2 mb-3">

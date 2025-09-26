@@ -27,9 +27,9 @@ const Logs = () => {
 
   // State for pagination - separate for each tab
   const [inventoryPage, setInventoryPage] = useState(0);
-  const [inventoryRowsPerPage, setInventoryRowsPerPage] = useState(10);
+  const [inventoryRowsPerPage, setInventoryRowsPerPage] = useState(25);
   const [transactionPage, setTransactionPage] = useState(0);
-  const [transactionRowsPerPage, setTransactionRowsPerPage] = useState(10);
+  const [transactionRowsPerPage, setTransactionRowsPerPage] = useState(25);
 
   const fetchLogs = async () => {
     try {
@@ -311,7 +311,7 @@ const Logs = () => {
 
       {products.length > 0 && (
         <TablePagination
-          rowsPerPageOptions={[10, 25, 50]}
+          rowsPerPageOptions={[25]}
           component="div"
           count={products.length}
           rowsPerPage={inventoryRowsPerPage}
@@ -441,7 +441,7 @@ const Logs = () => {
 
       {transactions.length > 0 && (
         <TablePagination
-          rowsPerPageOptions={[10, 25, 50]}
+          rowsPerPageOptions={[25]}
           component="div"
           count={transactions.length}
           rowsPerPage={transactionRowsPerPage}

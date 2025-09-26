@@ -6,6 +6,7 @@ import {
   Row,
   Col,
   InputGroup,
+  Image,
 } from "react-bootstrap";
 import { useEffect, useState } from "react";
 import Table from "@mui/material/Table";
@@ -28,6 +29,7 @@ import { IoSearch } from "react-icons/io5";
 const Products = ({ setRender, setProduct, setID, staffRole }) => {
   const [products, setProducts] = useState([]);
   const [filteredProducts, setFilteredProducts] = useState([]);
+  const [imageMap, setImageMap] = useState({});
   const [productId, setProductId] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -41,12 +43,11 @@ const Products = ({ setRender, setProduct, setID, staffRole }) => {
   const [searchQuery, setSearchQuery] = useState("");
 
   const [page, setPage] = useState(0);
-  const [rowsPerPage, setRowsPerPage] = useState(7);
+  const [rowsPerPage, setRowsPerPage] = useState(25);
 
   useEffect(() => {
-  console.log("staffRole in Products:", staffRole);
-}, [staffRole]);
-
+    console.log("staffRole in Products:", staffRole);
+  }, [staffRole]);
 
   // fetch products
   const fetchProducts = async () => {
@@ -63,6 +64,25 @@ const Products = ({ setRender, setProduct, setID, staffRole }) => {
 
       setProducts(data || []);
       setFilteredProducts(data || []);
+
+      // Build image URL map (same logic as ProductInfo)
+      const map = {};
+      (data || []).forEach((p) => {
+        const key = p.product_img;
+        if (!key) {
+          map[p.product_ID] = "";
+          return;
+        }
+        if (typeof key === "string" && key.startsWith("http")) {
+          map[p.product_ID] = key;
+        } else {
+          const { data: pub } = supabase.storage
+            .from("Smart-Inventory-System-(Pet Matters)")
+            .getPublicUrl(`products/${key}`);
+          map[p.product_ID] = pub?.publicUrl || "";
+        }
+      });
+      setImageMap(map);
     } catch (error) {
       console.error("Error fetching products:", error);
       setError("Failed to load products. Please try again.");
@@ -257,32 +277,33 @@ const Products = ({ setRender, setProduct, setID, staffRole }) => {
           </InputGroup>
 
           {/* Action buttons */}
-          {(staffRole === 'admin' || staffRole === 'super_admin') && (<div className="d-flex gap-2 ms-auto">
-            <Button
-              className="mx-1 mt-3"
-              size="sm"
-              onClick={handleAddProductButton}
-            >
-              Add Product
-            </Button>
-            <Button
-              className="mx-1 mt-3"
-              size="sm"
-              variant="outline-secondary"
-              onClick={() => handleRestock()}
-            >
-              Restock
-            </Button>
-            <Button
-              className="mx-1 mt-3"
-              size="sm"
-              variant="outline-danger"
-              onClick={() => handleUnstock()}
-            >
-              Unstock
-            </Button>
-          </div>)}
-          
+          {(staffRole === "admin" || staffRole === "super_admin") && (
+            <div className="d-flex gap-2 ms-auto">
+              <Button
+                className="mx-1 mt-3"
+                size="sm"
+                onClick={handleAddProductButton}
+              >
+                Add Product
+              </Button>
+              <Button
+                className="mx-1 mt-3"
+                size="sm"
+                variant="outline-secondary"
+                onClick={() => handleRestock()}
+              >
+                Restock
+              </Button>
+              <Button
+                className="mx-1 mt-3"
+                size="sm"
+                variant="outline-danger"
+                onClick={() => handleUnstock()}
+              >
+                Unstock
+              </Button>
+            </div>
+          )}
         </div>
 
         {error && (
@@ -300,10 +321,12 @@ const Products = ({ setRender, setProduct, setID, staffRole }) => {
           <Table stickyHeader>
             <TableHead>
               <TableRow>
+                <TableCell align="left">Image</TableCell>
                 <TableCell align="left">Product</TableCell>
                 <TableCell align="left">Product ID</TableCell>
                 <TableCell align="left">Category</TableCell>
-                <TableCell align="left">Buying Price</TableCell>
+                <TableCell align="left">Price</TableCell>
+                <TableCell align="left">Supplier Price</TableCell>
                 <TableCell align="left">Quantity</TableCell>
                 <TableCell align="left">Unit</TableCell>
                 <TableCell align="left">Expiry Date</TableCell>
@@ -313,7 +336,7 @@ const Products = ({ setRender, setProduct, setID, staffRole }) => {
             <TableBody>
               {filteredProducts.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={9} align="center" sx={{ py: 4 }}>
+                  <TableCell colSpan={10} align="center" sx={{ py: 4 }}>
                     <div className="text-muted">
                       <p>No products found</p>
                       <Button size="sm" onClick={handleAddProductButton}>
@@ -343,6 +366,41 @@ const Products = ({ setRender, setProduct, setID, staffRole }) => {
                           },
                         }}
                       >
+                        <TableCell sx={{ width: 64 }}>
+                          {imageMap[product.product_ID] ? (
+                            <Image
+                              src={imageMap[product.product_ID]}
+                              rounded
+                              style={{
+                                width: 48,
+                                height: 48,
+                                objectFit: "cover",
+                                border: "1px solid #eee",
+                              }}
+                              onError={(e) => {
+                                // hide broken image & show placeholder box
+                                e.currentTarget.style.display = "none";
+                              }}
+                            />
+                          ) : (
+                            <div
+                              style={{
+                                width: 48,
+                                height: 48,
+                                borderRadius: 6,
+                                background: "#f1f3f5",
+                                border: "1px dashed #dee2e6",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                fontSize: 10,
+                                color: "#868e96",
+                              }}
+                            >
+                              No Image
+                            </div>
+                          )}
+                        </TableCell>
                         <TableCell>{product.product_name}</TableCell>
                         <TableCell>{product.product_ID}</TableCell>
                         <TableCell>
@@ -350,6 +408,9 @@ const Products = ({ setRender, setProduct, setID, staffRole }) => {
                         </TableCell>
                         <TableCell>
                           ₱{product.product_price?.toFixed(2)}
+                        </TableCell>
+                        <TableCell>
+                          ₱{product.supplier_price?.toFixed(2)}
                         </TableCell>
                         <TableCell>{product.product_quantity}</TableCell>
                         <TableCell>{product.product_unit || "N/A"}</TableCell>
@@ -379,7 +440,7 @@ const Products = ({ setRender, setProduct, setID, staffRole }) => {
 
         {filteredProducts.length > 0 && (
           <TablePagination
-            rowsPerPageOptions={[7, 10, 15]}
+            rowsPerPageOptions={[25]}
             component="div"
             count={filteredProducts.length}
             rowsPerPage={rowsPerPage}
