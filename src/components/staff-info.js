@@ -6,7 +6,7 @@ import { IoCloseOutline } from "react-icons/io5";
 import { QRCodeSVG } from "qrcode.react";
 import { supabase } from "../supabaseClient";
 
-const StaffInfo = ({ staffId, setRender }) => {
+const StaffInfo = ({ staffId, setRender, embedded = false }) => {
   const [image, setImage] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
   const fileInputRef = useRef(null);
@@ -18,8 +18,11 @@ const StaffInfo = ({ staffId, setRender }) => {
   const [emailAddress, setEmailAddress] = useState("");
   const [staffBarcode, setStaffBarcode] = useState("");
 
-  const [editing, setEditing] = useState(false); // ✅ track edit mode
-  const [originalData, setOriginalData] = useState({}); // ✅ backup
+  const [editing, setEditing] = useState(false);
+  const [originalData, setOriginalData] = useState({});
+
+  // In embedded mode, we keep it read-only
+  const readOnly = embedded ? true : !editing;
 
   useEffect(() => {
     fetchStaffData();
@@ -27,7 +30,7 @@ const StaffInfo = ({ staffId, setRender }) => {
 
   const fetchStaffData = async () => {
     let { data: staff, error } = await supabase
-      .from("staff") // ✅ staff table
+      .from("staff")
       .select("*")
       .eq("id", staffId)
       .single();
@@ -35,23 +38,17 @@ const StaffInfo = ({ staffId, setRender }) => {
     if (error) {
       console.log(error);
     } else if (staff) {
-      setStaffName(staff.staff_name);
-      setPosition(staff.staff_position);
-      setContactNumber(staff.staff_contact);
-      setEmailAddress(staff.staff_email);
-      setStaffBarcode(staff.staff_barcode);
+      setStaffName(staff.staff_name || "");
+      setPosition(staff.staff_position || "staff");
+      setContactNumber(staff.staff_contact || "");
+      setEmailAddress(staff.staff_email || "");
+      setStaffBarcode(staff.staff_barcode || "");
 
-      // ✅ load image from Supabase storage
       if (staff.staff_img) {
         const { data: publicUrlData, error: urlError } = supabase.storage
           .from("Smart-Inventory-System-(Pet Matters)")
           .getPublicUrl(staff.staff_img);
-
-        if (!urlError) {
-          setImagePreview(publicUrlData.publicUrl);
-        } else {
-          console.error("Error fetching public URL:", urlError);
-        }
+        if (!urlError) setImagePreview(publicUrlData.publicUrl);
       }
 
       setOriginalData({
@@ -65,12 +62,14 @@ const StaffInfo = ({ staffId, setRender }) => {
   };
 
   const handleEditToggle = () => {
+    if (embedded) return; // no editing in modal
     if (editing) {
-      // Cancel edits → reset form to original data
-      setStaffName(originalData.staff_name);
-      setPosition(originalData.staff_position);
-      setContactNumber(originalData.staff_contact);
-      setEmailAddress(originalData.staff_email);
+      // cancel
+      setStaffName(originalData.staff_name || "");
+      setPosition(originalData.staff_position || "staff");
+      setContactNumber(originalData.staff_contact || "");
+      setEmailAddress(originalData.staff_email || "");
+      setImage(null);
       setEditing(false);
     } else {
       setEditing(true);
@@ -78,15 +77,16 @@ const StaffInfo = ({ staffId, setRender }) => {
   };
 
   const handleSave = async () => {
-    let imagePath = originalData.staff_img; // keep old if no new upload
+    if (embedded) return;
+    let imagePath = originalData.staff_img;
 
     if (image) {
       const fileExt = image.name.split(".").pop();
       const fileName = `${staffId}.${fileExt}`;
-      const filePath = `products/${fileName}`; // ✅ store inside "products" folder
+      const filePath = `products/${fileName}`;
 
       const { error: uploadError } = await supabase.storage
-        .from("Smart-Inventory-System-(Pet Matters)") // ✅ correct bucket
+        .from("Smart-Inventory-System-(Pet Matters)")
         .upload(filePath, image, { upsert: true });
 
       if (uploadError) {
@@ -94,17 +94,15 @@ const StaffInfo = ({ staffId, setRender }) => {
         return;
       }
 
-      imagePath = filePath; // ✅ save path in DB
-      // After successful upload
+      imagePath = filePath;
       const { data: publicUrlData } = supabase.storage
         .from("Smart-Inventory-System-(Pet Matters)")
         .getPublicUrl(filePath);
-
       setImagePreview(publicUrlData.publicUrl);
     }
 
     const { error } = await supabase
-      .from("staff") // ✅ correct table
+      .from("staff")
       .update({
         staff_name: staffName,
         staff_position: position,
@@ -132,9 +130,7 @@ const StaffInfo = ({ staffId, setRender }) => {
     if (file && file.type.startsWith("image/")) {
       setImage(file);
       const reader = new FileReader();
-      reader.onload = (e) => {
-        setImagePreview(e.target.result);
-      };
+      reader.onload = (e) => setImagePreview(e.target.result);
       reader.readAsDataURL(file);
     }
   };
@@ -148,116 +144,124 @@ const StaffInfo = ({ staffId, setRender }) => {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `QRCode_${staffBarcode}.svg`;
+    link.download = `QRCode_${staffBarcode || "staff"}.svg`;
     link.click();
     URL.revokeObjectURL(url);
   };
 
-  return (
-    <Container
-      className="bg-white m-4 rounded"
-      style={{ width: "140vh", height: "86vh" }}
-    >
-      <span
-        className="mx-1 mt-3 d-inline-block"
-        style={{ fontSize: "20px", fontWeight: "bold" }}
+  // ---- Layout wrappers (full vs embedded) ----
+  const Wrapper = ({ children }) =>
+    embedded ? (
+      <div className="px-2 py-1" style={{ minWidth: 760, maxWidth: 980 }}>
+        {children}
+      </div>
+    ) : (
+      <Container
+        className="bg-white m-4 rounded d-flex flex-column"
+        style={{ width: "140vh", minHeight: "86vh" }}
       >
-        Staff Info
-      </span>
-      <Row>
-        <Col md={6}>
-          <Form>
-            {/* Image Upload Section */}
-            <Form.Group className="my-4">
-              <div className="d-flex align-items-center justify-content-center gap-4">
-                {/* Circular Image Preview */}
-                <div
-                  className="position-relative"
-                  style={{ width: "120px", height: "120px" }}
-                >
-                  <div
-                    className={`rounded-circle border d-flex align-items-center justify-content-center position-relative overflow-hidden ${
-                      imagePreview
-                        ? "border-primary"
-                        : "border-secondary border-2 border-dashed"
-                    }`}
-                    style={{
-                      width: "120px",
-                      height: "120px",
-                      backgroundColor: imagePreview ? "transparent" : "#f8f9fa",
-                      cursor: editing ? "pointer" : "not-allowed",
-                      opacity: editing ? 1 : 0.6, // dim when disabled
-                    }}
-                    onClick={() => {
-                      if (editing) fileInputRef.current?.click();
-                    }}
-                  >
-                    {imagePreview ? (
-                      <img
-                        src={imagePreview}
-                        alt="Profile preview"
-                        className="w-100 h-100"
-                        style={{ objectFit: "cover" }}
-                      />
-                    ) : (
-                      <User size={40} className="text-secondary" />
-                    )}
-                  </div>
+        {children}
+      </Container>
+    );
 
-                  {imagePreview &&
-                    editing && ( // ✅ only show delete button in edit mode
-                      <Button
-                        variant="danger"
-                        size="sm"
-                        className="position-absolute rounded-circle p-1"
-                        style={{
-                          top: "5px",
-                          right: "5px",
-                          width: "25px",
-                          height: "25px",
-                          fontSize: "12px",
-                        }}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setImage(null);
-                          setImagePreview(null);
-                          if (fileInputRef.current) {
-                            fileInputRef.current.value = "";
-                          }
-                        }}
-                      >
-                        <IoCloseOutline className="mb-1" />
-                      </Button>
-                    )}
-                </div>
+  return (
+    <Wrapper>
+      {!embedded && (
+        <span className="mx-1 mt-3 d-inline-block fw-bold" style={{ fontSize: 20 }}>
+          Staff Info
+        </span>
+      )}
 
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
-                  onChange={(e) => handleImageChange(e.target.files[0])}
-                  className="d-none"
-                  disabled={!editing} // ✅ prevent selecting when not editing
-                />
+      <Row className={embedded ? "mt-1" : ""}>
+        {/* LEFT: avatar + form */}
+        <Col md={7} className="px-3">
+          {/* Avatar */}
+          <div className="d-flex justify-content-center mt-3 mb-3">
+            <div
+              className="position-relative"
+              style={{ width: embedded ? 96 : 120, height: embedded ? 96 : 120 }}
+            >
+              <div
+                className={`rounded-circle border d-flex align-items-center justify-content-center position-relative overflow-hidden ${
+                  imagePreview ? "border-primary" : "border-secondary border-2 border-dashed"
+                }`}
+                style={{
+                  width: "100%",
+                  height: "100%",
+                  backgroundColor: imagePreview ? "transparent" : "#f8f9fa",
+                  cursor: readOnly ? "default" : "pointer",
+                  opacity: readOnly ? 0.9 : 1,
+                }}
+                onClick={() => {
+                  if (!readOnly) fileInputRef.current?.click();
+                }}
+              >
+                {imagePreview ? (
+                  <img
+                    src={imagePreview}
+                    alt="Profile preview"
+                    className="w-100 h-100"
+                    style={{ objectFit: "cover" }}
+                  />
+                ) : (
+                  <User size={embedded ? 30 : 40} className="text-secondary" />
+                )}
               </div>
-            </Form.Group>
 
-            {/* Info Fields */}
+              {!readOnly && imagePreview && (
+                <Button
+                  variant="danger"
+                  size="sm"
+                  className="position-absolute rounded-circle p-1"
+                  style={{
+                    top: 5,
+                    right: 5,
+                    width: 25,
+                    height: 25,
+                    fontSize: 12,
+                  }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setImage(null);
+                    setImagePreview(null);
+                    if (fileInputRef.current) fileInputRef.current.value = "";
+                  }}
+                >
+                  <IoCloseOutline className="mb-1" />
+                </Button>
+              )}
+            </div>
+
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              onChange={(e) => handleImageChange(e.target.files[0])}
+              className="d-none"
+              disabled={readOnly}
+            />
+          </div>
+
+          {/* Form */}
+          <Form>
             <Form.Group className="mb-3">
               <Form.Label>Staff name</Form.Label>
               <Form.Control
                 type="text"
                 value={staffName}
                 onChange={(e) => setStaffName(e.target.value)}
-                disabled={!editing}
+                disabled={readOnly}
+                size="sm"
               />
             </Form.Group>
+
             <Form.Group className="mb-3">
               <Form.Label>Position</Form.Label>
               <Form.Select
                 value={position}
                 onChange={(e) => setPosition(e.target.value)}
-                disabled={!editing}
+                disabled={readOnly}
+                size="sm"
               >
                 <option value="admin">Admin</option>
                 <option value="staff">Staff</option>
@@ -270,46 +274,56 @@ const StaffInfo = ({ staffId, setRender }) => {
                 type="tel"
                 value={contactNumber}
                 onChange={(e) => setContactNumber(e.target.value)}
-                disabled={!editing}
+                disabled={readOnly}
+                size="sm"
               />
             </Form.Group>
+
             <Form.Group className="mb-3">
               <Form.Label>Email Address</Form.Label>
               <Form.Control
                 type="email"
                 value={emailAddress}
                 onChange={(e) => setEmailAddress(e.target.value)}
-                disabled={!editing}
+                disabled={readOnly}
+                size="sm"
               />
             </Form.Group>
           </Form>
         </Col>
 
-        {/* QR Section */}
+        {/* RIGHT: QR + button */}
         <Col
-          md={6}
-          className="d-flex flex-column justify-content-center align-items-center gap-3"
-          style={{ minHeight: "400px" }}
+          md={5}
+          className="d-flex flex-column align-items-center justify-content-center"
           ref={qrRef}
+          style={{ gap: 16 }}
         >
-          <QRCodeSVG value={staffBarcode} size={128} />
-          <Button variant="primary" onClick={downloadQRCode} className="my-5">
+          <QRCodeSVG value={staffBarcode || ""} size={embedded ? 128 : 148} />
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={downloadQRCode}
+            className={embedded ? "mt-2" : "my-3"}
+          >
             Download QR Code
           </Button>
         </Col>
       </Row>
 
-      {/* Action Buttons */}
-      <div className="mt-auto mb-3 me-3 d-flex gap-3 justify-content-end">
-        <Button variant="danger">Delete</Button>
-        <Button variant="secondary" onClick={handleEditToggle}>
-          {editing ? "Cancel" : "Edit"}
-        </Button>
-        <Button variant="primary" onClick={handleSave} disabled={!editing}>
-          Save
-        </Button>
-      </div>
-    </Container>
+      {/* Full-page action buttons (hidden in modal) */}
+      {!embedded && (
+        <div className="mt-auto mb-3 me-3 d-flex gap-3 justify-content-end">
+          <Button variant="danger">Delete</Button>
+          <Button variant="secondary" onClick={handleEditToggle}>
+            {editing ? "Cancel" : "Edit"}
+          </Button>
+          <Button variant="primary" onClick={handleSave} disabled={!editing}>
+            Save
+          </Button>
+        </div>
+      )}
+    </Wrapper>
   );
 };
 
