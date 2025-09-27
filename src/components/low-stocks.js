@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
-import { Badge, Image, Spinner } from "react-bootstrap";
-import { supabase } from "../supabaseClient"; // ✅ your Supabase client
+import { Badge, Container, Image, Spinner } from "react-bootstrap";
+import { supabase } from "../supabaseClient";
+
+const BUCKET = "Smart-Inventory-System-(Pet Matters)";
 
 const LowStocks = () => {
   const [items, setItems] = useState([]);
@@ -10,29 +12,48 @@ const LowStocks = () => {
     const fetchLowStocks = async () => {
       setLoading(true);
 
-      // ✅ Fetch items with stock quantity less than 20
-      const { data, error } = await supabase
-        .from("products") // <-- change to your actual table name
-        .select("product_ID, product_name, product_quantity, product_img")
-        .lt("product_quantity", 20) // threshold for "low stock"
-        .order("product_quantity", { ascending: true });
+      try {
+        // 1️⃣ Fetch items with stock quantity < 20
+        const { data, error } = await supabase
+          .from("products")
+          .select("product_ID, product_name, product_quantity, product_img")
+          .lt("product_quantity", 20)
+          .order("product_quantity", { ascending: true });
 
-      if (error) {
-        console.error("Error fetching low stocks:", error);
-      } else {
-        setItems(data || []);
+        if (error) throw error;
+
+        // 2️⃣ Map image URLs
+        const mapped = (data || []).map((p) => {
+          let imgUrl = "/fallback.png";
+          if (p.product_img) {
+            if (String(p.product_img).startsWith("http")) {
+              imgUrl = p.product_img;
+            } else {
+              const { data: pub } = supabase.storage
+                .from(BUCKET)
+                .getPublicUrl(`products/${p.product_img}`);
+              imgUrl = pub?.publicUrl || "/fallback.png";
+            }
+          }
+          return { ...p, imgUrl };
+        });
+
+        setItems(mapped);
+      } catch (err) {
+        console.error("Error fetching low stocks:", err);
+        setItems([]);
+      } finally {
+        setLoading(false);
       }
-
-      setLoading(false);
     };
 
     fetchLowStocks();
   }, []);
 
   return (
-    <div
+    <Container
       className="bg-white mx-3 my-4 rounded p-0"
-      style={{ height: "270px", width:"370px", overflowY: "auto" }}
+      style={{ height: 312, width: "370px", overflowY: "auto" }}
     >
       {/* Header */}
       <div className="d-flex justify-content-between align-items-center mx-2 mb-3">
@@ -46,9 +67,8 @@ const LowStocks = () => {
       ) : items.length === 0 ? (
         <div className="text-center text-muted py-3">No low stock items</div>
       ) : (
-        items.map((item) => {
+        items.map((item, idx) => {
           const isOutOfStock = item.product_quantity === 0;
-
           return (
             <div
               key={item.product_ID}
@@ -57,12 +77,13 @@ const LowStocks = () => {
               {/* Left: Image + Info */}
               <div className="d-flex align-items-center mt-1">
                 <Image
-                  src={item.product_img || "/fallback.png"} // ✅ fallback if no image
-                  style={{ width: "50px", height: "50px" }}
+                  src={item.imgUrl}
+                  style={{ width: 50, height: 50, objectFit: "cover" }}
                   rounded
+                  onError={(e) => (e.currentTarget.src = "/fallback.png")}
                 />
                 <div className="ms-2">
-                  <div className="fw-bold">{item.product_name}</div>
+                  <div className="fw-bold">{idx + 1}. {item.product_name}</div>
                   <small className="text-muted">
                     Remaining: {item.product_quantity} units
                   </small>
@@ -77,7 +98,7 @@ const LowStocks = () => {
           );
         })
       )}
-    </div>
+    </Container>
   );
 };
 

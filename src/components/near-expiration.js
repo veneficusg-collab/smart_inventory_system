@@ -1,32 +1,66 @@
 import { useEffect, useState } from "react";
-import { Badge, Image, Spinner } from "react-bootstrap";
-import { supabase } from "../supabaseClient"; // ✅ your Supabase client
+import { Badge, Container, Image, Spinner } from "react-bootstrap";
+import { supabase } from "../supabaseClient";
+
+const BUCKET = "Smart-Inventory-System-(Pet Matters)";
 
 const NearExpiration = () => {
   const [items, setItems] = useState([]);
+  const [imageMap, setImageMap] = useState({});
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchNearExpiration = async () => {
       setLoading(true);
 
-      // ✅ Fetch items with expiration date within 7 days
+      // next 7 days window
+      const in7Days = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+        .toISOString();
+
       const { data, error } = await supabase
-        .from("products") // <-- change to your actual table name
+        .from("products")
         .select(
           "product_ID, product_name, product_quantity, product_expiry, product_img"
         )
-        .lte(
-          "product_expiry",
-          new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
-        ); // next 7 days
+        .lte("product_expiry", in7Days)
+        .not("product_expiry", "is", null); // ignore null expiries
 
       if (error) {
         console.error("Error fetching near expiration:", error);
-      } else {
-        setItems(data || []);
+        setItems([]);
+        setLoading(false);
+        return;
       }
 
+      const rows = data || [];
+
+      // build image URL map (supports stored keys or full URLs)
+      const map = {};
+      rows.forEach((p) => {
+        const key = p.product_img;
+        if (!key) {
+          map[p.product_ID] = "/fallback.png";
+          return;
+        }
+        if (typeof key === "string" && key.startsWith("http")) {
+          map[p.product_ID] = key;
+        } else {
+          const { data: pub } = supabase
+            .storage
+            .from(BUCKET)
+            .getPublicUrl(`products/${key}`);
+          map[p.product_ID] = pub?.publicUrl || "/fallback.png";
+        }
+      });
+
+      setImageMap(map);
+
+      // sort by soonest expiry first
+      rows.sort(
+        (a, b) => new Date(a.product_expiry) - new Date(b.product_expiry)
+      );
+
+      setItems(rows);
       setLoading(false);
     };
 
@@ -34,11 +68,11 @@ const NearExpiration = () => {
   }, []);
 
   return (
-    <div
+    <Container
       className="bg-white mx-3 my-4 rounded p-0"
-      style={{ height: "270px", width:"370px", overflowY: "auto" }}
+      style={{ height: 312, width: "370px", overflowY: "auto" }}
     >
-      {/* Header */}
+      {/* Header (same style) */}
       <div className="d-flex justify-content-between align-items-center mx-2 mb-3">
         <span className="mx-1 mt-3 d-inline-block">Near Expiration</span>
       </div>
@@ -57,35 +91,46 @@ const NearExpiration = () => {
           const now = new Date();
           const isExpired = expiryDate < now;
 
+          // days left (negative if expired)
+          const daysLeft = Math.ceil(
+            (expiryDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
+          );
+
           return (
             <div
-              key={item.product_ID}
+              key={item.product_ID + String(item.product_expiry)}
               className="d-flex align-items-center justify-content-between my-2 w-100 px-2 border-top py-1"
             >
               {/* Left: Image + Info */}
               <div className="d-flex align-items-center mt-1">
                 <Image
-                  src={item.product_img || "/fallback.png"} // fallback if no image
-                  style={{ width: "50px", height: "50px" }}
+                  src={imageMap[item.product_ID] || "/fallback.png"}
+                  style={{ width: 50, height: 50, objectFit: "cover" }}
                   rounded
+                  onError={(e) => (e.currentTarget.src = "/fallback.png")}
                 />
                 <div className="ms-2">
                   <div className="fw-bold">{item.product_name}</div>
                   <small className="text-muted">
-                    Remaining: {item.product_quantity} Packets
+                    Remaining: {item.product_quantity}
                   </small>
+                  <div>
+                    <small className="text-muted">
+                      Expiry: {expiryDate.toLocaleDateString()}
+                    </small>
+                  </div>
                 </div>
               </div>
 
               {/* Right: Badge */}
               <Badge bg={isExpired ? "secondary" : "danger"} pill>
-                {isExpired ? "Expired" : "Expiring"}
+                {isExpired ? "Expired" : `${daysLeft}d left`}
               </Badge>
             </div>
           );
         })
       )}
-    </div>
+    </Container>
   );
 };
 

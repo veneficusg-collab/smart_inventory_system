@@ -23,6 +23,10 @@ const ProductInfo = ({ setRender, product }) => {
   const [editedVariants, setEditedVariants] = useState([]);
 
   const [details, setDetails] = useState({
+    product_ID: product.product_ID || "",
+    product_name: product.product_name || "",
+    product_category: product.product_category || "",
+    product_brand: product.product_brand || "",
     unit: product.product_unit || "",
     supplier_price: product.supplier_price || 0,
     product_price: product.product_price || 0,
@@ -72,11 +76,15 @@ const ProductInfo = ({ setRender, product }) => {
         const { error } = await supabase
           .from("products")
           .update({
-            product_quantity: row.product_quantity,
-            product_expiry: row.product_expiry,
+            product_ID: details.product_ID,
+            product_name: details.product_name,
+            product_category: details.product_category,
+            product_brand: details.product_brand,
             product_unit: details.unit,
             supplier_price: details.supplier_price,
             product_price: details.product_price,
+            product_quantity: row.product_quantity,
+            product_expiry: row.product_expiry,
           })
           .eq("id", row.id);
 
@@ -102,7 +110,8 @@ const ProductInfo = ({ setRender, product }) => {
   };
 
   const handleDelete = async () => {
-    if (!window.confirm(`Archive and delete "${product.product_name}"?`)) return;
+    if (!window.confirm(`Archive and delete "${product.product_name}"?`))
+      return;
 
     try {
       for (const row of variants) {
@@ -162,7 +171,11 @@ const ProductInfo = ({ setRender, product }) => {
               <Button variant="outline-success" size="sm" onClick={handleSave}>
                 <MdSave /> Save
               </Button>
-              <Button variant="outline-secondary" size="sm" onClick={handleCancel}>
+              <Button
+                variant="outline-secondary"
+                size="sm"
+                onClick={handleCancel}
+              >
                 <MdClose /> Cancel
               </Button>
             </>
@@ -186,12 +199,81 @@ const ProductInfo = ({ setRender, product }) => {
       {/* Overview */}
       <Row>
         <Col md={6}>
+          {/* Primary Details */}
           <div className="mx-5">
             <h6>Primary Details</h6>
-            <p><strong>Product ID:</strong> {product.product_ID}</p>
-            <p><strong>Product Name:</strong> {product.product_name}</p>
-            <p><strong>Category:</strong> {product.product_category}</p>
-            <p><strong>Brand:</strong> {product.product_brand}</p>
+
+            {/* Product ID */}
+            <div className="d-flex justify-content-between align-items-center my-2">
+              <span>Product ID</span>
+              {isEditing ? (
+                <Form.Control
+                  type="text"
+                  size="sm"
+                  value={details.product_ID || ""}
+                  onChange={(e) =>
+                    handleDetailsChange("product_ID", e.target.value)
+                  }
+                  style={{ width: "200px" }}
+                />
+              ) : (
+                <span>{details.product_ID || "—"}</span>
+              )}
+            </div>
+
+            {/* Product Name */}
+            <div className="d-flex justify-content-between align-items-center my-2">
+              <span>Product Name</span>
+              {isEditing ? (
+                <Form.Control
+                  type="text"
+                  size="sm"
+                  value={details.product_name || ""}
+                  onChange={(e) =>
+                    handleDetailsChange("product_name", e.target.value)
+                  }
+                  style={{ width: "200px" }}
+                />
+              ) : (
+                <span>{details.product_name || "—"}</span>
+              )}
+            </div>
+
+            {/* Category */}
+            <div className="d-flex justify-content-between align-items-center my-2">
+              <span>Category</span>
+              {isEditing ? (
+                <Form.Control
+                  type="text"
+                  size="sm"
+                  value={details.product_category || ""}
+                  onChange={(e) =>
+                    handleDetailsChange("product_category", e.target.value)
+                  }
+                  style={{ width: "200px" }}
+                />
+              ) : (
+                <span>{details.product_category || "—"}</span>
+              )}
+            </div>
+
+            {/* Brand */}
+            <div className="d-flex justify-content-between align-items-center my-2">
+              <span>Brand</span>
+              {isEditing ? (
+                <Form.Control
+                  type="text"
+                  size="sm"
+                  value={details.product_brand || ""}
+                  onChange={(e) =>
+                    handleDetailsChange("product_brand", e.target.value)
+                  }
+                  style={{ width: "200px" }}
+                />
+              ) : (
+                <span>{details.product_brand || "—"}</span>
+              )}
+            </div>
 
             {/* Unit */}
             <div className="d-flex justify-content-between align-items-center my-2">
@@ -218,7 +300,10 @@ const ProductInfo = ({ setRender, product }) => {
                   size="sm"
                   value={details.product_price}
                   onChange={(e) =>
-                    handleDetailsChange("product_price", parseFloat(e.target.value))
+                    handleDetailsChange(
+                      "product_price",
+                      parseFloat(e.target.value)
+                    )
                   }
                   style={{ width: "120px" }}
                 />
@@ -264,6 +349,7 @@ const ProductInfo = ({ setRender, product }) => {
             <TableBody>
               {editedVariants.map((v, idx) => (
                 <TableRow key={v.id}>
+                  {/* Quantity */}
                   <TableCell>
                     {isEditing ? (
                       <Form.Control
@@ -271,7 +357,11 @@ const ProductInfo = ({ setRender, product }) => {
                         size="sm"
                         value={v.product_quantity}
                         onChange={(e) =>
-                          handleVariantChange(idx, "product_quantity", parseInt(e.target.value))
+                          handleVariantChange(
+                            idx,
+                            "product_quantity",
+                            parseInt(e.target.value)
+                          )
                         }
                         style={{ width: "80px" }}
                       />
@@ -279,6 +369,8 @@ const ProductInfo = ({ setRender, product }) => {
                       v.product_quantity
                     )}
                   </TableCell>
+
+                  {/* Expiry Date */}
                   <TableCell>
                     {isEditing ? (
                       <Form.Control
@@ -286,7 +378,11 @@ const ProductInfo = ({ setRender, product }) => {
                         size="sm"
                         value={v.product_expiry || ""}
                         onChange={(e) =>
-                          handleVariantChange(idx, "product_expiry", e.target.value)
+                          handleVariantChange(
+                            idx,
+                            "product_expiry",
+                            e.target.value
+                          )
                         }
                         style={{ width: "160px" }}
                       />
@@ -296,11 +392,47 @@ const ProductInfo = ({ setRender, product }) => {
                       "—"
                     )}
                   </TableCell>
+
+                  {/* Supplier Name */}
                   <TableCell>
-                    {v.supplier_name || "—"}
+                    {isEditing ? (
+                      <Form.Control
+                        type="text"
+                        size="sm"
+                        value={v.supplier_name || ""}
+                        onChange={(e) =>
+                          handleVariantChange(
+                            idx,
+                            "supplier_name",
+                            e.target.value
+                          )
+                        }
+                        style={{ width: "160px" }}
+                      />
+                    ) : (
+                      v.supplier_name || "—"
+                    )}
                   </TableCell>
+
+                  {/* Supplier Price */}
                   <TableCell>
-                    ₱{Number(v.supplier_price ?? 0).toFixed(2)}
+                    {isEditing ? (
+                      <Form.Control
+                        type="number"
+                        size="sm"
+                        value={v.supplier_price ?? 0}
+                        onChange={(e) =>
+                          handleVariantChange(
+                            idx,
+                            "supplier_price",
+                            parseFloat(e.target.value)
+                          )
+                        }
+                        style={{ width: "120px" }}
+                      />
+                    ) : (
+                      `₱${Number(v.supplier_price ?? 0).toFixed(2)}`
+                    )}
                   </TableCell>
                 </TableRow>
               ))}
