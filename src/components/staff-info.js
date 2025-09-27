@@ -167,7 +167,10 @@ const StaffInfo = ({ staffId, setRender, embedded = false }) => {
   return (
     <Wrapper>
       {!embedded && (
-        <span className="mx-1 mt-3 d-inline-block fw-bold" style={{ fontSize: 20 }}>
+        <span
+          className="mx-1 mt-3 d-inline-block fw-bold"
+          style={{ fontSize: 20 }}
+        >
           Staff Info
         </span>
       )}
@@ -179,11 +182,16 @@ const StaffInfo = ({ staffId, setRender, embedded = false }) => {
           <div className="d-flex justify-content-center mt-3 mb-3">
             <div
               className="position-relative"
-              style={{ width: embedded ? 96 : 120, height: embedded ? 96 : 120 }}
+              style={{
+                width: embedded ? 96 : 120,
+                height: embedded ? 96 : 120,
+              }}
             >
               <div
                 className={`rounded-circle border d-flex align-items-center justify-content-center position-relative overflow-hidden ${
-                  imagePreview ? "border-primary" : "border-secondary border-2 border-dashed"
+                  imagePreview
+                    ? "border-primary"
+                    : "border-secondary border-2 border-dashed"
                 }`}
                 style={{
                   width: "100%",
@@ -257,15 +265,27 @@ const StaffInfo = ({ staffId, setRender, embedded = false }) => {
 
             <Form.Group className="mb-3">
               <Form.Label>Position</Form.Label>
-              <Form.Select
-                value={position}
-                onChange={(e) => setPosition(e.target.value)}
-                disabled={readOnly}
-                size="sm"
-              >
-                <option value="admin">Admin</option>
-                <option value="staff">Staff</option>
-              </Form.Select>
+
+              {embedded ? (
+                // 🔹 Read-only text in modal
+                <Form.Control
+                  readOnly
+                  value={position === "admin" ? "Admin" : "Staff"}
+                  size="sm"
+                  disabled
+                />
+              ) : (
+                // 🔹 Editable select in full-page
+                <Form.Select
+                  value={position}
+                  onChange={(e) => setPosition(e.target.value)}
+                  disabled={readOnly}
+                  size="sm"
+                >
+                  <option value="admin">Admin</option>
+                  <option value="staff">Staff</option>
+                </Form.Select>
+              )}
             </Form.Group>
 
             <Form.Group className="mb-3">
