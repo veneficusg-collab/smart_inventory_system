@@ -19,6 +19,8 @@ const StaffInfo = ({ staffId, setRender, embedded = false }) => {
   const [staffBarcode, setStaffBarcode] = useState("");
 
   const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [originalData, setOriginalData] = useState({});
 
   // In embedded mode, we keep it read-only
@@ -76,6 +78,23 @@ const StaffInfo = ({ staffId, setRender, embedded = false }) => {
     }
   };
 
+  const handleDelete = async () => {
+    if (!window.confirm(`Are you sure you want to delete ${staffName}?`)) return;
+    setDeleting(true);
+
+    const { error } = await supabase.from("staff").delete().eq("id", staffId);
+
+    setDeleting(false);
+
+    if (!error) {
+      alert("Staff deleted successfully.");
+      setRender("ManageStaff");
+    } else {
+      console.error(error);
+      alert("Failed to delete staff.");
+    }
+  };
+
   const handleSave = async () => {
     if (embedded) return;
     let imagePath = originalData.staff_img;
@@ -83,7 +102,7 @@ const StaffInfo = ({ staffId, setRender, embedded = false }) => {
     if (image) {
       const fileExt = image.name.split(".").pop();
       const fileName = `${staffId}.${fileExt}`;
-      const filePath = `products/${fileName}`;
+      const filePath = `staffs/${fileName}`;
 
       const { error: uploadError } = await supabase.storage
         .from("Smart-Inventory-System-(Pet Matters)")
@@ -334,12 +353,22 @@ const StaffInfo = ({ staffId, setRender, embedded = false }) => {
       {/* Full-page action buttons (hidden in modal) */}
       {!embedded && (
         <div className="mt-auto mb-3 me-3 d-flex gap-3 justify-content-end">
-          <Button variant="danger">Delete</Button>
-          <Button variant="secondary" onClick={handleEditToggle}>
+          <Button
+            variant="danger"
+            onClick={handleDelete}
+            disabled={deleting || saving}
+          >
+            {deleting ? "Deleting..." : "Delete"}
+          </Button>
+          <Button variant="secondary" onClick={handleEditToggle} disabled={deleting || saving}>
             {editing ? "Cancel" : "Edit"}
           </Button>
-          <Button variant="primary" onClick={handleSave} disabled={!editing}>
-            Save
+          <Button
+            variant="primary"
+            onClick={handleSave}
+            disabled={!editing || saving || deleting}
+          >
+            {saving ? "Saving..." : "Save"}
           </Button>
         </div>
       )}

@@ -50,46 +50,74 @@ const Products = ({ setRender, setProduct, setID, staffRole }) => {
   }, [staffRole]);
 
   // fetch products
-  const fetchProducts = async () => {
-    try {
-      setLoading(true);
-      setError("");
+  // fetch products
+const fetchProducts = async () => {
+  try {
+    setLoading(true);
+    setError("");
 
-      const { data, error } = await supabase
-        .from("products")
-        .select("*")
-        .order("created_at", { ascending: false });
+    const { data, error } = await supabase
+      .from("products")
+      .select("*")
+      .order("created_at", { ascending: false });
 
-      if (error) throw error;
+    if (error) throw error;
 
-      setProducts(data || []);
-      setFilteredProducts(data || []);
-
-      // Build image URL map (same logic as ProductInfo)
-      const map = {};
-      (data || []).forEach((p) => {
-        const key = p.product_img;
-        if (!key) {
-          map[p.product_ID] = "";
-          return;
-        }
-        if (typeof key === "string" && key.startsWith("http")) {
-          map[p.product_ID] = key;
+    // ✅ Merge products with same product_ID
+    const merged = Object.values(
+      (data || []).reduce((acc, p) => {
+        if (!acc[p.product_ID]) {
+          acc[p.product_ID] = { ...p };
         } else {
-          const { data: pub } = supabase.storage
-            .from("Smart-Inventory-System-(Pet Matters)")
-            .getPublicUrl(`products/${key}`);
-          map[p.product_ID] = pub?.publicUrl || "";
+          // 🔹 Sum quantities
+          acc[p.product_ID].product_quantity += p.product_quantity;
+
+          // 🔹 Nearest expiry date (earliest)
+          if (p.product_expiry) {
+            const currentExpiry = acc[p.product_ID].product_expiry
+              ? new Date(acc[p.product_ID].product_expiry)
+              : null;
+            const newExpiry = new Date(p.product_expiry);
+
+            if (!currentExpiry || newExpiry < currentExpiry) {
+              acc[p.product_ID].product_expiry = p.product_expiry;
+            }
+          }
         }
-      });
-      setImageMap(map);
-    } catch (error) {
-      console.error("Error fetching products:", error);
-      setError("Failed to load products. Please try again.");
-    } finally {
-      setLoading(false);
-    }
-  };
+        return acc;
+      }, {})
+    );
+
+    setProducts(merged);
+    setFilteredProducts(merged);
+
+    // ✅ Build image URL map based on merged data
+    const map = {};
+    merged.forEach((p) => {
+      const key = p.product_img;
+      if (!key) {
+        map[p.product_ID] = "";
+        return;
+      }
+      if (typeof key === "string" && key.startsWith("http")) {
+        map[p.product_ID] = key;
+      } else {
+        const { data: pub } = supabase.storage
+          .from("Smart-Inventory-System-(Pet Matters)")
+          .getPublicUrl(`products/${key}`);
+        map[p.product_ID] = pub?.publicUrl || "";
+      }
+    });
+    setImageMap(map);
+
+  } catch (error) {
+    console.error("Error fetching products:", error);
+    setError("Failed to load products. Please try again.");
+  } finally {
+    setLoading(false);
+  }
+};
+
 
   useEffect(() => {
     fetchProducts();

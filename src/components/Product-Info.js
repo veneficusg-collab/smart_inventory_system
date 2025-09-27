@@ -5,6 +5,7 @@ import TableContainer from "@mui/material/TableContainer";
 import TableHead from "@mui/material/TableHead";
 import TableRow from "@mui/material/TableRow";
 import Paper from "@mui/material/Paper";
+import TableBody from "@mui/material/TableBody";
 import { Container, Row, Col, Form, Button, Image } from "react-bootstrap";
 import {
   MdOutlineModeEdit,
@@ -13,141 +14,130 @@ import {
   MdClose,
   MdDelete,
 } from "react-icons/md";
-import TableBody from "@mui/material/TableBody";
 import { supabase } from "../supabaseClient";
-import logo from "../petfood.webp";
 
-// Initialize Supabase client
-
-const ProductInfo = ({ setRender, product, onUpdateProduct }) => {
+const ProductInfo = ({ setRender, product }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [imageUrl, setImageUrl] = useState(null);
-  const [editedProduct, setEditedProduct] = useState({
-    product_name: product.product_name || "",
-    product_category: product.product_category || "",
-    product_quantity: product.product_quantity || "",
-    product_expiry: product.product_expiry || "",
-    supplier_name: product.supplier_name || "",
-    supplier_number: product.supplier_number || "",
-    product_img: product.product_img || "",
+  const [variants, setVariants] = useState([]);
+  const [editedVariants, setEditedVariants] = useState([]);
+
+  const [details, setDetails] = useState({
+    unit: product.product_unit || "",
+    supplier_price: product.supplier_price || 0,
+    product_price: product.product_price || 0,
   });
 
   useEffect(() => {
-    if (product.product_img) {
-      // If it's already a full URL, just use it
-      console.log("product_img from DB:", product.product_img);
+    const fetchVariants = async () => {
+      const { data, error } = await supabase
+        .from("products")
+        .select("*")
+        .eq("product_ID", product.product_ID)
+        .order("product_expiry", { ascending: true });
 
+      if (!error && data) {
+        setVariants(data);
+        setEditedVariants(data);
+      }
+    };
+
+    fetchVariants();
+
+    if (product.product_img) {
       if (product.product_img.startsWith("http")) {
         setImageUrl(product.product_img);
       } else {
         const { data } = supabase.storage
           .from("Smart-Inventory-System-(Pet Matters)")
           .getPublicUrl(`products/${product.product_img}`);
-        if (data?.publicUrl) {
-          setImageUrl(data.publicUrl);
-        }
+        if (data?.publicUrl) setImageUrl(data.publicUrl);
       }
     }
   }, [product]);
 
-  const handleInputChange = (field, value) => {
-    setEditedProduct((prev) => ({
-      ...prev,
-      [field]: value,
-    }));
+  const handleVariantChange = (idx, field, value) => {
+    setEditedVariants((prev) =>
+      prev.map((row, i) => (i === idx ? { ...row, [field]: value } : row))
+    );
+  };
+
+  const handleDetailsChange = (field, value) => {
+    setDetails((prev) => ({ ...prev, [field]: value }));
   };
 
   const handleSave = async () => {
-    // Call the parent component's update function if provided
-    console.log(editedProduct);
+    try {
+      for (const row of editedVariants) {
+        const { error } = await supabase
+          .from("products")
+          .update({
+            product_quantity: row.product_quantity,
+            product_expiry: row.product_expiry,
+            product_unit: details.unit,
+            supplier_price: details.supplier_price,
+            product_price: details.product_price,
+          })
+          .eq("id", row.id);
 
-    const { data, error } = await supabase
-      .from("products")
-      .update({
-        product_name: editedProduct.product_name,
-        product_category: editedProduct.product_category,
-        product_price: editedProduct.product_price,
-        product_quantity: editedProduct.product_quantity,
-        supplier_name: editedProduct.supplier_name,
-        supplier_number: editedProduct.supplier_number,
-        product_img: editedProduct.product_img,
-      })
-      .eq("product_ID", product.product_ID)
-      .select();
-    console.log(data);
-    setIsEditing(false);
+        if (error) console.error("Update failed:", error);
+      }
+
+      setVariants(editedVariants);
+      setIsEditing(false);
+      alert("Product details updated.");
+    } catch (err) {
+      console.error("Save error:", err);
+    }
   };
 
   const handleCancel = () => {
-    // Reset edited product to original values
-    setEditedProduct({
-      product_name: product.product_name || "",
-      product_category: product.product_category || "",
-      product_quantity: product.product_quantity || "",
-      product_expiry: product.product_expiry || "",
-      supplier_name: product.supplier_name || "",
-      supplier_number: product.supplier_number || "",
+    setEditedVariants(variants);
+    setDetails({
+      unit: product.product_unit || "",
+      supplier_price: product.supplier_price || 0,
+      product_price: product.product_price || 0,
     });
     setIsEditing(false);
   };
 
   const handleDelete = async () => {
-    const confirmDelete = window.confirm(
-      `Archive and delete "${product.product_name}"?`
-    );
-    if (!confirmDelete) return;
+    if (!window.confirm(`Archive and delete "${product.product_name}"?`)) return;
 
     try {
-      // 1) Build archive payload from current product
-      const archiveRecord = {
-        // created_at will be set by DB default if present
-        product_name: product.product_name ?? null,
-        product_code: product.product_ID ?? null, // <-- map to archive.product_code
-        product_category: product.product_category ?? null,
-        product_price: product.product_price ?? null,
-        product_quantity: product.product_quantity ?? null,
-        product_unit: product.product_unit ?? null,
-        product_expiry: product.product_expiry ?? null,
-        product_img: product.product_img ?? null,
-        supplier_name: product.supplier_name ?? null,
-        product_brand: product.product_brand ?? null,
-        supplier_price: product.supplier_price ?? null,
-      };
+      for (const row of variants) {
+        const archiveRecord = {
+          product_name: row.product_name ?? null,
+          product_code: row.product_ID ?? null,
+          product_category: row.product_category ?? null,
+          product_price: row.product_price ?? null,
+          product_quantity: row.product_quantity ?? null,
+          product_unit: row.product_unit ?? null,
+          product_expiry: row.product_expiry ?? null,
+          product_img: row.product_img ?? null,
+          supplier_name: row.supplier_name ?? null,
+          product_brand: row.product_brand ?? null,
+          supplier_price: row.supplier_price ?? null,
+        };
 
-      // 2) Insert into archive FIRST
-      const { error: insertError } = await supabase
-        .from("archive")
-        .insert([archiveRecord]);
+        const { error: insertError } = await supabase
+          .from("archive")
+          .insert([archiveRecord]);
 
-      if (insertError) {
-        console.error("Archive insert failed:", insertError);
-        alert("Failed to archive product. Delete cancelled.");
-        return; // Do not proceed to delete if archive failed
+        if (insertError) {
+          alert("Failed to archive one entry. Delete cancelled.");
+          return;
+        }
+
+        await supabase.from("products").delete().eq("id", row.id);
       }
 
-      // 3) Delete from products ONLY after successful archive
-      const { error: deleteError } = await supabase
-        .from("products")
-        .delete()
-        .eq("product_ID", product.product_ID);
-
-      if (deleteError) {
-        console.error("Product delete failed:", deleteError);
-        alert(
-          "Product was archived, but deleting from products failed. Please try again."
-        );
-        return;
-      }
-
-      alert("Product archived and deleted successfully.");
-      setRender("products"); // go back to product list
+      alert("All product variants archived and deleted.");
+      setRender("products");
     } catch (err) {
       console.error("Unexpected delete error:", err);
-      alert("Something went wrong. Please try again.");
     }
   };
-
-  const displayProduct = isEditing ? editedProduct : product;
 
   return (
     <Container
@@ -155,30 +145,24 @@ const ProductInfo = ({ setRender, product, onUpdateProduct }) => {
       className="bg-white m-5 rounded d-flex flex-column"
       style={{ width: "135vh", minHeight: "80vh" }}
     >
+      {/* Header buttons */}
       <div className="d-flex justify-content-between align-items-center mb-4 mt-3 px-2">
-        <div className="d-flex align-items-center">
-          <Button
-            variant="outline-secondary"
-            size="sm"
-            className="me-3"
-            onClick={() => setRender("products")}
-            style={{ border: "none" }}
-          >
-            <MdArrowBack />
-          </Button>
-        </div>
-        {/* Edit/Save/Cancel/Delete buttons */}
+        <Button
+          variant="outline-secondary"
+          size="sm"
+          className="me-3"
+          onClick={() => setRender("products")}
+          style={{ border: "none" }}
+        >
+          <MdArrowBack />
+        </Button>
         <div className="d-flex gap-2">
           {isEditing ? (
             <>
               <Button variant="outline-success" size="sm" onClick={handleSave}>
                 <MdSave /> Save
               </Button>
-              <Button
-                variant="outline-secondary"
-                size="sm"
-                onClick={handleCancel}
-              >
+              <Button variant="outline-secondary" size="sm" onClick={handleCancel}>
                 <MdClose /> Cancel
               </Button>
             </>
@@ -199,165 +183,131 @@ const ProductInfo = ({ setRender, product, onUpdateProduct }) => {
         </div>
       </div>
 
-      <div>
-        <span className="mx-2 border-bottom border-primary border-1">
-          Overview
-        </span>
-        <hr style={{ marginTop: "-2px" }} className="mx-2"></hr>
-      </div>
-
+      {/* Overview */}
       <Row>
         <Col md={6}>
-          <span className="mx-5" style={{ fontWeight: "bold" }}>
-            Primary Details
-          </span>
+          <div className="mx-5">
+            <h6>Primary Details</h6>
+            <p><strong>Product ID:</strong> {product.product_ID}</p>
+            <p><strong>Product Name:</strong> {product.product_name}</p>
+            <p><strong>Category:</strong> {product.product_category}</p>
+            <p><strong>Brand:</strong> {product.product_brand}</p>
 
-          {/* Product ID */}
-          <div className="d-flex justify-content-between align-items-center mx-5 my-3">
-            <span>Product ID</span>
-            <span>{product.product_ID}</span>
-          </div>
-
-          {/* Product Name */}
-          <div className="d-flex justify-content-between align-items-center mx-5 my-3">
-            <span>Product name</span>
-            {isEditing ? (
-              <Form.Control
-                type="text"
-                value={editedProduct.product_name}
-                onChange={(e) =>
-                  handleInputChange("product_name", e.target.value)
-                }
-                style={{ width: "200px" }}
-                size="sm"
-              />
-            ) : (
-              <span>{displayProduct.product_name}</span>
-            )}
-          </div>
-
-          {/* Product Category */}
-          <div className="d-flex justify-content-between align-items-center mx-5 my-3">
-            <span>Product Category</span>
-            {isEditing ? (
-              <Form.Select
-                value={editedProduct.product_category}
-                onChange={(e) =>
-                  handleInputChange("product_category", e.target.value)
-                }
-                style={{ width: "200px" }}
-                size="sm"
-              >
-                <option value="">Select Category</option>
-                <option value="Pet Food">Pet Food</option>
-                <option value="Pet Accessories">Pet Accessories</option>
-                <option value="Pet Toys">Pet Toys</option>
-                <option value="Pet Medicine">Pet Medicine</option>
-                <option value="Pet Grooming">Pet Grooming</option>
-              </Form.Select>
-            ) : (
-              <span>{displayProduct.product_category}</span>
-            )}
-          </div>
-
-          {/* Product Quantity */}
-          <div className="d-flex justify-content-between align-items-center mx-5 my-3">
-            <span>Product Quantity</span>
-            {isEditing ? (
-              <Form.Control
-                type="number"
-                value={editedProduct.product_quantity}
-                onChange={(e) =>
-                  handleInputChange("product_quantity", e.target.value)
-                }
-                style={{ width: "200px" }}
-                size="sm"
-                min="0"
-              />
-            ) : (
-              <span>{displayProduct.product_quantity}</span>
-            )}
-          </div>
-
-          {/* Expiry Date */}
-          <div className="d-flex justify-content-between align-items-center mx-5 my-3">
-            <span>Expiry Date</span>
-            {isEditing ? (
-              <Form.Control
-                type="date"
-                value={editedProduct.product_expiry}
-                onChange={(e) =>
-                  handleInputChange("product_expiry", e.target.value)
-                }
-                style={{ width: "200px" }}
-                size="sm"
-              />
-            ) : (
-              <span>{displayProduct.product_expiry}</span>
-            )}
-          </div>
-
-          <div className="mt-5 mx-5">
-            <span>Supplier Details</span>
-          </div>
-
-          {/* Supplier Name */}
-          <div className="d-flex justify-content-between align-items-center mx-5 my-3">
-            <span>Supplier Name</span>
-            {isEditing ? (
-              <Form.Control
-                type="text"
-                value={editedProduct.supplier_name}
-                onChange={(e) =>
-                  handleInputChange("supplier_name", e.target.value)
-                }
-                style={{ width: "200px" }}
-                size="sm"
-              />
-            ) : (
-              <span>{displayProduct.supplier_name}</span>
-            )}
-          </div>
-
-          {/* Contact Number */}
-          <div className="d-flex justify-content-between align-items-center mx-5 my-3">
-            <span>Contact Number</span>
-            {isEditing ? (
-              <Form.Control
-                type="tel"
-                value={editedProduct.supplier_number}
-                onChange={(e) =>
-                  handleInputChange("supplier_number", e.target.value)
-                }
-                style={{ width: "200px" }}
-                size="sm"
-              />
-            ) : (
-              <span>{displayProduct.supplier_number}</span>
-            )}
-          </div>
-        </Col>
-
-        <Col md={6}>
-          <div className="mx-5 d-flex justify-content-center ">
-            <div
-              className="mt-3 border rounded d-flex align-items-center justify-content-center"
-              style={{
-                height: "200px",
-                width: "200px",
-                backgroundColor: "#f8f9fa",
-                border: "2px dashed #dee2e6",
-              }}
-            >
-              {imageUrl ? (
-                <Image src={imageUrl} style={{ height: "180px" }} />
+            {/* Unit */}
+            <div className="d-flex justify-content-between align-items-center my-2">
+              <span>Unit</span>
+              {isEditing ? (
+                <Form.Control
+                  type="text"
+                  size="sm"
+                  value={details.unit}
+                  onChange={(e) => handleDetailsChange("unit", e.target.value)}
+                  style={{ width: "120px" }}
+                />
               ) : (
-                <span className="text-muted">No Image</span>
+                <span>{details.unit || "—"}</span>
+              )}
+            </div>
+
+            {/* Product Price */}
+            <div className="d-flex justify-content-between align-items-center my-2">
+              <span>Product Price</span>
+              {isEditing ? (
+                <Form.Control
+                  type="number"
+                  size="sm"
+                  value={details.product_price}
+                  onChange={(e) =>
+                    handleDetailsChange("product_price", parseFloat(e.target.value))
+                  }
+                  style={{ width: "120px" }}
+                />
+              ) : (
+                <span>₱{Number(details.product_price).toFixed(2)}</span>
               )}
             </div>
           </div>
         </Col>
+
+        <Col md={6} className="d-flex justify-content-center">
+          <div
+            className="mt-3 border rounded d-flex align-items-center justify-content-center"
+            style={{
+              height: "200px",
+              width: "200px",
+              backgroundColor: "#f8f9fa",
+              border: "2px dashed #dee2e6",
+            }}
+          >
+            {imageUrl ? (
+              <Image src={imageUrl} style={{ height: "180px" }} />
+            ) : (
+              <span className="text-muted">No Image</span>
+            )}
+          </div>
+        </Col>
       </Row>
+
+      {/* Stock Entries (now shows per-variant Supplier Name & Supplier Price) */}
+      <div className="mx-5 my-4">
+        <h6>Stock Entries</h6>
+        <TableContainer component={Paper}>
+          <Table size="small">
+            <TableHead>
+              <TableRow>
+                <TableCell>Quantity</TableCell>
+                <TableCell>Expiry Date</TableCell>
+                <TableCell>Supplier Name</TableCell> {/* NEW */}
+                <TableCell>Supplier Price</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {editedVariants.map((v, idx) => (
+                <TableRow key={v.id}>
+                  <TableCell>
+                    {isEditing ? (
+                      <Form.Control
+                        type="number"
+                        size="sm"
+                        value={v.product_quantity}
+                        onChange={(e) =>
+                          handleVariantChange(idx, "product_quantity", parseInt(e.target.value))
+                        }
+                        style={{ width: "80px" }}
+                      />
+                    ) : (
+                      v.product_quantity
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    {isEditing ? (
+                      <Form.Control
+                        type="date"
+                        size="sm"
+                        value={v.product_expiry || ""}
+                        onChange={(e) =>
+                          handleVariantChange(idx, "product_expiry", e.target.value)
+                        }
+                        style={{ width: "160px" }}
+                      />
+                    ) : v.product_expiry ? (
+                      new Date(v.product_expiry).toLocaleDateString()
+                    ) : (
+                      "—"
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    {v.supplier_name || "—"}
+                  </TableCell>
+                  <TableCell>
+                    ₱{Number(v.supplier_price ?? 0).toFixed(2)}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      </div>
     </Container>
   );
 };
