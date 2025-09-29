@@ -11,7 +11,8 @@ import ProfitChart from "./profit-chart";
 import TotalSalesPerYear from "./total-sales-year";
 import TotalProfitPerYear from "./total-profit-year";
 import TotalExpensesPerYear from "./total-expenses-year";
-import TopSalesByBrand from "./top-sales-brand";
+import SalesRangeContainer from "./sales-range-container";
+
 
 const AdminDashboard = () => {
   return (
@@ -31,7 +32,7 @@ const AdminDashboard = () => {
           </Row>
           <Row>
             <Col>
-              <TopSalesByBrand />
+              <SalesRangeContainer />
             </Col>
           </Row>
           <Row>

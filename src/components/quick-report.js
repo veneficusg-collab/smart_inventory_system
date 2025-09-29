@@ -7,8 +7,11 @@ import {
   TableCell,
 } from "@mui/material";
 import { BiSolidReport } from "react-icons/bi";
+import { FaBoxOpen } from "react-icons/fa";
 import { useState, useEffect } from "react";
 import { supabase } from "../supabaseClient";
+
+const BUCKET = "Smart-Inventory-System-(Pet Matters)";
 
 const QuickReport = ({ refreshTrigger }) => {
   const [reportData, setReportData] = useState({
@@ -16,47 +19,151 @@ const QuickReport = ({ refreshTrigger }) => {
     transactionCount: 0,
     voidedCount: 0,
   });
-  const [currentStaffName, setCurrentStaffName] = useState(""); // Add current staff name state
+  const [currentStaffName, setCurrentStaffName] = useState("");
   const [showReportModal, setShowReportModal] = useState(false);
   const [showVoidModal, setShowVoidModal] = useState(false);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [transactions, setTransactions] = useState([]);
-  const [selectedTransaction, setSelectedTransaction] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  // Fetch report data for current staff
+  // 🔹 Product metadata map for naming + images
+  const [productMap, setProductMap] = useState({}); // product_ID -> { name, imgUrl }
+
+  // -------- Helpers --------
+  const publicProductUrl = (keyOrUrl) => {
+    if (!keyOrUrl) return null; // ← no image available
+    if (String(keyOrUrl).startsWith("http")) return keyOrUrl;
+    const { data } = supabase.storage
+      .from(BUCKET)
+      .getPublicUrl(`products/${keyOrUrl}`);
+    // If the bucket key is wrong this still returns a URL, but we only use "no image" when key is missing.
+    return data?.publicUrl || null;
+  };
+
+  const buildProductMap = async () => {
+    const { data, error } = await supabase
+      .from("products")
+      .select("product_ID, product_name, product_img");
+    if (error) {
+      console.error("Products fetch error:", error);
+      return;
+    }
+    const map = {};
+    (data || []).forEach((p) => {
+      map[p.product_ID] = {
+        name: p.product_name || p.product_ID,
+        imgUrl: publicProductUrl(p.product_img), // ← may be null
+      };
+    });
+    setProductMap(map);
+  };
+
+  // Given a transaction, produce a “representative” product cell (image + name)
+  const renderTxItemCell = (t) => {
+    const first = t.transaction_items?.[0];
+    if (!first) {
+      return (
+        <div className="d-flex align-items-center">
+          <FaBoxOpen size={32} className="text-muted me-2" />
+          <span>—</span>
+        </div>
+      );
+    }
+
+    const meta = productMap[first.product_code] || {
+      name: first.product_code,
+      imgUrl: null,
+    };
+    const more = Math.max(0, (t.transaction_items?.length || 0) - 1);
+    const hasImg = !!meta.imgUrl;
+
+    return (
+      <div className="d-flex align-items-center">
+        {hasImg ? (
+          <img
+            src={meta.imgUrl}
+            alt={meta.name}
+            style={{
+              width: 40,
+              height: 40,
+              borderRadius: 6,
+              objectFit: "cover",
+              marginRight: 8,
+              border: "1px solid #eee",
+            }}
+          />
+        ) : (
+          <FaBoxOpen size={32} className="text-muted me-2" />
+        )}
+        <div>
+          <div>{meta.name}</div>
+          {more > 0 && <small className="text-muted">+{more} more</small>}
+        </div>
+      </div>
+    );
+  };
+
+  const renderLineItem = (code, qty) => {
+    const meta = productMap[code] || { name: code, imgUrl: null };
+    return (
+      <div className="d-flex align-items-center mb-1">
+        {meta.imgUrl ? (
+          <img
+            src={meta.imgUrl}
+            alt={meta.name}
+            style={{
+              width: 26,
+              height: 26,
+              borderRadius: 6,
+              objectFit: "cover",
+              marginRight: 8,
+              border: "1px solid #eee",
+            }}
+          />
+        ) : (
+          <FaBoxOpen size={20} className="text-muted me-2" />
+        )}
+        <span style={{ fontSize: "0.9rem" }}>
+          {meta.name} ×{qty}
+        </span>
+      </div>
+    );
+  };
+
+  // -------- Fetchers --------
+
+  // Fetch report data for current staff (today)
   const fetchReportData = async () => {
     try {
-      // 1️⃣ Try Supabase user
+      // 1) who am I?
       const {
         data: { user },
       } = await supabase.auth.getUser();
-
       let staffName = null;
 
       if (user) {
-        // Supabase Auth path
         const { data: staff, error: staffError } = await supabase
           .from("staff")
           .select("staff_name")
           .eq("id", user.id)
           .single();
-
         if (staffError) throw staffError;
         staffName = staff.staff_name;
       } else {
-        // 2️⃣ QR fallback
         const storedUser = localStorage.getItem("user");
         if (!storedUser) return;
         staffName = JSON.parse(storedUser).staff_name;
       }
 
-      // 3️⃣ Now query transactions
-      const today = new Date();
-      const startOfDay = new Date(today.setHours(0, 0, 0, 0)).toISOString();
-      const endOfDay = new Date(today.setHours(23, 59, 59, 999)).toISOString();
+      // 2) today range
+      const now = new Date();
+      const startOfDay = new Date(now.setHours(0, 0, 0, 0)).toISOString();
+      const endOfDay = new Date(
+        new Date().setHours(23, 59, 59, 999)
+      ).toISOString();
 
-      const { data: transactions, error } = await supabase
+      // 3) fetch
+      const { data: txs, error } = await supabase
         .from("transactions")
         .select("*")
         .gte("created_at", startOfDay)
@@ -65,8 +172,8 @@ const QuickReport = ({ refreshTrigger }) => {
 
       if (error) throw error;
 
-      const completed = transactions.filter((t) => t.status === "completed");
-      const voided = transactions.filter((t) => t.status === "voided");
+      const completed = txs.filter((t) => t.status === "completed");
+      const voided = txs.filter((t) => t.status === "voided");
 
       setReportData({
         totalCollections: completed.reduce(
@@ -83,58 +190,140 @@ const QuickReport = ({ refreshTrigger }) => {
     }
   };
 
-  // Fetch all transactions for void/history (filtered by current staff)
+  // Full history (used by Void + History modals)
   const fetchTransactions = async () => {
-  setLoading(true);
-  try {
-    const { data: { user } } = await supabase.auth.getUser();
+    setLoading(true);
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      let staffName = null;
 
-    let staffName = null;
+      if (user) {
+        const { data: staff, error: staffError } = await supabase
+          .from("staff")
+          .select("staff_name")
+          .eq("id", user.id)
+          .single();
+        if (staffError) throw staffError;
+        staffName = staff.staff_name;
+      } else {
+        const storedUser = localStorage.getItem("user");
+        if (!storedUser) return;
+        staffName = JSON.parse(storedUser).staff_name;
+      }
 
-    if (user) {
-      const { data: staff, error: staffError } = await supabase
-        .from("staff")
-        .select("staff_name")
-        .eq("id", user.id)
-        .single();
-
-      if (staffError) throw staffError;
-      staffName = staff.staff_name;
-    } else {
-      const storedUser = localStorage.getItem("user");
-      if (!storedUser) return;
-      staffName = JSON.parse(storedUser).staff_name;
-    }
-
-    const { data, error } = await supabase
-      .from("transactions")
-      .select(`
-        *,
-        transaction_items (
-          product_code,
-          qty,
-          price,
-          subtotal
-        ),
-        transaction_payments (
-          method,
-          amount
+      const { data, error } = await supabase
+        .from("transactions")
+        .select(
+          `
+          *,
+          transaction_items ( product_code, qty, price, subtotal ),
+          transaction_payments ( method, amount )
+        `
         )
-      `)
-      .eq("staff", staffName)
-      .order("created_at", { ascending: false })
-      .limit(50);
+        .eq("staff", staffName)
+        .order("created_at", { ascending: false })
+        .limit(50);
 
-    if (error) throw error;
-    setTransactions(data || []);
-  } catch (err) {
-    console.error("Error fetching transactions:", err.message);
-  }
-  setLoading(false);
-};
+      if (error) throw error;
+      setTransactions(data || []);
+    } catch (err) {
+      console.error("Error fetching transactions:", err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
 
+  // Only today's transactions (for the View Report modal)
+  const fetchTransactionsToday = async () => {
+    setLoading(true);
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      let staffName = null;
 
-  // Void transaction
+      if (user) {
+        const { data: staff, error: staffError } = await supabase
+          .from("staff")
+          .select("staff_name")
+          .eq("id", user.id)
+          .single();
+        if (staffError) throw staffError;
+        staffName = staff.staff_name;
+      } else {
+        const storedUser = localStorage.getItem("user");
+        if (!storedUser) return;
+        staffName = JSON.parse(storedUser).staff_name;
+      }
+
+      const now = new Date();
+      const startOfDay = new Date(now.setHours(0, 0, 0, 0)).toISOString();
+      const endOfDay = new Date(
+        new Date().setHours(23, 59, 59, 999)
+      ).toISOString();
+
+      const { data, error } = await supabase
+        .from("transactions")
+        .select(
+          `
+          *,
+          transaction_items ( product_code, qty, price, subtotal ),
+          transaction_payments ( method, amount )
+        `
+        )
+        .eq("staff", staffName)
+        .gte("created_at", startOfDay)
+        .lte("created_at", endOfDay)
+        .order("created_at", { ascending: false });
+
+      if (error) throw error;
+      setTransactions(data || []);
+    } catch (err) {
+      console.error("Error fetching today's transactions:", err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Restore stock on void
+  const restoreStockForTransaction = async (transactionId) => {
+    const { data: txItems, error: itemsError } = await supabase
+      .from("transaction_items")
+      .select("product_code, qty")
+      .eq("transaction_id", transactionId);
+
+    if (itemsError) throw itemsError;
+    if (!txItems || txItems.length === 0) return;
+
+    for (const it of txItems) {
+      const code = it.product_code;
+      const qtyToRestore = Number(it.qty || 0);
+      if (!code || qtyToRestore <= 0) continue;
+
+      const { data: batches, error: batchErr } = await supabase
+        .from("products")
+        .select("id, product_quantity, product_expiry")
+        .eq("product_ID", code)
+        .order("product_expiry", { ascending: true, nullsFirst: false })
+        .limit(1);
+
+      if (batchErr) throw batchErr;
+      if (!batches || batches.length === 0) continue;
+
+      const target = batches[0];
+      const newQty = Number(target.product_quantity || 0) + qtyToRestore;
+
+      const { error: updateErr } = await supabase
+        .from("products")
+        .update({ product_quantity: newQty })
+        .eq("id", target.id);
+
+      if (updateErr) throw updateErr;
+    }
+  };
+
   const handleVoidTransaction = async (transactionId) => {
     if (
       !window.confirm(
@@ -147,7 +336,20 @@ const QuickReport = ({ refreshTrigger }) => {
     try {
       setLoading(true);
 
-      // Update transaction status to voided
+      const { data: tx, error: txErr } = await supabase
+        .from("transactions")
+        .select("status")
+        .eq("id", transactionId)
+        .single();
+      if (txErr) throw txErr;
+      if (!tx || tx.status !== "completed") {
+        alert("Only completed transactions can be voided.");
+        setLoading(false);
+        return;
+      }
+
+      await restoreStockForTransaction(transactionId);
+
       const { error: updateError } = await supabase
         .from("transactions")
         .update({ status: "voided" })
@@ -155,35 +357,39 @@ const QuickReport = ({ refreshTrigger }) => {
 
       if (updateError) throw updateError;
 
-      // TODO: Optionally restore product quantities here
-      // You would need to fetch transaction_items and add back the quantities
-
-      alert("Transaction voided successfully!");
+      alert("Transaction voided and stock restored successfully!");
       setShowVoidModal(false);
-      fetchReportData();
-      fetchTransactions();
+
+      await Promise.all([fetchReportData(), fetchTransactions()]);
     } catch (err) {
-      console.error("Error voiding transaction:", err.message);
-      alert("Failed to void transaction.");
+      console.error(
+        "Error voiding transaction and restoring stock:",
+        err.message
+      );
+      alert("Failed to void transaction and restore stock.");
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
-  // Initial load and refresh when transactions change
+  // -------- Effects --------
+  useEffect(() => {
+    buildProductMap();
+  }, []);
+
   useEffect(() => {
     fetchReportData();
   }, [refreshTrigger]);
 
+  // -------- Handlers (open modals) --------
   const handleViewReport = () => {
-    fetchTransactions();
+    fetchTransactionsToday();
     setShowReportModal(true);
   };
-
   const handleVoid = () => {
     fetchTransactions();
     setShowVoidModal(true);
   };
-
   const handleHistory = () => {
     fetchTransactions();
     setShowHistoryModal(true);
@@ -203,7 +409,7 @@ const QuickReport = ({ refreshTrigger }) => {
                   borderBottom: "2px solid #ccc",
                 }}
               >
-                <BiSolidReport style={{ marginRight: "8px" }} />
+                <BiSolidReport style={{ marginRight: 8 }} />
                 My Quick Report
                 {currentStaffName && (
                   <div
@@ -261,7 +467,7 @@ const QuickReport = ({ refreshTrigger }) => {
         </div>
       </Container>
 
-      {/* View Report Modal */}
+      {/* View Report (Today only) */}
       <Modal
         show={showReportModal}
         onHide={() => setShowReportModal(false)}
@@ -286,42 +492,52 @@ const QuickReport = ({ refreshTrigger }) => {
             </p>
           </div>
 
-          <h6>Recent Transactions</h6>
-          <div style={{ maxHeight: "400px", overflowY: "auto" }}>
+          <h6>Recent Transactions (Today)</h6>
+          <div style={{ maxHeight: 400, overflowY: "auto" }}>
             {loading ? (
               <p>Loading...</p>
             ) : (
               <Table size="small">
                 <TableHead>
                   <TableRow>
-                    <TableCell>ID</TableCell>
+                    <TableCell>Item</TableCell>
                     <TableCell>Date</TableCell>
                     <TableCell>Amount</TableCell>
                     <TableCell>Status</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {transactions.map((t) => (
-                    <TableRow key={t.id}>
-                      <TableCell>{t.id}</TableCell>
-                      <TableCell>
-                        {new Date(t.created_at).toLocaleDateString()}{" "}
-                        {new Date(t.created_at).toLocaleTimeString()}
-                      </TableCell>
-                      <TableCell>₱{t.total_amount.toFixed(2)}</TableCell>
-                      <TableCell>
-                        <span
-                          className={`badge ${
-                            t.status === "completed"
-                              ? "bg-success"
-                              : "bg-danger"
-                          }`}
-                        >
-                          {t.status}
-                        </span>
+                  {transactions.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={4} align="center" sx={{ py: 3 }}>
+                        No transactions today
                       </TableCell>
                     </TableRow>
-                  ))}
+                  ) : (
+                    transactions.map((t) => (
+                      <TableRow key={t.id}>
+                        <TableCell>{renderTxItemCell(t)}</TableCell>
+                        <TableCell>
+                          {new Date(t.created_at).toLocaleDateString()}{" "}
+                          {new Date(t.created_at).toLocaleTimeString()}
+                        </TableCell>
+                        <TableCell>
+                          ₱{(t.total_amount || 0).toFixed(2)}
+                        </TableCell>
+                        <TableCell>
+                          <span
+                            className={`badge ${
+                              t.status === "completed"
+                                ? "bg-success"
+                                : "bg-danger"
+                            }`}
+                          >
+                            {t.status}
+                          </span>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
                 </TableBody>
               </Table>
             )}
@@ -329,7 +545,7 @@ const QuickReport = ({ refreshTrigger }) => {
         </Modal.Body>
       </Modal>
 
-      {/* Void Modal */}
+      {/* Void Modal (recent list) */}
       <Modal
         show={showVoidModal}
         onHide={() => setShowVoidModal(false)}
@@ -342,7 +558,7 @@ const QuickReport = ({ refreshTrigger }) => {
           <p className="text-warning">
             ⚠️ Select a transaction to void. This action cannot be undone.
           </p>
-          <div style={{ maxHeight: "400px", overflowY: "auto" }}>
+          <div style={{ maxHeight: 400, overflowY: "auto" }}>
             {loading ? (
               <p>Loading...</p>
             ) : (
@@ -350,7 +566,7 @@ const QuickReport = ({ refreshTrigger }) => {
                 <TableHead>
                   <TableRow>
                     <TableCell>Action</TableCell>
-                    <TableCell>ID</TableCell>
+                    <TableCell>Item</TableCell>
                     <TableCell>Date</TableCell>
                     <TableCell>Amount</TableCell>
                     <TableCell>Status</TableCell>
@@ -371,14 +587,23 @@ const QuickReport = ({ refreshTrigger }) => {
                             Void
                           </Button>
                         </TableCell>
-                        <TableCell>{t.id}</TableCell>
+                        <TableCell>
+                          {t.transaction_items?.map((item, idx) => (
+                            <div key={idx}>
+                              {renderLineItem(item.product_code, item.qty)}
+                            </div>
+                          ))}
+                        </TableCell>
+
                         <TableCell>
                           {new Date(t.created_at).toLocaleDateString()}{" "}
                           {new Date(t.created_at).toLocaleTimeString()}
                         </TableCell>
-                        <TableCell>₱{t.total_amount.toFixed(2)}</TableCell>
                         <TableCell>
-                          <span className="badge bg-success">{t.status}</span>
+                          ₱{(t.total_amount || 0).toFixed(2)}
+                        </TableCell>
+                        <TableCell>
+                          <span className="badge bg-success">completed</span>
                         </TableCell>
                       </TableRow>
                     ))}
@@ -399,14 +624,14 @@ const QuickReport = ({ refreshTrigger }) => {
           <Modal.Title>Transaction History</Modal.Title>
         </Modal.Header>
         <Modal.Body>
-          <div style={{ maxHeight: "500px", overflowY: "auto" }}>
+          <div style={{ maxHeight: 500, overflowY: "auto" }}>
             {loading ? (
               <p>Loading...</p>
             ) : (
               <Table size="small">
                 <TableHead>
                   <TableRow>
-                    <TableCell>ID</TableCell>
+                    <TableCell>Item</TableCell>
                     <TableCell>Date</TableCell>
                     <TableCell>Amount</TableCell>
                     <TableCell>Items</TableCell>
@@ -417,7 +642,7 @@ const QuickReport = ({ refreshTrigger }) => {
                 <TableBody>
                   {transactions.map((t) => (
                     <TableRow key={t.id}>
-                      <TableCell>{t.id}</TableCell>
+                      <TableCell>{renderTxItemCell(t)}</TableCell>
                       <TableCell>
                         {new Date(t.created_at).toLocaleDateString()}
                         <br />
@@ -425,18 +650,20 @@ const QuickReport = ({ refreshTrigger }) => {
                           {new Date(t.created_at).toLocaleTimeString()}
                         </small>
                       </TableCell>
-                      <TableCell>₱{t.total_amount.toFixed(2)}</TableCell>
+                      <TableCell>₱{(t.total_amount || 0).toFixed(2)}</TableCell>
                       <TableCell>
                         {t.transaction_items?.map((item, idx) => (
-                          <div key={idx} style={{ fontSize: "0.8rem" }}>
-                            {item.product_code} x{item.qty}
+                          <div key={idx}>
+                            {renderLineItem(item.product_code, item.qty)}
                           </div>
                         ))}
                       </TableCell>
+
                       <TableCell>
                         {t.transaction_payments?.map((payment, idx) => (
                           <div key={idx} style={{ fontSize: "0.8rem" }}>
-                            {payment.method}: ₱{payment.amount.toFixed(2)}
+                            {payment.method}: ₱
+                            {(payment.amount || 0).toFixed(2)}
                           </div>
                         ))}
                       </TableCell>
