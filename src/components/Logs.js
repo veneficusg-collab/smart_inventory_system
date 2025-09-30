@@ -49,6 +49,24 @@ const Logs = () => {
     return data?.publicUrl || null;
   };
 
+  const resolveProductMetaFromLog = (logRow) => {
+    // If your logs table has product_ID or product_code, use that first:
+    const idLike = logRow.product_ID || logRow.product_code;
+    if (idLike && productMap[idLike]) return productMap[idLike];
+
+    // Fallback: try to match by product_name (case-insensitive)
+    if (logRow.product_name) {
+      const target = logRow.product_name.trim().toLowerCase();
+      const found = Object.values(productMap).find(
+        (p) => (p.name || "").trim().toLowerCase() === target
+      );
+      if (found) return found;
+    }
+
+    // Last resort
+    return { name: logRow.product_name || idLike || "Unknown", imgUrl: null };
+  };
+
   const buildProductMap = async () => {
     const { data, error } = await supabase
       .from("products")
@@ -328,8 +346,35 @@ const Logs = () => {
                       {product.id}
                     </TableCell>
                     <TableCell component="th" scope="row">
-                      {product.product_name}
+                      {(() => {
+                        const meta = resolveProductMetaFromLog(product);
+                        return (
+                          <div className="d-flex align-items-center">
+                            {meta.imgUrl ? (
+                              <img
+                                src={meta.imgUrl}
+                                alt={meta.name}
+                                style={{
+                                  width: 34,
+                                  height: 34,
+                                  borderRadius: 6,
+                                  objectFit: "cover",
+                                  marginRight: 8,
+                                  border: "1px solid #eee",
+                                }}
+                              />
+                            ) : (
+                              <FaBoxOpen
+                                size={22}
+                                className="text-muted me-2"
+                              />
+                            )}
+                            <span>{meta.name}</span>
+                          </div>
+                        );
+                      })()}
                     </TableCell>
+
                     <TableCell align="left">
                       {product.product_category || "N/A"}
                     </TableCell>
