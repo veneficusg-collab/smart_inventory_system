@@ -1,4 +1,4 @@
-import { Button, Container, Nav, Tab } from "react-bootstrap";
+import { Button, Container, Nav, Tab, Modal } from "react-bootstrap";
 import { useEffect, useState } from "react";
 import Table from "@mui/material/Table";
 import TableBody from "@mui/material/TableBody";
@@ -10,6 +10,9 @@ import Paper from "@mui/material/Paper";
 import TablePagination from "@mui/material/TablePagination";
 import { supabase } from "../supabaseClient";
 import { IoMdRefresh } from "react-icons/io";
+import { FaBoxOpen } from "react-icons/fa"; // ← fallback icon for no image
+
+const BUCKET = "Smart-Inventory-System-(Pet Matters)";
 
 const Logs = () => {
   useEffect(() => {
@@ -24,12 +27,49 @@ const Logs = () => {
   const [error, setError] = useState("");
   const [activeTab, setActiveTab] = useState("inventory");
   const [staffRole, setStaffRole] = useState("");
+  const [productMap, setProductMap] = useState({});
 
   // State for pagination - separate for each tab
   const [inventoryPage, setInventoryPage] = useState(0);
   const [inventoryRowsPerPage, setInventoryRowsPerPage] = useState(25);
   const [transactionPage, setTransactionPage] = useState(0);
   const [transactionRowsPerPage, setTransactionRowsPerPage] = useState(25);
+  const [selectedTx, setSelectedTx] = useState(null);
+  const [showTxModal, setShowTxModal] = useState(false);
+
+  const currency = (n) =>
+    `₱${Number(n || 0).toLocaleString("en-PH", { minimumFractionDigits: 2 })}`;
+
+  const publicProductUrl = (keyOrUrl) => {
+    if (!keyOrUrl) return null;
+    if (String(keyOrUrl).startsWith("http")) return keyOrUrl;
+    const { data } = supabase.storage
+      .from(BUCKET)
+      .getPublicUrl(`products/${keyOrUrl}`);
+    return data?.publicUrl || null;
+  };
+
+  const buildProductMap = async () => {
+    const { data, error } = await supabase
+      .from("products")
+      .select("product_ID, product_name, product_img");
+    if (error) {
+      console.error("Products fetch error:", error);
+      return;
+    }
+    const map = {};
+    (data || []).forEach((p) => {
+      map[p.product_ID] = {
+        name: p.product_name || p.product_ID,
+        imgUrl: publicProductUrl(p.product_img),
+      };
+    });
+    setProductMap(map);
+  };
+
+  useEffect(() => {
+    buildProductMap();
+  }, []);
 
   const fetchLogs = async () => {
     try {
@@ -69,13 +109,17 @@ const Logs = () => {
         staffRows.staff_position === "super_admin"
       ) {
         // Admin sees ALL logs
-        ({ data } = await supabase.from("logs").select("*"));
+        ({ data } = await supabase
+          .from("logs")
+          .select("*")
+          .order("created_at", { ascending: false }));
       } else {
         // Staff sees ONLY their logs
         ({ data } = await supabase
           .from("logs")
           .select("*")
-          .eq("staff", staffRows.staff_name));
+          .eq("staff", staffRows.staff_name)
+          .order("created_at", { ascending: false }));
       }
 
       setProducts(data || []);
@@ -371,6 +415,10 @@ const Logs = () => {
                 .map((transaction) => (
                   <TableRow
                     key={transaction.id}
+                    onClick={() => {
+                      setSelectedTx(transaction);
+                      setShowTxModal(true);
+                    }}
                     sx={{
                       "&:last-child td, &:last-child th": { border: 0 },
                       "&:hover": {
@@ -378,6 +426,7 @@ const Logs = () => {
                         transform: "scale(1.01)",
                         transition: "all 0.2s ease-in-out",
                       },
+                      cursor: "pointer",
                     }}
                   >
                     <TableCell component="th" scope="row">
@@ -459,6 +508,160 @@ const Logs = () => {
       fluid
       style={{ width: "140vh" }}
     >
+      {/* Transaction Details Modal */}
+      <Modal show={showTxModal} onHide={() => setShowTxModal(false)} size="lg">
+        <Modal.Header closeButton>
+          <Modal.Title>Transaction Details</Modal.Title>
+        </Modal.Header>
+
+        <Modal.Body>
+          {!selectedTx ? (
+            <p>No transaction selected.</p>
+          ) : (
+            <>
+              <div className="mb-3">
+                <div>
+                  <strong>ID:</strong> {selectedTx.id}
+                </div>
+                <div>
+                  <strong>Date:</strong>{" "}
+                  {new Date(selectedTx.created_at).toLocaleDateString()}{" "}
+                  {new Date(selectedTx.created_at).toLocaleTimeString()}
+                </div>
+                <div>
+                  <strong>Staff:</strong> {selectedTx.staff || "N/A"}
+                </div>
+                <div>
+                  <strong>Status:</strong>{" "}
+                  <span
+                    className={`badge ${
+                      selectedTx.status === "completed"
+                        ? "bg-success"
+                        : selectedTx.status === "voided"
+                        ? "bg-danger"
+                        : "bg-warning"
+                    }`}
+                  >
+                    {selectedTx.status}
+                  </span>
+                </div>
+                <div>
+                  <strong>Total Amount:</strong>{" "}
+                  {currency(selectedTx.total_amount)}
+                </div>
+              </div>
+
+              {/* Items */}
+              <h6 className="mt-3">Items</h6>
+              <TableContainer component={Paper} className="mb-3">
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Product</TableCell>
+                      <TableCell align="right">Qty</TableCell>
+                      <TableCell align="right">Price</TableCell>
+                      <TableCell align="right">Subtotal</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {(selectedTx.transaction_items || []).length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={4} align="center" sx={{ py: 2 }}>
+                          No items
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      selectedTx.transaction_items.map((it, idx) => (
+                        <TableRow key={idx}>
+                          <TableCell>
+                            {(() => {
+                              const meta = productMap[it.product_code] || {
+                                name: it.product_code,
+                                imgUrl: null,
+                              };
+                              return (
+                                <div className="d-flex align-items-center">
+                                  {meta.imgUrl ? (
+                                    <img
+                                      src={meta.imgUrl}
+                                      alt={meta.name}
+                                      style={{
+                                        width: 36,
+                                        height: 36,
+                                        borderRadius: 6,
+                                        objectFit: "cover",
+                                        marginRight: 8,
+                                        border: "1px solid #eee",
+                                      }}
+                                    />
+                                  ) : (
+                                    <FaBoxOpen
+                                      size={24}
+                                      className="text-muted me-2"
+                                    />
+                                  )}
+                                  <span>{meta.name}</span>
+                                </div>
+                              );
+                            })()}
+                          </TableCell>
+                          <TableCell align="right">{it.qty}</TableCell>
+                          <TableCell align="right">
+                            {currency(it.price)}
+                          </TableCell>
+                          <TableCell align="right">
+                            {currency(
+                              it.subtotal ?? (it.qty || 0) * (it.price || 0)
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+
+              {/* Payments */}
+              <h6 className="mt-2">Payments</h6>
+              <TableContainer component={Paper}>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Method</TableCell>
+                      <TableCell align="right">Amount</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {(selectedTx.transaction_payments || []).length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={2} align="center" sx={{ py: 2 }}>
+                          No payments recorded
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      selectedTx.transaction_payments.map((p, idx) => (
+                        <TableRow key={idx}>
+                          <TableCell>{p.method}</TableCell>
+                          <TableCell align="right">
+                            {currency(p.amount)}
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            </>
+          )}
+        </Modal.Body>
+
+        <Modal.Footer>
+          <Button variant="secondary" onClick={() => setShowTxModal(false)}>
+            Close
+          </Button>
+        </Modal.Footer>
+      </Modal>
+
       <div className="d-flex justify-content-between align-items-center mx-2">
         <span className="mx-1 mt-3 d-inline-block">
           Logs
