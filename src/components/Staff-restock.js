@@ -1,7 +1,8 @@
 import { Container } from "react-bootstrap";
-import { Row, Form, Col, Button } from "react-bootstrap";
+import { Row, Form, Col, Button, InputGroup, Alert } from "react-bootstrap";
 import { useEffect, useState } from "react";
 import { supabase } from "../supabaseClient";
+import { LuPlus, LuCheck, LuX } from "react-icons/lu";
 
 const StaffRestock = ({ setRender, scannedId }) => {
   // Form state
@@ -12,11 +13,21 @@ const StaffRestock = ({ setRender, scannedId }) => {
   const [expiryDate, setExpiryDate] = useState("");
   const [inputExpiryDate, setInputExpiryDate] = useState("");
   const [expiryDates, setExpiryDates] = useState([]);
+  const [productImage, setProductImage] = useState(null);
 
   // Supplier fields (editable)
   const [supplierName, setSupplierName] = useState("");
   const [supplierPrice, setSupplierPrice] = useState("");
   const [supplierNumber, setSupplierNumber] = useState(""); // ← NEW
+
+  // Supplier dropdown state
+  const [supplierList, setSupplierList] = useState([]);
+  const [supplierLoading, setSupplierLoading] = useState(false);
+  const [supplierError, setSupplierError] = useState("");
+  const [isAddingSupplier, setIsAddingSupplier] = useState(false);
+  const [newSupplierName, setNewSupplierName] = useState("");
+
+  const [supplierPhoneByName, setSupplierPhoneByName] = useState({});
 
   // Loading and error states
   const [loading, setLoading] = useState(false);
@@ -25,9 +36,80 @@ const StaffRestock = ({ setRender, scannedId }) => {
 
   useEffect(() => {
     fetchProduct(scannedId);
+    fetchSuppliers();
   }, []);
 
   const toDateString = (date) => new Date(date).toISOString().split("T")[0];
+
+  const fetchSuppliers = async () => {
+    try {
+      setSupplierError("");
+      setSupplierLoading(true);
+
+      const { data, error } = await supabase
+        .from("products")
+        .select("supplier_name, supplier_number");
+
+      if (error) throw error;
+
+      const namesSet = new Map(); // case-insensitive de-dupe
+      const freq = {}; // { nameLower: { number: count } }
+
+      (data || []).forEach((r) => {
+        const name = (r.supplier_name || "").trim();
+        const num = (r.supplier_number || "").trim();
+        if (name) {
+          const key = name.toLowerCase();
+          if (!namesSet.has(key)) namesSet.set(key, name);
+          if (num) {
+            if (!freq[key]) freq[key] = {};
+            freq[key][num] = (freq[key][num] || 0) + 1;
+          }
+        }
+      });
+
+      // Build mapping: most frequent number per supplier name
+      const mapping = {};
+      for (const [nameLower, counts] of Object.entries(freq)) {
+        const best = Object.entries(counts).sort(
+          (a, b) => b[1] - a[1] || a[0].localeCompare(b[0])
+        )[0]?.[0];
+        if (best) mapping[namesSet.get(nameLower)] = best; // keep original casing
+      }
+
+      setSupplierPhoneByName(mapping);
+
+      const names = Array.from(namesSet.values()).sort((a, b) =>
+        a.localeCompare(b)
+      );
+      setSupplierList(names);
+    } catch (err) {
+      setSupplierError(err.message || "Failed to load suppliers");
+    } finally {
+      setSupplierLoading(false);
+    }
+  };
+
+  const handleSaveNewSupplier = () => {
+    const name = newSupplierName.trim();
+    if (!name) {
+      setSupplierError("Supplier name cannot be empty.");
+      return;
+    }
+    const updated = Array.from(new Set([...supplierList, name])).sort((a, b) =>
+      a.localeCompare(b)
+    );
+    setSupplierList(updated);
+    setSupplierName(name); // select it
+    setIsAddingSupplier(false);
+    setNewSupplierName("");
+  };
+
+  const handleCancelAddSupplier = () => {
+    setIsAddingSupplier(false);
+    setNewSupplierName("");
+    setSupplierError("");
+  };
 
   const fetchProduct = async (scannedId) => {
     const { data: products, error } = await supabase
@@ -48,7 +130,6 @@ const StaffRestock = ({ setRender, scannedId }) => {
       setSupplierName(p0.supplier_name || "");
       setSupplierPrice(p0.supplier_price ?? "");
       setSupplierNumber(p0.supplier_number || ""); // populate
-
       setExpiryDates(
         products
           .filter((d) => d.product_expiry)
@@ -57,6 +138,17 @@ const StaffRestock = ({ setRender, scannedId }) => {
             product_quantity: d.product_quantity,
           }))
       );
+
+      if (p0.product_img) {
+        if (p0.product_img.startsWith("http")) {
+          setProductImage(p0.product_img);
+        } else {
+          const { data } = supabase.storage
+            .from("Smart-Inventory-System-(Pet Matters)")
+            .getPublicUrl(`products/${p0.product_img}`);
+          if (data?.publicUrl) setProductImage(data.publicUrl);
+        }
+      }
     } else {
       setError("ID not found.");
     }
@@ -156,23 +248,22 @@ const StaffRestock = ({ setRender, scannedId }) => {
           .single();
         if (baseError) throw baseError;
 
-        const { error: insertError } = await supabase
-          .from("products")
-          .insert([
-            {
-              product_ID: baseProduct.product_ID,
-              product_name: baseProduct.product_name,
-              product_quantity: parseInt(quantity, 10),
-              product_expiry: inputExpiryDate,
-              product_price: baseProduct.product_price,
-              product_category: baseProduct.product_category,
-              product_unit: baseProduct.product_unit,
-              supplier_price: parseFloat(supplierPrice) || 0,
-              supplier_name: supplierName,
-              supplier_number: supplierNumber,
-              branch: baseProduct.branch,
-            },
-          ]);
+        const { error: insertError } = await supabase.from("products").insert([
+          {
+            product_ID: baseProduct.product_ID,
+            product_name: baseProduct.product_name,
+            product_quantity: parseInt(quantity, 10),
+            product_expiry: inputExpiryDate,
+            product_price: baseProduct.product_price,
+            product_category: baseProduct.product_category,
+            product_unit: baseProduct.product_unit,
+            supplier_price: parseFloat(supplierPrice) || 0,
+            supplier_name: supplierName,
+            supplier_number: supplierNumber,
+            branch: baseProduct.branch,
+            product_img: baseProduct.product_img,
+          },
+        ]);
         if (insertError) throw insertError;
 
         await supabase.from("logs").insert([
@@ -250,18 +341,88 @@ const StaffRestock = ({ setRender, scannedId }) => {
                 </Form.Group>
 
                 {/* Supplier Name */}
-                <Form.Group as={Row} className="mb-3 mt-4">
+                <Form.Group
+                  as={Row}
+                  className="mb-3 mt-4"
+                  controlId="formSupplierName"
+                >
                   <Form.Label column sm={3} className="text-start">
                     Supplier Name
                   </Form.Label>
                   <Col sm={9}>
-                    <Form.Control
-                      type="text"
-                      placeholder="Enter supplier name"
-                      size="sm"
-                      value={supplierName}
-                      onChange={(e) => setSupplierName(e.target.value)}
-                    />
+                    {!isAddingSupplier ? (
+                      <InputGroup size="sm">
+                        <Form.Select
+                          value={supplierName}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setSupplierName(val);
+                            const suggested = supplierPhoneByName[val];
+                            if (suggested) setSupplierNumber(suggested); // auto-fill number
+                          }}
+                          disabled={supplierLoading}
+                        >
+                          <option value="" disabled>
+                            {supplierLoading
+                              ? "Loading suppliers..."
+                              : "Select supplier"}
+                          </option>
+                          {supplierList.map((s) => (
+                            <option key={s} value={s}>
+                              {s}
+                            </option>
+                          ))}
+                        </Form.Select>
+                        <Button
+                          variant="outline-secondary"
+                          title="Add a new supplier"
+                          onClick={() => {
+                            setIsAddingSupplier(true);
+                            setTimeout(() => {
+                              const el =
+                                document.getElementById("newSupplierInput");
+                              el && el.focus();
+                            }, 0);
+                          }}
+                        >
+                          <LuPlus />
+                        </Button>
+                      </InputGroup>
+                    ) : (
+                      <InputGroup size="sm">
+                        <Form.Control
+                          id="newSupplierInput"
+                          type="text"
+                          placeholder="Type new supplier name"
+                          value={newSupplierName}
+                          onChange={(e) => setNewSupplierName(e.target.value)}
+                          disabled={supplierLoading}
+                        />
+                        <Button
+                          variant="outline-success"
+                          title="Save supplier"
+                          onClick={handleSaveNewSupplier}
+                          disabled={supplierLoading || !newSupplierName.trim()}
+                        >
+                          <LuCheck />
+                        </Button>
+                        <Button
+                          variant="outline-secondary"
+                          title="Cancel"
+                          onClick={handleCancelAddSupplier}
+                          disabled={supplierLoading}
+                        >
+                          <LuX />
+                        </Button>
+                      </InputGroup>
+                    )}
+                    {supplierError && (
+                      <div className="mt-2">
+                        <Alert variant="warning" className="py-1 px-2 mb-0">
+                          {supplierError}
+                        </Alert>
+                      </div>
+                    )}
                   </Col>
                 </Form.Group>
 
@@ -376,6 +537,34 @@ const StaffRestock = ({ setRender, scannedId }) => {
                     </Form.Select>
                   </Col>
                 </Form.Group>
+              </div>
+            </Col>
+            <Col
+              md={6}
+              className="d-flex justify-content-center align-items-start mt-4"
+            >
+              <div
+                className="border rounded d-flex flex-column align-items-center justify-content-center"
+                style={{
+                  width: "250px",
+                  height: "250px",
+                  backgroundColor: "#f8f9fa",
+                  border: "2px dashed #dee2e6",
+                }}
+              >
+                {productImage ? (
+                  <img
+                    src={productImage}
+                    alt={productName}
+                    style={{
+                      maxWidth: "100%",
+                      maxHeight: "100%",
+                      borderRadius: "8px",
+                    }}
+                  />
+                ) : (
+                  <span className="text-muted">No Image Available</span>
+                )}
               </div>
             </Col>
           </Row>
