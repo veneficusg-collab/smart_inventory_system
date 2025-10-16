@@ -481,18 +481,29 @@ const Logs = () => {
                       {formatDateTime(transaction.created_at)}
                     </TableCell>
                     <TableCell align="left">
-                      ₱{transaction.total_amount?.toFixed(2) || "0.00"}
+                      {currency(transaction.total_amount)}
                     </TableCell>
                     <TableCell align="left">
                       <div style={{ maxWidth: "200px", overflow: "hidden" }}>
-                        {transaction.transaction_items?.map((item, idx) => (
-                          <div
-                            key={idx}
-                            style={{ fontSize: "0.8rem", lineHeight: "1.2" }}
-                          >
-                            {item.product_code} x{item.qty}
-                          </div>
-                        )) || "N/A"}
+                        {transaction.transaction_items?.length
+                          ? transaction.transaction_items.map((item, idx) => {
+                              const meta = productMap[item.product_code] || {
+                                name: item.product_code,
+                              };
+                              return (
+                                <div
+                                  key={idx}
+                                  style={{
+                                    fontSize: "0.8rem",
+                                    lineHeight: "1.2",
+                                  }}
+                                  title={meta.name}
+                                >
+                                  {meta.name} ×{item.qty}
+                                </div>
+                              );
+                            })
+                          : "N/A"}
                       </div>
                     </TableCell>
                     <TableCell align="left">
@@ -503,8 +514,7 @@ const Logs = () => {
                               key={idx}
                               style={{ fontSize: "0.8rem", lineHeight: "1.2" }}
                             >
-                              {payment.method}: ₱
-                              {payment.amount?.toFixed(2) || "0.00"}
+                              {payment.method}: {currency(payment.amount)}
                             </div>
                           )
                         ) || "N/A"}

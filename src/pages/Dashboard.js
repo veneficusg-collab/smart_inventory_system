@@ -15,6 +15,7 @@ import { supabase } from "../supabaseClient";
 import StaffUnstock from "../components/Staff-unstock";
 import POS from "../components/POS";
 import Archive from "../components/Archive";
+import DTR from "../components/DTR";
 
 const Dashboard = () => {
   const [render, setRender] = useState("AdminDashboard");
@@ -210,6 +211,8 @@ const Dashboard = () => {
             <StaffInfo staffId={staffId} setRender={setRender} />
           )}
           {render === "Logs" && <Logs />}
+
+          {render === "DTR" && <DTR />}
 
           {/* Staff Links */}
           {render === "StaffDashboard" && (

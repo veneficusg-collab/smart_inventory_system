@@ -11,6 +11,7 @@ import { Link } from "@mui/material";
 import { ClipboardClock, Logs } from "lucide-react";
 import { supabase } from "../supabaseClient";
 import { HiArchiveBoxXMark } from "react-icons/hi2";
+import { FaCalendarTimes } from "react-icons/fa";
 
 
 const Sidebar = ({ setRender, staffRole }) => {
@@ -121,6 +122,17 @@ const Sidebar = ({ setRender, staffRole }) => {
                   <span className="mx-3">Logs</span>
                 </div>
               </Link>
+              <Link
+                underline="hover"
+                color="inherit"
+                component="button"
+                onClick={() => setRender("DTR")}
+              >
+                <div className="d-flex align-items-center my-3">
+                  <FaCalendarTimes style={{ width: "16px" }} />
+                  <span className="mx-3">DTR</span>
+                </div>
+              </Link>
                 <Link
                 underline="hover"
                 color="inherit"
@@ -132,6 +144,8 @@ const Sidebar = ({ setRender, staffRole }) => {
                   <span className="mx-3">Archive</span>
                 </div>
               </Link>
+            
+
             </>
           ) : (
             // ✅ Staff role = only Logs

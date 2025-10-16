@@ -36,7 +36,6 @@ const QuickReport = ({ refreshTrigger }) => {
     const { data } = supabase.storage
       .from(BUCKET)
       .getPublicUrl(`products/${keyOrUrl}`);
-    // If the bucket key is wrong this still returns a URL, but we only use "no image" when key is missing.
     return data?.publicUrl || null;
   };
 
@@ -287,7 +286,14 @@ const QuickReport = ({ refreshTrigger }) => {
     }
   };
 
-  // Restore stock on void
+  /**
+   * Restore stock on void AND return details of what we changed
+   * so we can write logs:
+   *  - product_code
+   *  - qty (restored)
+   *  - product_expiry (batch we added back to; 'yyyy-mm-dd' or null)
+   *  - product_uuid (products.id of the batch row we updated)
+   */
   const restoreStockForTransaction = async (transactionId) => {
     const { data: txItems, error: itemsError } = await supabase
       .from("transaction_items")
@@ -295,13 +301,16 @@ const QuickReport = ({ refreshTrigger }) => {
       .eq("transaction_id", transactionId);
 
     if (itemsError) throw itemsError;
-    if (!txItems || txItems.length === 0) return;
+    if (!txItems || txItems.length === 0) return [];
+
+    const restored = [];
 
     for (const it of txItems) {
       const code = it.product_code;
       const qtyToRestore = Number(it.qty || 0);
       if (!code || qtyToRestore <= 0) continue;
 
+      // Put back to the earliest-expiring batch we currently have
       const { data: batches, error: batchErr } = await supabase
         .from("products")
         .select("id, product_quantity, product_expiry")
@@ -321,7 +330,18 @@ const QuickReport = ({ refreshTrigger }) => {
         .eq("id", target.id);
 
       if (updateErr) throw updateErr;
+
+      restored.push({
+        product_code: code,
+        qty: qtyToRestore,
+        product_expiry: target.product_expiry
+          ? new Date(target.product_expiry).toISOString().split("T")[0]
+          : null,
+        product_uuid: target.id,
+      });
     }
+
+    return restored;
   };
 
   const handleVoidTransaction = async (transactionId) => {
@@ -336,6 +356,7 @@ const QuickReport = ({ refreshTrigger }) => {
     try {
       setLoading(true);
 
+      // Only completed can be voided
       const { data: tx, error: txErr } = await supabase
         .from("transactions")
         .select("status")
@@ -348,14 +369,79 @@ const QuickReport = ({ refreshTrigger }) => {
         return;
       }
 
-      await restoreStockForTransaction(transactionId);
+      // 1) Restore stock — and capture what we did for logging
+      const restored = await restoreStockForTransaction(transactionId);
 
+      // 2) Mark transaction as voided
       const { error: updateError } = await supabase
         .from("transactions")
         .update({ status: "voided" })
         .eq("id", transactionId);
-
       if (updateError) throw updateError;
+
+      // 3) Write logs for the void items (non-blocking if it fails)
+      try {
+        // Who is staff?
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+        let staffName = null;
+
+        if (user) {
+          const { data: staff, error: staffError } = await supabase
+            .from("staff")
+            .select("staff_name")
+            .eq("id", user.id)
+            .single();
+          if (staffError) throw staffError;
+          staffName = staff.staff_name;
+        } else {
+          const storedUser = localStorage.getItem("user");
+          if (storedUser) {
+            staffName = JSON.parse(storedUser).staff_name;
+          }
+        }
+
+        const codes = [...new Set(restored.map((r) => r.product_code))];
+
+        // Pull product meta to fill names/category/unit
+        const { data: prodMeta, error: metaErr } = await supabase
+          .from("products")
+          .select("id, product_ID, product_name, product_category, product_unit")
+          .in("product_ID", codes);
+        if (metaErr) throw metaErr;
+
+        const metaByCode = {};
+        (prodMeta || []).forEach((p) => {
+          if (!metaByCode[p.product_ID]) metaByCode[p.product_ID] = p;
+        });
+
+        const logsPayload = restored.map((r) => {
+          const meta = metaByCode[r.product_code] || {};
+          return {
+            product_id: r.product_code,
+            product_name: meta.product_name || r.product_code,
+            product_quantity: r.qty,
+            product_category: meta.product_category || null,
+            product_unit: meta.product_unit || null,
+            product_expiry: r.product_expiry || null, // where we placed it back
+            staff: staffName || "Unknown",
+            product_action: "Void",
+            product_uuid: meta.id || r.product_uuid || null,
+          };
+        });
+
+        if (logsPayload.length > 0) {
+          const { error: logErr } = await supabase
+            .from("logs")
+            .insert(logsPayload);
+          if (logErr) {
+            console.error("Failed to insert void logs:", logErr.message);
+          }
+        }
+      } catch (logErr) {
+        console.error("Logging (void) error:", logErr.message);
+      }
 
       alert("Transaction voided and stock restored successfully!");
       setShowVoidModal(false);
