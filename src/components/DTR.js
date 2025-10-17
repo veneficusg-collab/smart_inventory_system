@@ -11,7 +11,6 @@ import {
   Paper,
 } from "@mui/material";
 import { IoMdPrint } from "react-icons/io";
-import { FaBoxOpen } from "react-icons/fa";
 import { supabase } from "../supabaseClient";
 
 const BUCKET = "Smart-Inventory-System-(Pet Matters)";
@@ -35,7 +34,7 @@ const currency = (n) =>
   `₱${Number(n || 0).toLocaleString("en-PH", { minimumFractionDigits: 2 })}`;
 
 const DTR = () => {
-  const printRef = useRef(null); // ✅ For print scoping
+  const printRef = useRef(null);
 
   const [mode, setMode] = useState("daily");
   const today = new Date();
@@ -357,13 +356,14 @@ const DTR = () => {
                 <TableCell>Total</TableCell>
                 <TableCell>Items</TableCell>
                 <TableCell>Payments</TableCell>
+                <TableCell>Staff</TableCell> {/* ✅ Staff column */}
                 <TableCell>Status</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
               {transactions.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} align="center">
+                  <TableCell colSpan={7} align="center">
                     No transactions
                   </TableCell>
                 </TableRow>
@@ -395,6 +395,7 @@ const DTR = () => {
                         </div>
                       ))}
                     </TableCell>
+                    <TableCell>{t.staff || "N/A"}</TableCell> {/* ✅ show staff */}
                     <TableCell>{t.status}</TableCell>
                   </TableRow>
                 ))
@@ -415,12 +416,13 @@ const DTR = () => {
                 <TableCell align="right">Qty</TableCell>
                 <TableCell>Unit</TableCell>
                 <TableCell>Action</TableCell>
+                <TableCell>Staff</TableCell> {/* ✅ Added Staff column */}
               </TableRow>
             </TableHead>
             <TableBody>
               {logs.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} align="center">
+                  <TableCell colSpan={7} align="center">
                     No logs
                   </TableCell>
                 </TableRow>
@@ -443,6 +445,7 @@ const DTR = () => {
                       <TableCell align="right">{lg.product_quantity}</TableCell>
                       <TableCell>{lg.product_unit || "N/A"}</TableCell>
                       <TableCell>{lg.product_action || "N/A"}</TableCell>
+                      <TableCell>{lg.staff || "N/A"}</TableCell> {/* ✅ show staff */}
                     </TableRow>
                   );
                 })
