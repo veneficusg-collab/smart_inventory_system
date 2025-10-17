@@ -126,14 +126,14 @@ const DTR = () => {
         )
         .gte("created_at", startISO)
         .lte("created_at", endISO)
-        .order("created_at", { ascending: true });
+        .order("created_at", { ascending: false }); // 🔽 latest first
 
       let logQuery = supabase
         .from("logs")
         .select("*")
         .gte("created_at", startISO)
         .lte("created_at", endISO)
-        .order("created_at", { ascending: true });
+        .order("created_at", { ascending: false }); // 🔽 latest first
 
       if (staff_position !== "admin" && staff_position !== "super_admin") {
         txQuery = txQuery.eq("staff", staff_name);
@@ -356,7 +356,7 @@ const DTR = () => {
                 <TableCell>Total</TableCell>
                 <TableCell>Items</TableCell>
                 <TableCell>Payments</TableCell>
-                <TableCell>Staff</TableCell> {/* ✅ Staff column */}
+                <TableCell>Staff</TableCell>
                 <TableCell>Status</TableCell>
               </TableRow>
             </TableHead>
@@ -395,7 +395,7 @@ const DTR = () => {
                         </div>
                       ))}
                     </TableCell>
-                    <TableCell>{t.staff || "N/A"}</TableCell> {/* ✅ show staff */}
+                    <TableCell>{t.staff || "N/A"}</TableCell>
                     <TableCell>{t.status}</TableCell>
                   </TableRow>
                 ))
@@ -416,7 +416,7 @@ const DTR = () => {
                 <TableCell align="right">Qty</TableCell>
                 <TableCell>Unit</TableCell>
                 <TableCell>Action</TableCell>
-                <TableCell>Staff</TableCell> {/* ✅ Added Staff column */}
+                <TableCell>Staff</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -445,7 +445,7 @@ const DTR = () => {
                       <TableCell align="right">{lg.product_quantity}</TableCell>
                       <TableCell>{lg.product_unit || "N/A"}</TableCell>
                       <TableCell>{lg.product_action || "N/A"}</TableCell>
-                      <TableCell>{lg.staff || "N/A"}</TableCell> {/* ✅ show staff */}
+                      <TableCell>{lg.staff || "N/A"}</TableCell>
                     </TableRow>
                   );
                 })
