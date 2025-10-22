@@ -22,14 +22,10 @@ const AddStaff = (props) => {
   const [successMessage, setSuccessMessage] = useState("");
   const [img, setImg] = useState("");
 
-  const handleLogout = async () => {
-
-    let { error } = await supabase.auth.signOut();
-    window.location.reload();
-  }
-
   const handleAddStaff = async (e) => {
     e.preventDefault();
+    setErrorMessage("");
+    setSuccessMessage("");
 
     if (password !== confirmPassword) {
       setErrorMessage("Confirm password didn't match!");
@@ -84,49 +80,76 @@ const AddStaff = (props) => {
       return;
     }
 
-    // 🚨 IMPORTANT
-    // You cannot call supabase.auth.signUp() with just QR login.
-    // That requires a Supabase Auth session (or service role key).
-    // So at this point you have two choices:
-
-    // ✅ Option A: If you are logged in with Supabase Auth
-    // You can directly call supabase.auth.signUp()
+    // ✅ Option A: Supabase Auth (client can signUp)
     if (supaUser) {
-      const { data: signUpData, error: signUpError } =
-        await supabase.auth.signUp({ email, password });
+      try {
+        // ⭐ session preserve — capture current admin session
+        const {
+          data: { session: prevSession },
+        } = await supabase.auth.getSession();
 
-      if (signUpError) {
-        setErrorMessage(signUpError.message);
-        return;
+        const { data: signUpData, error: signUpError } =
+          await supabase.auth.signUp({ email, password });
+
+        if (signUpError) {
+          setErrorMessage(signUpError.message);
+          return;
+        }
+
+        // Insert into staff table for the NEW user
+        const user = signUpData.user;
+        const staffBarcode = "P" + Math.floor(100000 + Math.random() * 900000);
+
+        const { error: staffError } = await supabase.from("staff").insert([
+          {
+            id: user.id,
+            staff_name: staffName,
+            staff_position: position,
+            staff_contact: contactNumber,
+            staff_email: email,
+            staff_barcode: staffBarcode,
+          },
+        ]);
+
+        if (staffError) {
+          setErrorMessage(staffError.message);
+          return;
+        }
+
+        // ⭐ session preserve — if signUp switched the session, restore the admin
+        // (This happens when your project auto-confirms users and signUp returns a session)
+        if (signUpData.session && prevSession) {
+          await supabase.auth.setSession({
+            access_token: prevSession.access_token,
+            refresh_token: prevSession.refresh_token,
+          });
+        }
+
+        setSuccessMessage("New staff added successfully!");
+        // (Optional) clear the form
+        setStaffName("");
+        setPosition("");
+        setContactNumber("");
+        setEmail("");
+        setPassword("");
+        setConfirmPassword("");
+        setImage(null);
+        setImagePreview(null);
+        setTimeout(() => {
+          window.location.reload();
+        }, 300);
+      } catch (err) {
+        console.error(err);
+        setErrorMessage("Failed to add staff. Please try again.");
       }
-
-      // Insert into staff table
-      const user = signUpData.user;
-      const staffBarcode = "P" + Math.floor(100000 + Math.random() * 900000);
-
-      const { error: staffError } = await supabase.from("staff").insert([
-        {
-          id: user.id,
-          staff_name: staffName,
-          staff_position: position,
-          staff_contact: contactNumber,
-          staff_email: email,
-          staff_barcode: staffBarcode,
-        },
-      ]);
-
-      if (staffError) {
-        setErrorMessage(staffError.message);
-        return;
-      }
-
-      setSuccessMessage("New Staff Added Successfully! Test the new account! Redirecting to Login...");
-      setTimeout(() => handleLogout(), 3000);
+    } else {
+      // ✅ Option B: QR-only session — cannot call signUp from the browser.
+      // You must create the user via a server endpoint using the Supabase SERVICE ROLE key.
+      // Example: await fetch("/api/add-staff", { method: "POST", body: JSON.stringify({ email, password, staffName, position, contactNumber }) })
+      setErrorMessage(
+        "You’re logged in via QR. Please add staff from an admin email/password session or use a secure server endpoint."
+      );
     }
-
-    // ✅ Option B: If you are logged in with QR
-    // Call your own backend API (with Supabase service role key)
-    // Example: await fetch("/api/add-staff", { method: "POST", body: JSON.stringify({ email, password, staffName, position, contactNumber }) })
   };
 
   const handleImageChange = (file) => {
@@ -270,8 +293,6 @@ const AddStaff = (props) => {
               <Form.Label>Position</Form.Label>
               <Form.Select
                 required
-                type="text"
-                placeholder="Enter position"
                 value={position}
                 onChange={(e) => setPosition(e.target.value)}
               >

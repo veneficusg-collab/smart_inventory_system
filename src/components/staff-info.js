@@ -4,6 +4,13 @@ import Button from "react-bootstrap/Button";
 import { User } from "lucide-react";
 import { IoCloseOutline } from "react-icons/io5";
 import { QRCodeSVG } from "qrcode.react";
+import {
+  MdOutlineModeEdit,
+  MdArrowBack,
+  MdSave,
+  MdClose,
+  MdDelete,
+} from "react-icons/md";
 import { supabase } from "../supabaseClient";
 
 const StaffInfo = ({ staffId, setRender, embedded = false }) => {
@@ -28,6 +35,7 @@ const StaffInfo = ({ staffId, setRender, embedded = false }) => {
 
   useEffect(() => {
     fetchStaffData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const fetchStaffData = async () => {
@@ -66,7 +74,7 @@ const StaffInfo = ({ staffId, setRender, embedded = false }) => {
   const handleEditToggle = () => {
     if (embedded) return; // no editing in modal
     if (editing) {
-      // cancel
+      // cancel -> revert
       setStaffName(originalData.staff_name || "");
       setPosition(originalData.staff_position || "staff");
       setContactNumber(originalData.staff_contact || "");
@@ -88,7 +96,7 @@ const StaffInfo = ({ staffId, setRender, embedded = false }) => {
 
     if (!error) {
       alert("Staff deleted successfully.");
-      setRender("ManageStaff");
+      setRender?.("ManageStaff");
     } else {
       console.error(error);
       alert("Failed to delete staff.");
@@ -97,43 +105,41 @@ const StaffInfo = ({ staffId, setRender, embedded = false }) => {
 
   const handleSave = async () => {
     if (embedded) return;
+    setSaving(true);
     let imagePath = originalData.staff_img;
 
-    if (image) {
-      const fileExt = image.name.split(".").pop();
-      const fileName = `${staffId}.${fileExt}`;
-      const filePath = `staffs/${fileName}`;
+    try {
+      if (image) {
+        const fileExt = image.name.split(".").pop();
+        const fileName = `${staffId}.${fileExt}`;
+        const filePath = `staffs/${fileName}`;
 
-      const { error: uploadError } = await supabase.storage
-        .from("Smart-Inventory-System-(Pet Matters)")
-        .upload(filePath, image, { upsert: true });
+        const { error: uploadError } = await supabase.storage
+          .from("Smart-Inventory-System-(Pet Matters)")
+          .upload(filePath, image, { upsert: true });
 
-      if (uploadError) {
-        console.error(uploadError);
-        return;
+        if (uploadError) throw uploadError;
+
+        imagePath = filePath;
+        const { data: publicUrlData } = supabase.storage
+          .from("Smart-Inventory-System-(Pet Matters)")
+          .getPublicUrl(filePath);
+        setImagePreview(publicUrlData.publicUrl);
       }
 
-      imagePath = filePath;
-      const { data: publicUrlData } = supabase.storage
-        .from("Smart-Inventory-System-(Pet Matters)")
-        .getPublicUrl(filePath);
-      setImagePreview(publicUrlData.publicUrl);
-    }
+      const { error } = await supabase
+        .from("staff")
+        .update({
+          staff_name: staffName,
+          staff_position: position,
+          staff_contact: contactNumber,
+          staff_email: emailAddress,
+          staff_img: imagePath,
+        })
+        .eq("id", staffId);
 
-    const { error } = await supabase
-      .from("staff")
-      .update({
-        staff_name: staffName,
-        staff_position: position,
-        staff_contact: contactNumber,
-        staff_email: emailAddress,
-        staff_img: imagePath,
-      })
-      .eq("id", staffId);
+      if (error) throw error;
 
-    if (error) {
-      console.error(error);
-    } else {
       setOriginalData({
         staff_name: staffName,
         staff_position: position,
@@ -142,6 +148,12 @@ const StaffInfo = ({ staffId, setRender, embedded = false }) => {
         staff_img: imagePath,
       });
       setEditing(false);
+      alert("Staff info updated.");
+    } catch (err) {
+      console.error(err);
+      alert("Failed to save staff info.");
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -168,33 +180,71 @@ const StaffInfo = ({ staffId, setRender, embedded = false }) => {
     URL.revokeObjectURL(url);
   };
 
-  // ---- Layout wrappers (full vs embedded) ----
-  const Wrapper = ({ children }) =>
-    embedded ? (
-      <div className="px-2 py-1" style={{ minWidth: 760, maxWidth: 980 }}>
-        {children}
-      </div>
-    ) : (
-      <Container
-        className="bg-white m-4 rounded d-flex flex-column"
-        style={{ width: "140vh", minHeight: "86vh" }}
-      >
-        {children}
-      </Container>
-    );
-
   return (
-    <Wrapper>
+    <Container
+      fluid
+      className="bg-white m-5 rounded d-flex flex-column"
+      style={{ width: "135vh", minHeight: "80vh" }}
+    >
+      {/* Header row: back button (left) + actions (right) */}
       {!embedded && (
-        <span
-          className="mx-1 mt-3 d-inline-block fw-bold"
-          style={{ fontSize: 20 }}
-        >
-          Staff Info
-        </span>
+        <div className="d-flex justify-content-between align-items-center mb-4 mt-3 px-2">
+          <Button
+            variant="outline-secondary"
+            size="sm"
+            className="me-3"
+            onClick={() => setRender?.("ManageStaff")}
+            style={{ border: "none" }}
+          >
+            <MdArrowBack />
+          </Button>
+
+          <div className="d-flex gap-2">
+            {editing ? (
+              <>
+                <Button
+                  variant="outline-success"
+                  size="sm"
+                  onClick={handleSave}
+                  disabled={saving || deleting}
+                >
+                  <MdSave /> Save
+                </Button>
+                <Button
+                  variant="outline-secondary"
+                  size="sm"
+                  onClick={handleEditToggle}
+                  disabled={saving || deleting}
+                >
+                  <MdClose /> Cancel
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button
+                  variant="outline-secondary"
+                  size="sm"
+                  onClick={handleEditToggle}
+                  disabled={saving || deleting}
+                >
+                  <MdOutlineModeEdit /> Edit
+                </Button>
+                <Button
+                  variant="outline-danger"
+                  size="sm"
+                  onClick={handleDelete}
+                  disabled={saving || deleting}
+                >
+                  <MdDelete /> Delete
+                </Button>
+              </>
+            )}
+          </div>
+        </div>
       )}
 
-      <Row className={embedded ? "mt-1" : ""}>
+      {/* Content */}
+      <Row>
         {/* LEFT: avatar + form */}
         <Col md={7} className="px-3">
           {/* Avatar */}
@@ -202,8 +252,8 @@ const StaffInfo = ({ staffId, setRender, embedded = false }) => {
             <div
               className="position-relative"
               style={{
-                width: embedded ? 96 : 120,
-                height: embedded ? 96 : 120,
+                width: 120,
+                height: 120,
               }}
             >
               <div
@@ -231,7 +281,7 @@ const StaffInfo = ({ staffId, setRender, embedded = false }) => {
                     style={{ objectFit: "cover" }}
                   />
                 ) : (
-                  <User size={embedded ? 30 : 40} className="text-secondary" />
+                  <User size={40} className="text-secondary" />
                 )}
               </div>
 
@@ -284,9 +334,7 @@ const StaffInfo = ({ staffId, setRender, embedded = false }) => {
 
             <Form.Group className="mb-3">
               <Form.Label>Position</Form.Label>
-
               {embedded ? (
-                // 🔹 Read-only text in modal
                 <Form.Control
                   readOnly
                   value={position === "admin" ? "Admin" : "Staff"}
@@ -294,7 +342,6 @@ const StaffInfo = ({ staffId, setRender, embedded = false }) => {
                   disabled
                 />
               ) : (
-                // 🔹 Editable select in full-page
                 <Form.Select
                   value={position}
                   onChange={(e) => setPosition(e.target.value)}
@@ -338,41 +385,18 @@ const StaffInfo = ({ staffId, setRender, embedded = false }) => {
           ref={qrRef}
           style={{ gap: 16 }}
         >
-          <QRCodeSVG value={staffBarcode || ""} size={embedded ? 128 : 148} />
+          <QRCodeSVG value={staffBarcode || ""} size={148} />
           <Button
             variant="primary"
             size="sm"
             onClick={downloadQRCode}
-            className={embedded ? "mt-2" : "my-3"}
+            className="my-3"
           >
             Download QR Code
           </Button>
         </Col>
       </Row>
-
-      {/* Full-page action buttons (hidden in modal) */}
-      {!embedded && (
-        <div className="mt-auto mb-3 me-3 d-flex gap-3 justify-content-end">
-          <Button
-            variant="danger"
-            onClick={handleDelete}
-            disabled={deleting || saving}
-          >
-            {deleting ? "Deleting..." : "Delete"}
-          </Button>
-          <Button variant="secondary" onClick={handleEditToggle} disabled={deleting || saving}>
-            {editing ? "Cancel" : "Edit"}
-          </Button>
-          <Button
-            variant="primary"
-            onClick={handleSave}
-            disabled={!editing || saving || deleting}
-          >
-            {saving ? "Saving..." : "Save"}
-          </Button>
-        </div>
-      )}
-    </Wrapper>
+    </Container>
   );
 };
 

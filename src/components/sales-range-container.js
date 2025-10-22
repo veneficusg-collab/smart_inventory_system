@@ -1,30 +1,56 @@
 // components/SalesRangeContainer.jsx
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Container, Spinner } from "react-bootstrap";
 import Button from "@mui/material/Button";
 import TextField from "@mui/material/TextField";
 import { CiRepeat } from "react-icons/ci";
 import { supabase } from "../supabaseClient";
 
-
 import SalesTop5Chart from "./top-sales-range";
 import ProfitLossSummary from "./profit-loss-summary";
 
 const BUCKET = "Smart-Inventory-System-(Pet Matters)";
 
-const SalesRangeContainer = () => {
-  const todayISO = new Date().toISOString().slice(0, 10);
-  const sevenAgoISO = new Date(Date.now() - 6 * 86400000)
-    .toISOString()
-    .slice(0, 10);
+// ---- Local date helpers (avoid UTC off-by-one) ----
+const toYMD = (d) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
+    d.getDate()
+  ).padStart(2, "0")}`;
 
-  const [fromDate, setFromDate] = useState(sevenAgoISO);
-  const [toDate, setToDate] = useState(todayISO);
+const startOfLocalDayISO = (ymd) => {
+  const [y, m, d] = ymd.split("-").map(Number);
+  return new Date(y, m - 1, d, 0, 0, 0, 0).toISOString(); // local -> ISO
+};
+const endOfLocalDayISO = (ymd) => {
+  const [y, m, d] = ymd.split("-").map(Number);
+  return new Date(y, m - 1, d, 23, 59, 59, 999).toISOString();
+};
+
+const SalesRangeContainer = () => {
+  // Build defaults entirely in local time
+  const todayLocal = new Date();
+  const sevenAgoLocal = new Date(
+    todayLocal.getFullYear(),
+    todayLocal.getMonth(),
+    todayLocal.getDate() - 6
+  );
+
+  const [fromDate, setFromDate] = useState(toYMD(sevenAgoLocal));
+  const [toDate, setToDate] = useState(toYMD(todayLocal));
   const [mode, setMode] = useState("sales"); // 'sales' | 'pl'
 
   // product meta fetched once and shared with children
   const [productMap, setProductMap] = useState(null); // code -> {name, imgUrl, supplier_price}
   const [loadingMeta, setLoadingMeta] = useState(true);
+
+  // Compute correct ISO range for queries (local start/end of day)
+  const { fromISO, toISO } = useMemo(
+    () => ({
+      fromISO: startOfLocalDayISO(fromDate),
+      toISO: endOfLocalDayISO(toDate),
+    }),
+    [fromDate, toDate]
+  );
 
   useEffect(() => {
     (async () => {
@@ -68,7 +94,9 @@ const SalesRangeContainer = () => {
     <Container className="bg-white rounded p-3 m-4 shadow-sm">
       <div className="d-flex justify-content-between align-items-center mb-3">
         <h6 className="mb-0">
-          {mode === "sales" ? "Sales by Item (Per Day in Range)" : "Profit / Loss (Selected Range)"}
+          {mode === "sales"
+            ? "Sales by Item (Per Day in Range)"
+            : "Profit / Loss (Selected Range)"}
         </h6>
 
         <div className="d-flex align-items-center gap-2">
@@ -107,9 +135,22 @@ const SalesRangeContainer = () => {
           <Spinner animation="border" />
         </div>
       ) : mode === "sales" ? (
-        <SalesTop5Chart fromDate={fromDate} toDate={toDate} productMap={productMap} />
+        // Passing corrected ISO range as well (children can use fromISO/toISO for queries)
+        <SalesTop5Chart
+          fromDate={fromDate}
+          toDate={toDate}
+          fromISO={fromISO}
+          toISO={toISO}
+          productMap={productMap}
+        />
       ) : (
-        <ProfitLossSummary fromDate={fromDate} toDate={toDate} productMap={productMap} />
+        <ProfitLossSummary
+          fromDate={fromDate}
+          toDate={toDate}
+          fromISO={fromISO}
+          toISO={toISO}
+          productMap={productMap}
+        />
       )}
     </Container>
   );

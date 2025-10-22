@@ -9,14 +9,23 @@ const COLORS = ["#4e79a7", "#f28e2b", "#e15759", "#76b7b2", "#59a14f"];
 const currency = (n) =>
   `₱${Number(n || 0).toLocaleString("en-PH", { minimumFractionDigits: 2 })}`;
 
-const daysBetween = (fromISO, toISO) => {
+// ---- Local date utils (NO toISOString slicing) ----
+const fmtYMD = (d) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
+    d.getDate()
+  ).padStart(2, "0")}`;
+
+const parseYMD = (ymd) => {
+  const [y, m, d] = ymd.split("-").map(Number);
+  return new Date(y, m - 1, d);
+};
+
+const listDaysInclusive = (fromYMD, toYMD) => {
   const out = [];
-  const s = new Date(fromISO);
-  const e = new Date(toISO);
-  s.setHours(0, 0, 0, 0);
-  e.setHours(0, 0, 0, 0);
-  for (let d = new Date(s); d <= e; d.setDate(d.getDate() + 1)) {
-    out.push(d.toISOString().slice(0, 10));
+  const start = parseYMD(fromYMD);
+  const end = parseYMD(toYMD);
+  for (let cur = new Date(start); cur <= end; cur.setDate(cur.getDate() + 1)) {
+    out.push(fmtYMD(cur));
   }
   return out;
 };
@@ -51,10 +60,11 @@ const SalesTop5Chart = ({ fromDate, toDate, productMap }) => {
       if (!fromDate || !toDate) return;
       setLoading(true);
       try {
-        const startISO = `${fromDate}T00:00:00.000Z`;
-        const end = new Date(toDate);
-        end.setDate(end.getDate() + 1);
-        const endISO = end.toISOString();
+        // Build LOCAL start/end of day, then convert once to ISO for the query
+        const start = parseYMD(fromDate);
+        start.setHours(0, 0, 0, 0);
+        const end = parseYMD(toDate);
+        end.setHours(23, 59, 59, 999);
 
         const { data, error } = await supabase
           .from("transactions")
@@ -65,19 +75,19 @@ const SalesTop5Chart = ({ fromDate, toDate, productMap }) => {
           `
           )
           .eq("status", "completed")
-          .gte("created_at", startISO)
-          .lt("created_at", endISO);
+          .gte("created_at", start.toISOString())
+          .lte("created_at", end.toISOString()); // <= inclusive end-of-day
+
         if (error) throw error;
 
         const totalsByItem = {};
         const byDayItem = {};
 
         (data || []).forEach((t) => {
-          const d = new Date(t.created_at);
-          const local = new Date(d.getFullYear(), d.getMonth(), d.getDate())
-            .toISOString()
-            .slice(0, 10);
-          if (!byDayItem[local]) byDayItem[local] = {};
+          // Bucket by LOCAL calendar day
+          const dt = new Date(t.created_at);
+          const ymd = fmtYMD(dt);
+          if (!byDayItem[ymd]) byDayItem[ymd] = {};
 
           t.transaction_items?.forEach((it) => {
             const code = it.product_code;
@@ -89,14 +99,14 @@ const SalesTop5Chart = ({ fromDate, toDate, productMap }) => {
             totalsByItem[code].qty += qty;
             totalsByItem[code].sales += sales;
 
-            byDayItem[local][code] = (byDayItem[local][code] || 0) + sales;
+            byDayItem[ymd][code] = (byDayItem[ymd][code] || 0) + sales;
           });
         });
 
         const rows = Object.entries(totalsByItem).map(([code, v]) => ({
           code,
-          name: productMap[code]?.name || code,
-          img: productMap[code]?.imgUrl || "/fallback.png",
+          name: productMap?.[code]?.name || code,
+          img: productMap?.[code]?.imgUrl || "/fallback.png",
           qty: v.qty,
           sales: v.sales,
         }));
@@ -109,21 +119,24 @@ const SalesTop5Chart = ({ fromDate, toDate, productMap }) => {
           acc[r.code] = { label: r.name, color: COLORS[i % COLORS.length] };
           return acc;
         }, {});
-        const days = daysBetween(fromDate, toDate);
-        const daily = days.map((iso) => {
+
+        // Build inclusive local day list
+        const days = listDaysInclusive(fromDate, toDate);
+
+        const daily = days.map((ymd) => {
           const row = {
-            day: new Date(iso).toLocaleDateString("en-US", {
+            day: new Date(ymd).toLocaleDateString("en-US", {
               month: "short",
               day: "numeric",
             }),
           };
-          topCodes.forEach((code) => (row[code] = byDayItem[iso]?.[code] || 0));
+          topCodes.forEach((code) => (row[code] = byDayItem[ymd]?.[code] || 0));
           return row;
         });
 
         setDailyDataset(daily);
         setSeriesDefs(
-          topCodes.map((code, i) => ({
+          topCodes.map((code) => ({
             dataKey: code,
             label: topLabels[code].label,
             color: topLabels[code].color,

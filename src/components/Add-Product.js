@@ -344,7 +344,7 @@ const AddProduct = ({ setRender }) => {
   };
 
   const handleCancelButton = () => {
-    setRender("product");
+    setRender("products");
   };
 
   // Upload image to Supabase Storage

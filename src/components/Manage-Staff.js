@@ -1,3 +1,4 @@
+// ManageStaff.jsx
 import { useEffect, useState } from "react";
 import { Button, Container } from "react-bootstrap";
 import Table from "@mui/material/Table";
@@ -10,64 +11,78 @@ import AddStaff from "./add-staff";
 import { supabase } from "../supabaseClient";
 
 const ManageStaff = ({ setStaffId, setRender }) => {
-  // Data state
   const [staffData, setStaffData] = useState([]);
   const [currentUser, setCurrentUser] = useState("");
   const [currentUserId, setCurrentUserId] = useState("");
-
-  // Modal state
   const [modalShow, setModalShow] = useState(false);
+  const [deletingId, setDeletingId] = useState(null); // NEW
 
   const handleRowClicked = (staffID) => {
     setStaffId(staffID);
     setRender("StaffInfo");
   };
 
-  // Fetch all staff
   const fetchStaffData = async () => {
     const { data, error } = await supabase.from("staff").select("*");
-    if (error) {
-      console.error("Error fetching staff:", error.message);
-    } else {
-      setStaffData(data);
-    }
+    if (!error && data) setStaffData(data);
   };
 
-  // Fetch current user’s position
   const fetchCurrentUser = async () => {
     const {
       data: { user },
     } = await supabase.auth.getUser();
-
     if (!user) return;
 
     const { data: staff, error } = await supabase
       .from("staff")
-      .select("staff_position")
+      .select("id, staff_position")
       .eq("id", user.id)
-      .single(); // expect only one
+      .single();
 
-    if (error) {
-      console.error("Error fetching current user:", error.message);
-    } else {
-      setCurrentUser(staff?.staff_position || "");
-      setCurrentUserId(staff?.id || "");
+    if (!error && staff) {
+      setCurrentUser(staff.staff_position || "");
+      setCurrentUserId(staff.id || "");
     }
   };
 
-  // Delete staff handler
+  // UPDATED: call Edge Function to delete both auth user + staff row
   const handleDelete = async (id) => {
-    if (!window.confirm("Are you sure you want to delete this staff member?")) {
+    if (!window.confirm("Are you sure you want to delete this staff member?"))
+      return;
+
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    if (!session?.access_token) {
+      alert(
+        "Please sign in with your admin email/password account to delete staff."
+      );
       return;
     }
 
-    const { error } = await supabase.from("staff").delete().eq("id", id);
+    setDeletingId(id);
+    try {
+      const { data, error } = await supabase.functions.invoke("delete-staff", {
+        body: { userId: id },
+        // not strictly necessary, but explicit never hurts:
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
 
-    if (error) {
-      console.error("Error deleting staff:", error.message);
-    } else {
-      // Refresh staff list after delete
-      fetchStaffData();
+      if (error) {
+        console.error("Edge function error:", error);
+        alert(error.message || "Failed to delete staff.");
+        return;
+      }
+      if (data?.error) {
+        alert(data.error);
+        return;
+      }
+      await fetchStaffData();
+    } catch (e) {
+      console.error("invoke transport error:", e);
+      alert(`Edge Function request failed: ${e?.message || e}`);
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -97,7 +112,6 @@ const ManageStaff = ({ setStaffId, setRender }) => {
 
       <AddStaff show={modalShow} onHide={() => setModalShow(false)} />
 
-      {/* Table container with scroll */}
       <Box
         sx={{
           flexGrow: 1,
@@ -118,7 +132,6 @@ const ManageStaff = ({ setStaffId, setRender }) => {
               )}
             </TableRow>
           </TableHead>
-
           <TableBody>
             {staffData.map((staff) => {
               const canDelete =
@@ -147,12 +160,13 @@ const ManageStaff = ({ setStaffId, setRender }) => {
                         <Button
                           size="sm"
                           variant="danger"
+                          disabled={deletingId === staff.id}
                           onClick={(e) => {
-                            e.stopPropagation(); // prevent row click
+                            e.stopPropagation();
                             handleDelete(staff.id);
                           }}
                         >
-                          Delete
+                          {deletingId === staff.id ? "Deleting..." : "Delete"}
                         </Button>
                       )}
                     </TableCell>
