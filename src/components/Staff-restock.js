@@ -155,29 +155,35 @@ const StaffRestock = ({ setRender, scannedId }) => {
   };
 
   const getCurrentStaffName = async () => {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
 
-    if (user) {
-      const { data: staff, error } = await supabase
-        .from("staff")
-        .select("staff_name")
-        .eq("id", user.id)
-        .single();
-      if (error) throw error;
-      return staff?.staff_name || "Unknown";
+      if (user?.id) {
+        // Limit to 1 row so .single() is always valid, even if duplicates exist
+        const { data: staff, error } = await supabase
+          .from("staff")
+          .select("staff_name")
+          .eq("id", user.id)
+          .limit(1)
+          .single();
+
+        if (!error && staff) return staff.staff_name || "Unknown";
+      }
+    } catch (_) {
+      /* ignore and fall back */
     }
 
-    const storedUser = localStorage.getItem("user");
-    if (storedUser) {
-      try {
+    // Fallback: QR/localStorage login
+    try {
+      const storedUser = localStorage.getItem("user");
+      if (storedUser) {
         const parsed = JSON.parse(storedUser);
         return parsed?.staff_name || "Unknown";
-      } catch {
-        return "Unknown";
       }
-    }
+    } catch (_) {}
+
     return "Unknown";
   };
 
@@ -223,7 +229,7 @@ const StaffRestock = ({ setRender, scannedId }) => {
           {
             product_id: product.product_ID,
             product_name: product.product_name,
-            product_quantity: newQuantity,
+            product_quantity: parseInt(quantity, 10), // ✅ log only what was added
             product_category: product.product_category,
             product_unit: product.product_unit,
             product_expiry: inputExpiryDate,
@@ -232,7 +238,7 @@ const StaffRestock = ({ setRender, scannedId }) => {
             product_uuid: product.id,
             supplier_name: supplierName,
             supplier_number: supplierNumber,
-            supplier_price: parseFloat(supplierPrice),
+            supplier_price: parseFloat(supplierPrice) || 0,
           },
         ]);
 
@@ -261,7 +267,6 @@ const StaffRestock = ({ setRender, scannedId }) => {
             supplier_price: parseFloat(supplierPrice) || 0,
             supplier_name: supplierName,
             supplier_number: supplierNumber,
-            branch: baseProduct.branch,
             product_img: baseProduct.product_img,
           },
         ]);

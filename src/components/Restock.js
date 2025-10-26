@@ -260,7 +260,6 @@ const Restock = ({ setRender, Id, scannedId }) => {
             supplier_number,
             supplier_price,
             product_img: base.product_img,
-            branch: base.branch,
           },
         ]);
         if (insertErr) throw insertErr;
