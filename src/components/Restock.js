@@ -1,300 +1,326 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState } from "react";
+import { Container, Row, Col, Form, Button, Alert, InputGroup } from "react-bootstrap";
+import { LuPlus, LuCheck, LuX } from "react-icons/lu";
 import { supabase } from "../supabaseClient";
-import { Col, Container, Row } from "react-bootstrap";
-import { Form, Button, Alert } from "react-bootstrap";
-import { BrowserMultiFormatReader } from "@zxing/browser";
-import BarcodeModal from "./barcode-modal";
 
-const Restock = ({ setRender, Id }) => {
+const BUCKET = "Smart-Inventory-System-(Pet Matters)";
+
+const Restock = ({ setRender, Id, scannedId }) => {
+  // Detect role
+  const [staffRole, setStaffRole] = useState(null); // "admin" | "staff"
+  const [staffName, setStaffName] = useState("Unknown");
+
+  // Product identity (support both old props)
+  const initialProductId = Id || scannedId || "";
+
+  // Common fields
+  const [productName, setProductName] = useState("");
+  const [productId, setProductId] = useState(initialProductId);
+  const [quantity, setQuantity] = useState("");
+  const [expiryDate, setExpiryDate] = useState("");
+  const [inputExpiryDate, setInputExpiryDate] = useState("");
+  const [expiryDates, setExpiryDates] = useState([]);
+  const [productImage, setProductImage] = useState(null);
+  const [productUnit, setProductUnit] = useState("");
+
+  // Supplier fields
+  const [supplierName, setSupplierName] = useState("");
+  const [supplierPrice, setSupplierPrice] = useState("");
+  const [supplierNumber, setSupplierNumber] = useState("");
+
+  // Supplier dropdown (staff)
+  const [supplierList, setSupplierList] = useState([]);
+  const [supplierPhoneByName, setSupplierPhoneByName] = useState({});
+  const [isAddingSupplier, setIsAddingSupplier] = useState(false);
+  const [newSupplierName, setNewSupplierName] = useState("");
+
+  // UI
   const [loading, setLoading] = useState(false);
+  const [loadingRole, setLoadingRole] = useState(true);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
-  const [showCamera, setShowCamera] = useState(false);
-  const scannedRef = useRef(false);
+  const toDateString = (date) => new Date(date).toISOString().split("T")[0];
 
-  const [barcodeModalShow, setBarcodeModalShow] = useState(false);
-
-  const [productName, setProductName] = useState("");
-  const [productId, setProductId] = useState("");
-  const [category, setCategory] = useState("");
-  const [buyingPrice, setBuyingPrice] = useState(null);
-  const [currentQuantity, setCurrentQuantity] = useState("");
-  const [quantity, setQuantity] = useState(null);
-  const [unit, setUnit] = useState("");
-  const [productUnit, setProductUnit] = useState("");
-  const [supplierName, setSupplierName] = useState("");
-  const [supplierNumber, setSupplierNumber] = useState("");
-  const [expiryDate, setExpiryDate] = useState("");
-  const [result, onResult] = useState("");
-  const [imgUrl, setImgURL] = useState("");
-  const [inputExpiryDate, setInputExpiryDate] = useState("");
-  const [expiryDates, setExpiryDates] = useState([]); // now holds objects
-
-  const videoRef = useRef(null);
-  const scannerControlsRef = useRef(null);
-
+  // --- Fetch current user role & name ---
   useEffect(() => {
-    fetchProduct();
+    (async () => {
+      try {
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+
+        if (user) {
+          const { data: staff, error } = await supabase
+            .from("staff")
+            .select("staff_name, staff_position")
+            .eq("id", user.id)
+            .single();
+
+          if (!error && staff) {
+            setStaffRole(staff.staff_position); // "admin" | "staff"
+            setStaffName(staff.staff_name || "Unknown");
+          } else {
+            // fallback to local storage (QR login)
+            const stored = localStorage.getItem("user");
+            if (stored) {
+              const parsed = JSON.parse(stored);
+              setStaffRole(parsed?.staff_position || "staff");
+              setStaffName(parsed?.staff_name || "Unknown");
+            } else {
+              setStaffRole("staff");
+            }
+          }
+        } else {
+          const stored = localStorage.getItem("user");
+          if (stored) {
+            const parsed = JSON.parse(stored);
+            setStaffRole(parsed?.staff_position || "staff");
+            setStaffName(parsed?.staff_name || "Unknown");
+          } else {
+            setStaffRole("staff");
+          }
+        }
+      } catch {
+        setStaffRole("staff");
+      } finally {
+        setLoadingRole(false);
+      }
+    })();
   }, []);
 
-  const toDateString = (date) => {
-    return new Date(date).toISOString().split("T")[0]; // "yyyy-mm-dd"
-  };
+  // --- Fetch product & suppliers (if needed) ---
+  useEffect(() => {
+    if (productId) fetchProduct(productId);
+  }, [productId]);
 
-  const fetchProduct = async () => {
-    const { data, error } = await supabase
+  useEffect(() => {
+    if (staffRole === "staff") fetchSuppliers();
+  }, [staffRole]);
+
+  const fetchProduct = async (id) => {
+    const { data: products, error } = await supabase
       .from("products")
-      .select(
-        "product_ID, product_name, product_quantity, product_unit, product_expiry"
-      )
-      .eq("product_ID", Id); // fetch ALL rows with same product ID
+      .select("*")
+      .eq("product_ID", id);
 
-    if (error) {
-      console.error("Error fetching product:", error);
-      setError("Failed to load product");
+    if (error || !products?.length) {
+      setError("Product not found.");
       return;
     }
 
-    if (data && data.length > 0) {
-      // use first row for product info
-      const product = data[0];
-      setProductId(product.product_ID);
-      setProductName(product.product_name);
-      setProductUnit(product.product_unit);
+    const p0 = products[0];
+    setProductId(p0.product_ID);
+    setProductName(p0.product_name);
+    setProductUnit(p0.product_unit);
+    setSupplierName(p0.supplier_name || "");
+    setSupplierPrice(p0.supplier_price ?? "");
+    setSupplierNumber(p0.supplier_number || "");
 
-      // expiryDates should be an array of { product_expiry, product_quantity }
-      setExpiryDates(
-        data
-          .filter((d) => d.product_expiry) // only valid dates
-          .map((d) => ({
-            product_expiry: d.product_expiry,
-            product_quantity: d.product_quantity,
-          }))
-      );
+    setExpiryDates(
+      products
+        .filter((d) => d.product_expiry)
+        .map((d) => ({
+          product_expiry: toDateString(d.product_expiry),
+          product_quantity: d.product_quantity,
+        }))
+    );
+
+    if (p0.product_img) {
+      if (String(p0.product_img).startsWith("http")) {
+        setProductImage(p0.product_img);
+      } else {
+        const { data: urlData } = supabase
+          .storage
+          .from(BUCKET)
+          .getPublicUrl(`products/${p0.product_img}`);
+        if (urlData?.publicUrl) setProductImage(urlData.publicUrl);
+      }
+    } else {
+      setProductImage(null);
     }
   };
 
-  const handleRestockButton = async (e) => {
+  const fetchSuppliers = async () => {
+    const { data, error } = await supabase
+      .from("products")
+      .select("supplier_name, supplier_number");
+
+    if (error || !data) return;
+
+    const namesSet = new Map();
+    const freq = {};
+    data.forEach((r) => {
+      const name = (r.supplier_name || "").trim();
+      const num = (r.supplier_number || "").trim();
+      if (!name) return;
+      const key = name.toLowerCase();
+      if (!namesSet.has(key)) namesSet.set(key, name);
+      if (num) {
+        if (!freq[key]) freq[key] = {};
+        freq[key][num] = (freq[key][num] || 0) + 1;
+      }
+    });
+
+    const mapping = {};
+    for (const [key, counts] of Object.entries(freq)) {
+      const best = Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0];
+      if (best) mapping[namesSet.get(key)] = best;
+    }
+
+    setSupplierPhoneByName(mapping);
+    setSupplierList(Array.from(namesSet.values()).sort());
+  };
+
+  // --- Submit restock ---
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
     setError("");
     setSuccess("");
 
     try {
-      // ✅ Get logged in user
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      const qty = parseInt(quantity, 10);
+      if (!qty || qty <= 0) throw new Error("Enter a valid quantity.");
 
-      const { data: staffData, error: staffError } = await supabase
-        .from("staff")
-        .select("staff_name")
-        .eq("id", user.id);
+      // If admin, supplier fields are preserved but not editable here; we still save what's already in DB
+      const supplier_name = staffRole === "staff" ? supplierName : supplierName;
+      const supplier_number = staffRole === "staff" ? supplierNumber : supplierNumber;
+      const supplier_price = staffRole === "staff"
+        ? parseFloat(supplierPrice) || 0
+        : parseFloat(supplierPrice) || 0;
 
-      if (staffError) throw staffError;
-
-      const staffName = staffData?.[0]?.staff_name || "Unknown";
-
-      // ✅ Convert input to numbers
-      const qtyToAdd = parseInt(quantity, 10);
-      if (isNaN(qtyToAdd) || qtyToAdd <= 0) {
-        throw new Error("Enter a valid quantity to restock.");
-      }
-
-      // ✅ 1. Check if product + expiry already exists
-      const { data: products, error: fetchError } = await supabase
+      // Check existing expiry batch
+      const { data: existing, error: fetchErr } = await supabase
         .from("products")
         .select("*")
         .eq("product_ID", productId)
         .eq("product_expiry", inputExpiryDate);
 
-      if (fetchError) throw fetchError;
+      if (fetchErr) throw fetchErr;
 
-      if (products && products.length > 0) {
-        // ✅ Expiry exists → update quantity
-        const product = products[0];
-        const newQuantity = parseInt(product.product_quantity, 10) + qtyToAdd;
+      if (existing?.length) {
+        const p = existing[0];
+        const newQty = parseInt(p.product_quantity, 10) + qty;
 
-        const { data: updated, error: updateError } = await supabase
+        const { error: updateErr } = await supabase
           .from("products")
-          .update({ product_quantity: newQuantity })
-          .eq("product_ID", product.product_ID)
-          .eq("product_expiry", inputExpiryDate)
-          .select();
+          .update({
+            product_quantity: newQty,
+            supplier_name,
+            supplier_number,
+            supplier_price,
+          })
+          .eq("product_ID", p.product_ID)
+          .eq("product_expiry", inputExpiryDate);
 
-        if (updateError) throw updateError;
+        if (updateErr) throw updateErr;
 
-        // ✅ Insert log
+        // Log only the delta you added (qty)
         await supabase.from("logs").insert([
           {
-            product_id: product.product_ID,
-            product_name: product.product_name,
-            product_quantity: qtyToAdd, // log only what was added
-            product_category: product.product_category,
-            product_unit: product.product_unit,
+            product_id: p.product_ID,
+            product_name: p.product_name,
+            product_quantity: qty,
+            product_category: p.product_category,
+            product_unit: p.product_unit,
             product_expiry: inputExpiryDate,
             staff: staffName,
             product_action: "Restock",
-            product_uuid: product.id,
+            product_uuid: p.id,
+            supplier_name,
+            supplier_number,
+            supplier_price,
           },
         ]);
 
         setSuccess("Quantity updated successfully!");
       } else {
-        // 🚀 Expiry not found → insert new row
-        const { data: baseProduct, error: baseError } = await supabase
+        // New expiry batch
+        const { data: base, error: baseErr } = await supabase
           .from("products")
           .select("*")
           .eq("product_ID", productId)
           .limit(1)
           .single();
 
-        if (baseError) throw baseError;
+        if (baseErr) throw baseErr;
 
-        const { data: inserted, error: insertError } = await supabase
-          .from("products")
-          .insert([
-            {
-              product_ID: baseProduct.product_ID,
-              product_name: baseProduct.product_name,
-              product_quantity: qtyToAdd,
-              product_expiry: inputExpiryDate,
-              product_category: baseProduct.product_category,
-              product_price: baseProduct.product_price,
-              product_unit: baseProduct.product_unit,
-              supplier_name: baseProduct.supplier_name,
-              supplier_number: baseProduct.supplier_number,
-              branch: baseProduct.branch,
-            },
-          ])
-          .select();
+        const { error: insertErr } = await supabase.from("products").insert([
+          {
+            product_ID: base.product_ID,
+            product_name: base.product_name,
+            product_quantity: qty,
+            product_expiry: inputExpiryDate,
+            product_brand: base.product_brand,
+            product_price: base.product_price,
+            product_category: base.product_category,
+            product_unit: base.product_unit,
+            supplier_name,
+            supplier_number,
+            supplier_price,
+            product_img: base.product_img,
+            branch: base.branch,
+          },
+        ]);
+        if (insertErr) throw insertErr;
 
-        if (insertError) throw insertError;
-
-        const newProduct = inserted[0];
-
-        // ✅ Insert log
         await supabase.from("logs").insert([
           {
-            product_id: newProduct.product_ID,
-            product_name: newProduct.product_name,
-            product_quantity: qtyToAdd,
-            product_category: newProduct.product_category,
-            product_unit: newProduct.product_unit,
+            product_id: base.product_ID,
+            product_name: base.product_name,
+            product_quantity: qty,
+            product_category: base.product_category,
+            product_unit: base.product_unit,
             product_expiry: inputExpiryDate,
             staff: staffName,
             product_action: "Restock",
-            product_uuid: newProduct.id,
+            supplier_name,
+            supplier_number,
+            supplier_price,
           },
         ]);
 
         setSuccess("New expiry batch added successfully!");
       }
 
-      // ✅ Clear inputs & redirect
-      setQuantity(null);
+      setQuantity("");
       setTimeout(() => {
-        setRender("products");
-      }, 1500);
+        // same destinations as your current flows
+        setRender(productId === scannedId ? "StaffDashboard" : "products");
+      }, 1000);
     } catch (err) {
-      console.error("Error in handleRestockButton:", err.message);
-      setError(err.message || "Something went wrong. Please try again.");
+      console.error(err);
+      setError(err.message || "Something went wrong.");
     } finally {
       setLoading(false);
     }
   };
 
-  const handleCancelButton = () => {
-    if (scannerControlsRef.current) {
-      scannerControlsRef.current.stop(); // ✅ stop scanner immediately
-    }
-    setRender("product");
+  const handleSaveNewSupplier = () => {
+    const name = newSupplierName.trim();
+    if (!name) return;
+    const updated = Array.from(new Set([...supplierList, name])).sort();
+    setSupplierList(updated);
+    setSupplierName(name);
+    setIsAddingSupplier(false);
+    setNewSupplierName("");
   };
 
-  // useEffect(() => {
-  //   scannedRef.current = false; // reset whenever camera is shown
-  //   const codeReader = new BrowserMultiFormatReader();
+  const handleCancelButton = () =>
+    setRender(productId === scannedId ? "StaffDashboard" : "products");
 
-  //   codeReader
-  //     .decodeFromVideoDevice(null, videoRef.current, (result, error) => {
-  //       if (result && !scannedRef.current) {
-  //         scannedRef.current = true; // ✅ only once
-  //         const code = result.getText();
-  //         console.log("Scanned once:", code);
-
-  //         setProductId(code);
-  //         handleScannedProduct(code);
-  //         setShowCamera(false); // hide camera
-
-  //         if (scannerControlsRef.current) {
-  //           scannerControlsRef.current.stop();
-  //           scannerControlsRef.current = null;
-  //         }
-  //       }
-
-  //       if (error && !(error.name === "NotFoundException")) {
-  //         console.error(error);
-  //       }
-  //     })
-  //     .then((controls) => {
-  //       scannerControlsRef.current = controls;
-  //     });
-
-  //   return () => {
-  //     if (scannerControlsRef.current) {
-  //       scannerControlsRef.current.stop();
-  //       scannerControlsRef.current = null;
-  //     }
-  //   };
-  // }, [showCamera]);
-
-  // const handleScannedProduct = async (productId) => {
-  //   let { data: products, error } = await supabase
-  //     .from("products")
-  //     .select("*")
-  //     .eq("product_ID", productId);
-
-  //   if (error) {
-  //     console.error(error);
-  //     return;
-  //   }
-
-  //   let { data: expiryData, error: expiryError } = await supabase
-  //     .from("products")
-  //     .select("product_expiry, product_quantity")
-  //     .eq("product_ID", productId);
-
-  //   if (expiryError) {
-  //     console.error(expiryError);
-  //     return;
-  //   }
-
-  //   if (expiryData) {
-  //     // ✅ only keep valid rows
-  //     setExpiryDates(
-  //       expiryData.filter(
-  //         (e) => e.product_expiry && !isNaN(new Date(e.product_expiry))
-  //       )
-  //     );
-  //   }
-
-  //   if (products && products.length > 0) {
-  //     setProductName(products[0].product_name);
-  //     setCategory(products[0].product_category);
-  //     setBuyingPrice(products[0].product_price);
-  //     setUnit(products[0].product_unit);
-  //     setSupplierName(products[0].supplier_name);
-  //     setSupplierNumber(products[0].supplier_number);
-  //     setImgURL(products[0].product_img);
-  //   } else {
-  //     setProductName("");
-  //   }
-  // };
-
-  const resetForm = () => {
-    window.location.reload();
-  };
+  if (loadingRole) {
+    return (
+      <Container
+        fluid
+        className="bg-white mx-5 my-4 rounded d-flex justify-content-center align-items-center"
+        style={{ width: "135vh", minHeight: "80vh" }}
+      >
+        <div className="text-muted">Loading…</div>
+      </Container>
+    );
+  }
 
   return (
     <Container
@@ -303,92 +329,176 @@ const Restock = ({ setRender, Id }) => {
       style={{ width: "135vh", minHeight: "80vh" }}
     >
       <div className="d-flex flex-column align-items-center mb-4">
-        <span className="mx-0 mt-5 mb-2 d-inline-block h4">Restock</span>
+        <span className="mx-0 mt-5 mb-2 d-inline-block h4">
+          Restock
+        </span>
       </div>
 
-      {/* Success/Error Messages */}
-      {error && (
-        <Alert variant="danger" className="mx-4">
-          {error}
-        </Alert>
-      )}
-      {success && (
-        <Alert variant="success" className="mx-4">
-          {success}
-        </Alert>
-      )}
+      {error && <Alert variant="danger" className="mx-4">{error}</Alert>}
+      {success && <Alert variant="success" className="mx-4">{success}</Alert>}
 
-      {/* Form content - takes available space */}
       <div className="flex-grow-1">
-        <Form onSubmit={handleRestockButton} className="me-5">
+        <Form onSubmit={handleSubmit}>
           <Row>
-            <Col>
+            {/* LEFT COLUMN */}
+            <Col md={6}>
               <div className="ms-5">
-                <Form.Group
-                  as={Row}
-                  className="mb-3 mt-4"
-                  controlId="formProductId"
-                >
+                {/* Product ID */}
+                <Form.Group as={Row} className="mb-3 mt-4">
                   <Form.Label column sm={3} className="text-start">
                     Product ID
                   </Form.Label>
                   <Col sm={9}>
-                    <Form.Control
-                      type="text"
-                      placeholder="Enter product ID"
-                      value={productId}
-                      required
-                      disabled
-                    />
+                    <Form.Control value={productId} size="sm" disabled />
                   </Col>
                 </Form.Group>
 
-                <Form.Group
-                  as={Row}
-                  className="mb-3 mt-4"
-                  controlId="formProductName"
-                >
+                {/* Product Name */}
+                <Form.Group as={Row} className="mb-3 mt-4">
                   <Form.Label column sm={3} className="text-start">
                     Product Name
                   </Form.Label>
                   <Col sm={9}>
-                    <Form.Control
-                      type="text"
-                      placeholder="Enter product name"
-                      size="sm"
-                      value={productName}
-                      required
-                      disabled
-                    />
+                    <Form.Control value={productName} size="sm" disabled />
                   </Col>
                 </Form.Group>
 
-                <Form.Group
-                  as={Row}
-                  className="mb-3 mt-4"
-                  controlId="formQuantity"
-                >
+                {/* Supplier (editable for staff only) */}
+                {staffRole === "staff" ? (
+                  <>
+                    <Form.Group as={Row} className="mb-3 mt-4">
+                      <Form.Label column sm={3} className="text-start">
+                        Supplier Name
+                      </Form.Label>
+                      <Col sm={9}>
+                        {!isAddingSupplier ? (
+                          <InputGroup size="sm">
+                            <Form.Select
+                              value={supplierName}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setSupplierName(val);
+                                if (supplierPhoneByName[val]) {
+                                  setSupplierNumber(supplierPhoneByName[val]);
+                                }
+                              }}
+                            >
+                              <option value="" disabled>
+                                Select supplier
+                              </option>
+                              {supplierList.map((s) => (
+                                <option key={s}>{s}</option>
+                              ))}
+                            </Form.Select>
+                            <Button
+                              variant="outline-secondary"
+                              onClick={() => setIsAddingSupplier(true)}
+                            >
+                              <LuPlus />
+                            </Button>
+                          </InputGroup>
+                        ) : (
+                          <InputGroup size="sm">
+                            <Form.Control
+                              value={newSupplierName}
+                              onChange={(e) => setNewSupplierName(e.target.value)}
+                              placeholder="New supplier"
+                            />
+                            <Button
+                              variant="outline-success"
+                              onClick={handleSaveNewSupplier}
+                              disabled={!newSupplierName.trim()}
+                            >
+                              <LuCheck />
+                            </Button>
+                            <Button
+                              variant="outline-secondary"
+                              onClick={() => setIsAddingSupplier(false)}
+                            >
+                              <LuX />
+                            </Button>
+                          </InputGroup>
+                        )}
+                      </Col>
+                    </Form.Group>
+
+                    <Form.Group as={Row} className="mb-3 mt-4">
+                      <Form.Label column sm={3} className="text-start">
+                        Supplier Number
+                      </Form.Label>
+                      <Col sm={9}>
+                        <Form.Control
+                          value={supplierNumber}
+                          onChange={(e) => setSupplierNumber(e.target.value)}
+                          size="sm"
+                        />
+                      </Col>
+                    </Form.Group>
+
+                    <Form.Group as={Row} className="mb-3 mt-4">
+                      <Form.Label column sm={3} className="text-start">
+                        Supplier Price
+                      </Form.Label>
+                      <Col sm={9}>
+                        <Form.Control
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={supplierPrice}
+                          onChange={(e) => setSupplierPrice(e.target.value)}
+                          size="sm"
+                        />
+                      </Col>
+                    </Form.Group>
+                  </>
+                ) : (
+                  // Admin sees the current supplier info (read-only)
+                  <>
+                    <Form.Group as={Row} className="mb-3 mt-4">
+                      <Form.Label column sm={3} className="text-start">
+                        Supplier Name
+                      </Form.Label>
+                      <Col sm={9}>
+                        <Form.Control value={supplierName} size="sm" disabled />
+                      </Col>
+                    </Form.Group>
+                    <Form.Group as={Row} className="mb-3 mt-4">
+                      <Form.Label column sm={3} className="text-start">
+                        Supplier Number
+                      </Form.Label>
+                      <Col sm={9}>
+                        <Form.Control value={supplierNumber} size="sm" disabled />
+                      </Col>
+                    </Form.Group>
+                    <Form.Group as={Row} className="mb-3 mt-4">
+                      <Form.Label column sm={3} className="text-start">
+                        Supplier Price
+                      </Form.Label>
+                      <Col sm={9}>
+                        <Form.Control value={supplierPrice} size="sm" disabled />
+                      </Col>
+                    </Form.Group>
+                  </>
+                )}
+
+                {/* Quantity */}
+                <Form.Group as={Row} className="mb-3 mt-4">
                   <Form.Label column sm={3} className="text-start">
                     Quantity
                   </Form.Label>
                   <Col sm={9}>
                     <Form.Control
                       type="number"
-                      min="0"
-                      placeholder="Enter Restock Quantity"
-                      size="sm"
                       value={quantity}
                       onChange={(e) => setQuantity(e.target.value)}
+                      size="sm"
                       required
                     />
                   </Col>
                 </Form.Group>
 
-                <Form.Group
-                  as={Row}
-                  className="mb-3 mt-4"
-                  controlId="formExpiryDate"
-                >
+                {/* Expiry Date (new batch) */}
+                <Form.Group as={Row} className="mb-3 mt-4">
                   <Form.Label column sm={3} className="text-start">
                     Expiry Date
                   </Form.Label>
@@ -404,100 +514,73 @@ const Restock = ({ setRender, Id }) => {
                   </Col>
                 </Form.Group>
 
-                <Form.Group as={Row} className="mb-3 mt-4" controlId="formUnit">
-                  <Form.Label column sm={3} className="text-start">
-                    Unit
-                  </Form.Label>
-                  <Col sm={9}>
-                    <Form.Control
-                      type="text"
-                      placeholder="Enter product unit (e.g., kg, pcs, liters)"
-                      size="sm"
-                      value={productUnit}
-                      disabled
-                    />
-                  </Col>
-                </Form.Group>
-
-                <Form.Group
-                  as={Row}
-                  className="mb-3 mt-4"
-                  controlId="formExpiryDate"
-                >
+                {/* Existing batches */}
+                <Form.Group as={Row} className="mb-3 mt-4">
                   <Form.Label column sm={3} className="text-start">
                     Expiry Dates
                   </Form.Label>
                   <Col sm={9}>
                     <Form.Select
                       size="sm"
-                      value={expiryDate || ""}
-                      onChange={(e) => {
-                        setExpiryDate(e.target.value);
-
-                        // ✅ also update currentQuantity for selected expiry batch
-                        const selected = expiryDates.find(
-                          (d) =>
-                            new Date(d.product_expiry)
-                              .toISOString()
-                              .split("T")[0] === e.target.value
-                        );
-                        setCurrentQuantity(
-                          selected ? selected.product_quantity : null
-                        );
-                      }}
+                      value={expiryDate}
+                      onChange={(e) => setExpiryDate(e.target.value)}
                     >
                       <option value="" disabled>
                         Select expiry date
                       </option>
-                      {expiryDates && expiryDates.length > 0 ? (
-                        expiryDates.map((d, idx) => {
-                          const formatted = new Date(d.product_expiry)
-                            .toISOString()
-                            .split("T")[0];
-                          return (
-                            <option key={idx} value={formatted}>
-                              {formatted} (qty: {d.product_quantity})
-                            </option>
-                          );
-                        })
-                      ) : (
-                        <option disabled>No expiry dates</option>
-                      )}
+                      {expiryDates.map((d, i) => (
+                        <option key={i} value={d.product_expiry}>
+                          {d.product_expiry} (qty: {d.product_quantity})
+                        </option>
+                      ))}
                     </Form.Select>
                   </Col>
                 </Form.Group>
               </div>
             </Col>
+
+            {/* RIGHT COLUMN */}
+            <Col
+              md={6}
+              className="d-flex justify-content-center align-items-start mt-4"
+            >
+              <div
+                className="border rounded d-flex flex-column align-items-center justify-content-center"
+                style={{
+                  width: "250px",
+                  height: "250px",
+                  backgroundColor: "#f8f9fa",
+                  border: "2px dashed #dee2e6",
+                }}
+              >
+                {productImage ? (
+                  <img
+                    src={productImage}
+                    alt={productName}
+                    style={{ maxWidth: "100%", maxHeight: "100%", borderRadius: 8 }}
+                  />
+                ) : (
+                  <span className="text-muted">No Image Available</span>
+                )}
+              </div>
+            </Col>
           </Row>
 
-          {/* Buttons fixed at bottom-right */}
+          {/* Buttons */}
           <div className="d-flex justify-content-end align-items-end p-3">
-            <Button
-              variant="outline-secondary"
-              type="button"
-              size="sm"
-              className="me-2"
-              onClick={resetForm}
-              disabled={loading}
-            >
-              Reset
-            </Button>
             <Button
               variant="secondary"
               type="button"
               size="sm"
               className="me-2"
-              onClick={handleCancelButton}
+              onClick={() =>
+                setRender("products")
+              }
               disabled={loading}
             >
               Cancel
             </Button>
-            <Button
-              variant="primary"
-              type="submit"
-              size="sm"
-              disabled={loading}
-            >
+            <Button variant="primary" type="submit" size="sm" disabled={loading}>
               {loading ? "Restocking..." : "Restock"}
             </Button>
           </div>

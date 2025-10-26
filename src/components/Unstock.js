@@ -137,7 +137,7 @@ const Unstock = ({ setRender, Id }) => {
 
   const resetForm = () => window.location.reload();
 
-  const handleCancelButton = () => setRender("product");
+  const handleCancelButton = () => setRender("products");
 
   return (
     <Container

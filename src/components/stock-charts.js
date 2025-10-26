@@ -30,7 +30,7 @@ const StockCharts = () => {
         const date = new Date(log.created_at);
         const monthIndex = date.getMonth(); // 0 = Jan, 11 = Dec
 
-        if (log.product_action === "Restock") {
+        if (log.product_action === "Restock" || log.product_action === "Restore") {
           restock[monthIndex] += log.product_quantity || 0;
         } else if (log.product_action === "Unstock") {
           unstock[monthIndex] += log.product_quantity || 0;
