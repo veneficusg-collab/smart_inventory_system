@@ -46,8 +46,7 @@ const StockCharts = () => {
 
   return (
     <Container
-      className="bg-white mx-2 my-3 rounded p-0"
-      style={{ width: "1230px" }}
+      className="bg-white m-4 rounded p-0"
     >
       <LineChart
         xAxis={[
@@ -71,8 +70,8 @@ const StockCharts = () => {
           },
         ]}
         height={300}
-        width={1200}
-        margin={{ left: 10, bottom: 50, top: 20, right: 10 }}
+        
+        margin={{ bottom: 50, top: 20 }}
         yAxis={[
           {
             label: "Number of Stocks",

@@ -21,6 +21,7 @@ const ProductInfo = ({ setRender, product }) => {
   const [imageUrl, setImageUrl] = useState(null);
   const [variants, setVariants] = useState([]);
   const [editedVariants, setEditedVariants] = useState([]);
+  const [staffName, setStaffName] = useState(""); // ✅ for logs
 
   const [details, setDetails] = useState({
     product_ID: product.product_ID || "",
@@ -59,6 +60,33 @@ const ProductInfo = ({ setRender, product }) => {
       }
     }
   }, [product]);
+
+  // ✅ Resolve current staff name for logs
+  useEffect(() => {
+    (async () => {
+      try {
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+        if (user) {
+          const { data: s } = await supabase
+            .from("staff")
+            .select("staff_name")
+            .eq("id", user.id)
+            .single();
+          if (s?.staff_name) setStaffName(s.staff_name);
+        } else {
+          const storedUser = localStorage.getItem("user");
+          if (storedUser) {
+            const u = JSON.parse(storedUser);
+            if (u?.staff_name) setStaffName(u.staff_name);
+          }
+        }
+      } catch {
+        // ignore; leave blank => "System"
+      }
+    })();
+  }, []);
 
   const handleVariantChange = (idx, field, value) => {
     setEditedVariants((prev) =>
@@ -115,6 +143,7 @@ const ProductInfo = ({ setRender, product }) => {
 
     try {
       for (const row of variants) {
+        // 1) Archive this variant
         const archiveRecord = {
           product_name: row.product_name ?? null,
           product_code: row.product_ID ?? null,
@@ -138,10 +167,28 @@ const ProductInfo = ({ setRender, product }) => {
           return;
         }
 
+        // 2) ✅ Insert a LOG for this archived variant (product_action = "Archive")
+        const logRow = {
+          product_id: row.product_ID, // or product_code if your logs use that column name
+          product_name: row.product_name ?? row.product_ID,
+          product_category: row.product_category ?? null,
+          product_unit: row.product_unit ?? null,
+          product_quantity: row.product_quantity ?? 0,
+          product_expiry: row.product_expiry ?? null,
+          product_action: "Archive",
+          staff: staffName || "System",
+        };
+        const { error: logErr } = await supabase.from("logs").insert([logRow]);
+        if (logErr) {
+          console.error("Log insert (Archive) failed:", logErr);
+          // not fatal; continue
+        }
+
+        // 3) Delete the variant row
         await supabase.from("products").delete().eq("id", row.id);
       }
 
-      alert("All product variants archived and deleted.");
+      alert("All product variants archived, logged, and deleted.");
       setRender("products");
     } catch (err) {
       console.error("Unexpected delete error:", err);
@@ -342,14 +389,13 @@ const ProductInfo = ({ setRender, product }) => {
               <TableRow>
                 <TableCell>Quantity</TableCell>
                 <TableCell>Expiry Date</TableCell>
-                <TableCell>Supplier Name</TableCell> {/* NEW */}
+                <TableCell>Supplier Name</TableCell>
                 <TableCell>Supplier Price</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
               {editedVariants.map((v, idx) => (
                 <TableRow key={v.id}>
-                  {/* Quantity */}
                   <TableCell>
                     {isEditing ? (
                       <Form.Control
@@ -370,7 +416,6 @@ const ProductInfo = ({ setRender, product }) => {
                     )}
                   </TableCell>
 
-                  {/* Expiry Date */}
                   <TableCell>
                     {isEditing ? (
                       <Form.Control
@@ -393,7 +438,6 @@ const ProductInfo = ({ setRender, product }) => {
                     )}
                   </TableCell>
 
-                  {/* Supplier Name */}
                   <TableCell>
                     {isEditing ? (
                       <Form.Control
@@ -414,7 +458,6 @@ const ProductInfo = ({ setRender, product }) => {
                     )}
                   </TableCell>
 
-                  {/* Supplier Price */}
                   <TableCell>
                     {isEditing ? (
                       <Form.Control

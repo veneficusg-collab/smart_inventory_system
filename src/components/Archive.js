@@ -131,17 +131,15 @@ const Archive = () => {
     setRestoreErr("");
   };
 
-  const submitRestore = async () => {
+    const submitRestore = async () => {
     if (!restoreRow) return;
     setRestoreErr("");
 
-    // Basic validation
     const qtyNum = parseInt(restoreQty, 10);
     if (isNaN(qtyNum) || qtyNum < 0) {
       setRestoreErr("Quantity must be a non-negative number.");
       return;
     }
-    // allow empty expiry (no expiry)
     const expiryVal = restoreExpiry ? new Date(restoreExpiry) : null;
     if (restoreExpiry && isNaN(expiryVal)) {
       setRestoreErr("Invalid expiry date.");
@@ -151,15 +149,39 @@ const Archive = () => {
     setRestoreSaving(true);
     setBusyId(restoreRow.id);
     try {
-      // 1) Insert back into products with overrides
+      // ✅ 1) Log BEFORE restoring
+      const storedUser = localStorage.getItem("user");
+      let staffName = "System";
+      if (storedUser) {
+        try {
+          const u = JSON.parse(storedUser);
+          staffName = u.staff_name || "System";
+        } catch {}
+      }
+
+      const logRow = {
+        product_id: restoreRow.product_code,
+        product_name: restoreRow.product_name ?? restoreRow.product_code,
+        product_category: restoreRow.product_category ?? null,
+        product_unit: restoreRow.product_unit ?? null,
+        product_quantity: restoreRow.product_quantity ?? 0,
+        product_expiry: restoreRow.product_expiry ?? null,
+        product_action: "Restore",
+        staff: staffName,
+      };
+
+      const { error: logError } = await supabase.from("logs").insert([logRow]);
+      if (logError) console.error("Log insert (Restore) failed:", logError);
+
+      // 2) Insert back into products
       const productRecord = {
         product_name: restoreRow.product_name ?? null,
         product_ID: restoreRow.product_code ?? null,
         product_category: restoreRow.product_category ?? null,
-        product_price: restoreRow.product_price ?? null, // selling/buying price column in your schema
+        product_price: restoreRow.product_price ?? null,
         product_quantity: qtyNum,
         product_unit: restoreRow.product_unit ?? null,
-        product_expiry: restoreExpiry || null, // keep YYYY-MM-DD string
+        product_expiry: restoreExpiry || null,
         product_img: restoreRow.product_img ?? null,
         supplier_name: restoreRow.supplier_name ?? null,
         supplier_price: restoreRow.supplier_price ?? null,
@@ -178,7 +200,7 @@ const Archive = () => {
         return;
       }
 
-      // 2) Remove from archive
+      // 3) Remove from archive
       const { error: deleteError } = await supabase
         .from("archive")
         .delete()
@@ -194,7 +216,6 @@ const Archive = () => {
         return;
       }
 
-      // optimistic UI
       setRows((prev) => prev.filter((r) => r.id !== restoreRow.id));
       closeRestoreModal();
       alert("Product restored successfully.");
@@ -207,7 +228,6 @@ const Archive = () => {
     }
   };
 
-  // ------- Permanent delete -------
   const handleDelete = async (row) => {
     if (
       !window.confirm(
@@ -218,6 +238,31 @@ const Archive = () => {
 
     setBusyId(row.id);
     try {
+      // ✅ 1) Log BEFORE delete
+      const storedUser = localStorage.getItem("user");
+      let staffName = "System";
+      if (storedUser) {
+        try {
+          const u = JSON.parse(storedUser);
+          staffName = u.staff_name || "System";
+        } catch {}
+      }
+
+      const logRow = {
+        product_id: row.product_code,
+        product_name: row.product_name ?? row.product_code,
+        product_category: row.product_category ?? null,
+        product_unit: row.product_unit ?? null,
+        product_quantity: row.product_quantity ?? 0,
+        product_expiry: row.product_expiry ?? null,
+        product_action: "Delete",
+        staff: staffName,
+      };
+
+      const { error: logError } = await supabase.from("logs").insert([logRow]);
+      if (logError) console.error("Log insert (Delete) failed:", logError);
+
+      // 2) Then delete from archive
       const { error: delError } = await supabase
         .from("archive")
         .delete()
@@ -238,6 +283,7 @@ const Archive = () => {
       setBusyId(null);
     }
   };
+
 
   // ------- UI -------
   if (loading) {

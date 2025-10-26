@@ -180,6 +180,95 @@ const StaffInfo = ({ staffId, setRender, embedded = false }) => {
     URL.revokeObjectURL(url);
   };
 
+  // ---------- VIEW ----------
+  // Embedded (modal) — no grid, compact, centered; avatar + QR side-by-side
+  if (embedded) {
+    return (
+      <Container
+        fluid
+        className="bg-white rounded d-flex flex-column align-items-center"
+        style={{ width: "auto", padding: "1.25rem 1.5rem" }}
+      >
+        {/* Avatar + QR */}
+        <div
+          className="d-flex align-items-center justify-content-center mb-4"
+          ref={qrRef}
+          style={{ gap: 40 }}
+        >
+          {/* Avatar */}
+          <div className="position-relative" style={{ width: 96, height: 96 }}>
+            <div
+              className={`rounded-circle border d-flex align-items-center justify-content-center overflow-hidden ${
+                imagePreview
+                  ? "border-primary"
+                  : "border-secondary border-2 border-dashed"
+              }`}
+              style={{
+                width: "100%",
+                height: "100%",
+                backgroundColor: imagePreview ? "transparent" : "#f8f9fa",
+                cursor: "default",
+              }}
+            >
+              {imagePreview ? (
+                <img
+                  src={imagePreview}
+                  alt="Profile preview"
+                  className="w-100 h-100"
+                  style={{ objectFit: "cover" }}
+                />
+              ) : (
+                <User size={30} className="text-secondary" />
+              )}
+            </div>
+          </div>
+
+          {/* QR + Download */}
+          <div className="d-flex flex-column align-items-center">
+            <QRCodeSVG value={staffBarcode || ""} size={110} />
+            <Button
+              variant="link"
+              size="sm"
+              onClick={downloadQRCode}
+              style={{ padding: 0, fontSize: "0.75rem", marginTop: 4 }}
+            >
+              Download
+            </Button>
+          </div>
+        </div>
+
+        {/* Form (narrow + centered) */}
+        <Form style={{ width: "100%", maxWidth: 420 }}>
+          <Form.Group className="mb-3">
+            <Form.Label>Staff name</Form.Label>
+            <Form.Control type="text" value={staffName} disabled size="sm" />
+          </Form.Group>
+
+          <Form.Group className="mb-3">
+            <Form.Label>Position</Form.Label>
+            <Form.Control
+              readOnly
+              value={position === "admin" ? "Admin" : "Staff"}
+              size="sm"
+              disabled
+            />
+          </Form.Group>
+
+          <Form.Group className="mb-3">
+            <Form.Label>Contact Number</Form.Label>
+            <Form.Control type="tel" value={contactNumber} disabled size="sm" />
+          </Form.Group>
+
+          <Form.Group className="mb-3">
+            <Form.Label>Email Address</Form.Label>
+            <Form.Control type="email" value={emailAddress} disabled size="sm" />
+          </Form.Group>
+        </Form>
+      </Container>
+    );
+  }
+
+  // Full-page (non-embedded) — keeps previous layout
   return (
     <Container
       fluid
@@ -187,61 +276,59 @@ const StaffInfo = ({ staffId, setRender, embedded = false }) => {
       style={{ width: "135vh", minHeight: "80vh" }}
     >
       {/* Header row: back button (left) + actions (right) */}
-      {!embedded && (
-        <div className="d-flex justify-content-between align-items-center mb-4 mt-3 px-2">
-          <Button
-            variant="outline-secondary"
-            size="sm"
-            className="me-3"
-            onClick={() => setRender?.("ManageStaff")}
-            style={{ border: "none" }}
-          >
-            <MdArrowBack />
-          </Button>
+      <div className="d-flex justify-content-between align-items-center mb-4 mt-3 px-2">
+        <Button
+          variant="outline-secondary"
+          size="sm"
+          className="me-3"
+          onClick={() => setRender?.("ManageStaff")}
+          style={{ border: "none" }}
+        >
+          <MdArrowBack />
+        </Button>
 
-          <div className="d-flex gap-2">
-            {editing ? (
-              <>
-                <Button
-                  variant="outline-success"
-                  size="sm"
-                  onClick={handleSave}
-                  disabled={saving || deleting}
-                >
-                  <MdSave /> Save
-                </Button>
-                <Button
-                  variant="outline-secondary"
-                  size="sm"
-                  onClick={handleEditToggle}
-                  disabled={saving || deleting}
-                >
-                  <MdClose /> Cancel
-                </Button>
-              </>
-            ) : (
-              <>
-                <Button
-                  variant="outline-secondary"
-                  size="sm"
-                  onClick={handleEditToggle}
-                  disabled={saving || deleting}
-                >
-                  <MdOutlineModeEdit /> Edit
-                </Button>
-                <Button
-                  variant="outline-danger"
-                  size="sm"
-                  onClick={handleDelete}
-                  disabled={saving || deleting}
-                >
-                  <MdDelete /> Delete
-                </Button>
-              </>
-            )}
-          </div>
+        <div className="d-flex gap-2">
+          {editing ? (
+            <>
+              <Button
+                variant="outline-success"
+                size="sm"
+                onClick={handleSave}
+                disabled={saving || deleting}
+              >
+                <MdSave /> Save
+              </Button>
+              <Button
+                variant="outline-secondary"
+                size="sm"
+                onClick={handleEditToggle}
+                disabled={saving || deleting}
+              >
+                <MdClose /> Cancel
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button
+                variant="outline-secondary"
+                size="sm"
+                onClick={handleEditToggle}
+                disabled={saving || deleting}
+              >
+                <MdOutlineModeEdit /> Edit
+              </Button>
+              <Button
+                variant="outline-danger"
+                size="sm"
+                onClick={handleDelete}
+                disabled={saving || deleting}
+              >
+                <MdDelete /> Delete
+              </Button>
+            </>
+          )}
         </div>
-      )}
+      </div>
 
       {/* Content */}
       <Row>
@@ -249,13 +336,7 @@ const StaffInfo = ({ staffId, setRender, embedded = false }) => {
         <Col md={7} className="px-3">
           {/* Avatar */}
           <div className="d-flex justify-content-center mt-3 mb-3">
-            <div
-              className="position-relative"
-              style={{
-                width: 120,
-                height: 120,
-              }}
-            >
+            <div className="position-relative" style={{ width: 120, height: 120 }}>
               <div
                 className={`rounded-circle border d-flex align-items-center justify-content-center position-relative overflow-hidden ${
                   imagePreview
@@ -290,13 +371,7 @@ const StaffInfo = ({ staffId, setRender, embedded = false }) => {
                   variant="danger"
                   size="sm"
                   className="position-absolute rounded-circle p-1"
-                  style={{
-                    top: 5,
-                    right: 5,
-                    width: 25,
-                    height: 25,
-                    fontSize: 12,
-                  }}
+                  style={{ top: 5, right: 5, width: 25, height: 25, fontSize: 12 }}
                   onClick={(e) => {
                     e.stopPropagation();
                     setImage(null);
@@ -334,24 +409,15 @@ const StaffInfo = ({ staffId, setRender, embedded = false }) => {
 
             <Form.Group className="mb-3">
               <Form.Label>Position</Form.Label>
-              {embedded ? (
-                <Form.Control
-                  readOnly
-                  value={position === "admin" ? "Admin" : "Staff"}
-                  size="sm"
-                  disabled
-                />
-              ) : (
-                <Form.Select
-                  value={position}
-                  onChange={(e) => setPosition(e.target.value)}
-                  disabled={readOnly}
-                  size="sm"
-                >
-                  <option value="admin">Admin</option>
-                  <option value="staff">Staff</option>
-                </Form.Select>
-              )}
+              <Form.Select
+                value={position}
+                onChange={(e) => setPosition(e.target.value)}
+                disabled={readOnly}
+                size="sm"
+              >
+                <option value="admin">Admin</option>
+                <option value="staff">Staff</option>
+              </Form.Select>
             </Form.Group>
 
             <Form.Group className="mb-3">
@@ -382,18 +448,14 @@ const StaffInfo = ({ staffId, setRender, embedded = false }) => {
         <Col
           md={5}
           className="d-flex flex-column align-items-center justify-content-center"
-          ref={qrRef}
           style={{ gap: 16 }}
         >
-          <QRCodeSVG value={staffBarcode || ""} size={148} />
-          <Button
-            variant="primary"
-            size="sm"
-            onClick={downloadQRCode}
-            className="my-3"
-          >
-            Download QR Code
-          </Button>
+          <div ref={qrRef} className="d-flex flex-column align-items-center">
+            <QRCodeSVG value={staffBarcode || ""} size={148} />
+            <Button variant="primary" size="sm" onClick={downloadQRCode} className="my-3">
+              Download QR Code
+            </Button>
+          </div>
         </Col>
       </Row>
     </Container>

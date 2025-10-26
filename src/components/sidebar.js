@@ -122,17 +122,7 @@ const Sidebar = ({ setRender, staffRole }) => {
                   <span className="mx-3">Logs</span>
                 </div>
               </Link>
-              <Link
-                underline="hover"
-                color="inherit"
-                component="button"
-                onClick={() => setRender("DTR")}
-              >
-                <div className="d-flex align-items-center my-3">
-                  <FaCalendarTimes style={{ width: "16px" }} />
-                  <span className="mx-3">DTR</span>
-                </div>
-              </Link>
+              
                 <Link
                 underline="hover"
                 color="inherit"

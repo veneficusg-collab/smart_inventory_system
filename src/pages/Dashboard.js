@@ -1,4 +1,4 @@
-import { Col, Container } from "react-bootstrap";
+import { Col, Container, Spinner } from "react-bootstrap";
 import Row from "react-bootstrap/Row";
 import Sidebar from "../components/sidebar";
 import Header from "../components/header";
@@ -21,22 +21,27 @@ const Dashboard = () => {
   const [render, setRender] = useState("AdminDashboard");
   const [staffId, setStaffId] = useState("");
   const [staffRole, setStaffRole] = useState("");
+  const [staffName, setStaffName] = useState("");
   const [scannedId, setScannedId] = useState("");
+  const [loading, setLoading] = useState(true); // ✅ Added loading state
 
   useEffect(() => {
     fetchCurrentUser();
   }, []);
 
   useEffect(() => {
-    setDefaultRender();
+    if (staffRole) {
+      setDefaultRender();
+      setLoading(false); // ✅ stop loading once role is known
+    }
   }, [staffRole]);
 
-  // 🔹 Auto-archive expired + out-of-stock products on app load
   useEffect(() => {
     (async () => {
       await archiveExpiredProducts();
-      await archiveZeroStockProducts(); // ⬅️ NEW
+      await archiveZeroStockProducts();
     })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const setDefaultRender = () => {
@@ -45,39 +50,49 @@ const Dashboard = () => {
   };
 
   const fetchCurrentUser = async () => {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
 
-    if (user) {
-      let { data: staff, error } = await supabase
-        .from("staff")
-        .select("staff_position")
-        .eq("id", user.id)
-        .single();
+      if (user) {
+        let { data: staff, error } = await supabase
+          .from("staff")
+          .select("staff_name, staff_position")
+          .eq("id", user.id)
+          .single();
 
-      if (!error && staff) {
-        setStaffRole(staff.staff_position);
-        setStaffId(user.id);
-        console.log("Supabase Role:", staff.staff_position);
+        if (!error && staff) {
+          setStaffRole(staff.staff_position);
+          setStaffId(user.id);
+          setStaffName(staff.staff_name || "");
+          console.log("Supabase Role:", staff.staff_position);
+        } else {
+          console.error("Staff fetch error:", error);
+          setLoading(false);
+        }
+      } else {
+        const storedUser = localStorage.getItem("user");
+        if (storedUser) {
+          const qrUser = JSON.parse(storedUser);
+          setStaffRole(qrUser.staff_position);
+          setStaffId(qrUser.id);
+          setStaffName(qrUser.staff_name || "");
+          console.log("QR Role:", qrUser.staff_position);
+        }
+        setLoading(false);
       }
-    } else {
-      const storedUser = localStorage.getItem("user");
-      if (storedUser) {
-        const qrUser = JSON.parse(storedUser);
-        setStaffRole(qrUser.staff_position);
-        setStaffId(qrUser.id);
-        console.log("QR Role:", qrUser.staff_position);
-      }
+    } catch (err) {
+      console.error("Error fetching current user:", err);
+      setLoading(false);
     }
   };
 
-  // 🔸 Move expired products to archive
+  // 🔸 Archive expired products
   const archiveExpiredProducts = async () => {
     try {
-      const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD (UTC)
+      const today = new Date().toISOString().slice(0, 10);
 
-      // 1) Fetch expired products (ignore rows without an expiry)
       const { data: expired, error: fetchErr } = await supabase
         .from("products")
         .select("*")
@@ -90,7 +105,6 @@ const Dashboard = () => {
       }
       if (!expired || expired.length === 0) return;
 
-      // 2) Prepare archive rows (map product_ID -> product_code)
       const archiveRows = expired.map((p) => ({
         product_name: p.product_name ?? null,
         product_code: p.product_ID ?? null,
@@ -103,40 +117,47 @@ const Dashboard = () => {
         supplier_name: p.supplier_name ?? null,
         product_brand: p.product_brand ?? null,
         supplier_price: p.supplier_price ?? null,
-        product_id: p.id ?? null,
       }));
 
-      // 3) Insert into archive FIRST
       const { error: insertErr } = await supabase
         .from("archive")
         .insert(archiveRows);
-
       if (insertErr) {
         console.error("Archive insert failed:", insertErr);
-        return; // don't delete if archiving fails
+        return;
       }
 
-      // 4) Delete archived products from products table
+      const logRows = expired.map((p) => ({
+        product_id: p.product_ID,
+        product_name: p.product_name ?? p.product_ID,
+        product_category: p.product_category ?? null,
+        product_unit: p.product_unit ?? null,
+        product_quantity: p.product_quantity ?? 0,
+        product_expiry: p.product_expiry ?? null,
+        product_action: "Auto-Archive (Expired)",
+        product_uuid: p.id ?? null,
+        staff: "System",
+      }));
+      const { error: logErr } = await supabase.from("logs").insert(logRows);
+      if (logErr) console.error("Log insert (expired) failed:", logErr);
+
       const productIDs = expired.map((p) => p.product_ID);
       const { error: deleteErr } = await supabase
         .from("products")
         .delete()
         .in("product_ID", productIDs);
 
-      if (deleteErr) {
+      if (deleteErr)
         console.error("Delete expired products failed:", deleteErr);
-      } else {
-        console.log(`Archived & deleted ${productIDs.length} expired product(s).`);
-      }
+      else console.log(`Archived ${productIDs.length} expired products.`);
     } catch (e) {
       console.error("archiveExpiredProducts unexpected error:", e);
     }
   };
 
-  // 🔸 NEW: Move zero/out-of-stock products to archive (product_quantity <= 0)
+  // 🔸 Archive zero/out-of-stock products
   const archiveZeroStockProducts = async () => {
     try {
-      // 1) Fetch products where quantity <= 0 (nulls are ignored)
       const { data: zeroStock, error: fetchErr } = await supabase
         .from("products")
         .select("*")
@@ -148,7 +169,6 @@ const Dashboard = () => {
       }
       if (!zeroStock || zeroStock.length === 0) return;
 
-      // 2) Prepare archive rows (same mapping)
       const archiveRows = zeroStock.map((p) => ({
         product_name: p.product_name ?? null,
         product_code: p.product_ID ?? null,
@@ -163,34 +183,63 @@ const Dashboard = () => {
         supplier_price: p.supplier_price ?? null,
       }));
 
-      // 3) Insert into archive FIRST
       const { error: insertErr } = await supabase
         .from("archive")
         .insert(archiveRows);
-
       if (insertErr) {
         console.error("Archive (zero-stock) insert failed:", insertErr);
         return;
       }
 
-      // 4) Delete from products
+      const logRows = zeroStock.map((p) => ({
+        product_id: p.product_ID,
+        product_name: p.product_name ?? p.product_ID,
+        product_category: p.product_category ?? null,
+        product_unit: p.product_unit ?? null,
+        product_quantity: p.product_quantity ?? 0,
+        product_expiry: p.product_expiry ?? null,
+        product_action: "Auto-Archive (Zero Stock)",
+        product_uuid: p.id ?? null,
+        staff: "System",
+      }));
+      const { error: logErr } = await supabase.from("logs").insert(logRows);
+      if (logErr) console.error("Log insert (zero stock) failed:", logErr);
+
       const productIDs = zeroStock.map((p) => p.product_ID);
       const { error: deleteErr } = await supabase
         .from("products")
         .delete()
         .in("product_ID", productIDs);
 
-      if (deleteErr) {
+      if (deleteErr)
         console.error("Delete zero-stock products failed:", deleteErr);
-      } else {
-        console.log(`Archived & deleted ${productIDs.length} zero-stock product(s).`);
-      }
+      else console.log(`Archived ${productIDs.length} zero-stock products.`);
     } catch (e) {
       console.error("archiveZeroStockProducts unexpected error:", e);
     }
   };
 
-  // Admin & Staff views
+  // ✅ Loading screen to prevent dashboard preview flicker
+  if (loading) {
+    return (
+      <div
+        style={{
+          height: "100vh",
+          width: "100%",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          backgroundColor: "#f8f9fa",
+        }}
+      >
+        <Spinner animation="border" variant="primary" />
+        <p className="mt-3 text-muted">Loading your dashboard...</p>
+      </div>
+    );
+  }
+
+  // ✅ Normal Dashboard once loading is complete
   return (
     <Container fluid className="p-0">
       <Row className="w-100 m-0">
@@ -203,7 +252,6 @@ const Dashboard = () => {
           {/* Admin Links */}
           {render === "AdminDashboard" && <AdminDashboard />}
           {render === "Inventory" && <Inventory staffRole={staffRole} />}
-          {render === "Reports" && <Reports />}
           {render === "ManageStaff" && (
             <ManageStaff setStaffId={setStaffId} setRender={setRender} />
           )}
@@ -211,8 +259,7 @@ const Dashboard = () => {
             <StaffInfo staffId={staffId} setRender={setRender} />
           )}
           {render === "Logs" && <Logs />}
-
-          {render === "DTR" && <DTR />}
+          {render === "Reports" && <DTR />}
 
           {/* Staff Links */}
           {render === "StaffDashboard" && (
@@ -224,10 +271,9 @@ const Dashboard = () => {
           {render === "Unstock" && (
             <StaffUnstock scannedId={scannedId} setRender={setRender} />
           )}
-
           {render === "POS" && <POS />}
 
-          {/* All User */}
+          {/* All Users */}
           {render === "Archive" && <Archive />}
         </Col>
       </Row>
