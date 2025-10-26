@@ -94,55 +94,31 @@ const Logs = () => {
       setLoading(true);
       setError("");
 
-      // 1️⃣ Try Supabase session
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      const staff = await getCurrentStaff();
+      setStaffRole(staff.staff_position);
 
-      let staffRows = null;
+      let logsRes;
 
-      if (user) {
-        // Fetch staff details
-        let { data, error: staffError } = await supabase
-          .from("staff")
-          .select("staff_name, staff_position")
-          .eq("id", user.id)
-          .single();
-
-        if (staffError) throw staffError;
-        staffRows = data;
-      } else {
-        // 2️⃣ Fallback: QR login from localStorage
-        const storedUser = localStorage.getItem("user");
-        if (!storedUser) throw new Error("No logged in user found");
-
-        staffRows = JSON.parse(storedUser);
-      }
-
-      setStaffRole(staffRows.staff_position);
-
-      let data;
-      if (
-        staffRows.staff_position === "admin" ||
-        staffRows.staff_position === "super_admin"
-      ) {
-        // Admin sees ALL logs
-        ({ data } = await supabase
+      if (["admin", "super_admin"].includes(staff.staff_position)) {
+        logsRes = await supabase
           .from("logs")
           .select("*")
-          .order("created_at", { ascending: false }));
-      } else {
-        // Staff sees ONLY their logs
-        ({ data } = await supabase
+          .order("created_at", { ascending: false });
+      } else if (staff.staff_barcode) {
+        // ✅ staff filter by barcode
+        logsRes = await supabase
           .from("logs")
           .select("*")
-          .eq("staff", staffRows.staff_name)
-          .order("created_at", { ascending: false }));
+          .eq("staff_barcode", staff.staff_barcode)
+          .order("created_at", { ascending: false });
+      } else {
+        // Fallback if barcode missing (optional): show none
+        logsRes = { data: [] };
       }
 
-      setProducts(data || []);
-    } catch (error) {
-      console.error("Error fetching logs:", error);
+      setProducts(logsRes.data || []);
+    } catch (err) {
+      console.error("Error fetching logs:", err);
       setError("Failed to load logs. Please try again.");
       setProducts([]);
     } finally {
@@ -150,91 +126,95 @@ const Logs = () => {
     }
   };
 
-  const fetchTransactions = async () => {
+  // Put this above fetchLogs/fetchTransactions
+  const getCurrentStaff = async () => {
+    // Try Supabase session first
     try {
-      setTransactionLoading(true);
-      setError("");
-
-      // 1️⃣ Try Supabase session
       const {
         data: { user },
       } = await supabase.auth.getUser();
-
-      let staffRows = null;
-
-      if (user) {
-        let { data, error: staffError } = await supabase
+      if (user?.id) {
+        // No .single(): use limit(1) and pick [0]
+        const { data, error } = await supabase
           .from("staff")
-          .select("staff_name, staff_position")
+          .select("staff_name, staff_position, staff_barcode")
           .eq("id", user.id)
-          .single();
+          .limit(1);
 
-        if (staffError) throw staffError;
-        staffRows = data;
-      } else {
-        // 2️⃣ Fallback: QR login from localStorage
-        const storedUser = localStorage.getItem("user");
-        if (!storedUser) throw new Error("No logged in user found");
-
-        staffRows = JSON.parse(storedUser);
+        if (!error && data && data.length > 0) {
+          return {
+            staff_name: data[0].staff_name || "Unknown",
+            staff_position: data[0].staff_position || "staff",
+            staff_barcode: data[0].staff_barcode || null,
+          };
+        }
       }
+    } catch (_) {}
 
-      let data;
-      if (
-        staffRows.staff_position === "admin" ||
-        staffRows.staff_position === "super_admin"
-      ) {
-        // Admin sees ALL transactions
-        ({ data } = await supabase
-          .from("transactions")
-          .select(
-            `
-          *,
-          transaction_items (
-            product_code,
-            qty,
-            price,
-            subtotal
-          ),
-          transaction_payments (
-            method,
-            amount
-          )
-        `
-          )
-          .order("created_at", { ascending: false }));
-      } else {
-        // Staff sees ONLY their transactions
-        ({ data } = await supabase
-          .from("transactions")
-          .select(
-            `
-          *,
-          transaction_items (
-            product_code,
-            qty,
-            price,
-            subtotal
-          ),
-          transaction_payments (
-            method,
-            amount
-          )
-        `
-          )
-          .eq("staff", staffRows.staff_name)
-          .order("created_at", { ascending: false }));
+    // Fallback: QR/localStorage login
+    try {
+      const raw = localStorage.getItem("user");
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        return {
+          staff_name: parsed?.staff_name || "Unknown",
+          staff_position: parsed?.staff_position || "staff",
+          staff_barcode: parsed?.staff_barcode || null,
+        };
       }
+    } catch (_) {}
 
-      setTransactions(data || []);
-    } catch (error) {
-      console.error("Error fetching transactions:", error);
-      setError("Failed to load transactions. Please try again.");
-      setTransactions([]);
-    } finally {
-      setTransactionLoading(false);
-    }
+    return {
+      staff_name: "Unknown",
+      staff_position: "staff",
+      staff_barcode: null,
+    };
   };
+
+  const fetchTransactions = async () => {
+  try {
+    setTransactionLoading(true);
+    setError("");
+
+    const staff = await getCurrentStaff();
+
+    let txRes;
+
+    if (["admin", "super_admin"].includes(staff.staff_position)) {
+      txRes = await supabase
+        .from("transactions")
+        .select(`
+          *,
+          transaction_items (product_code, qty, price, subtotal),
+          transaction_payments (method, amount)
+        `)
+        .order("created_at", { ascending: false });
+    } else if (staff.staff_barcode) {
+      // ✅ staff filter by barcode
+      txRes = await supabase
+        .from("transactions")
+        .select(`
+          *,
+          transaction_items (product_code, qty, price, subtotal),
+          transaction_payments (method, amount)
+        `)
+        .eq("staff_barcode", staff.staff_barcode)
+        .order("created_at", { ascending: false });
+    } else {
+      // Fallback if barcode missing (optional): show none
+      txRes = { data: [] };
+    }
+
+    setTransactions(txRes.data || []);
+  } catch (err) {
+    console.error("Error fetching transactions:", err);
+    setError("Failed to load transactions. Please try again.");
+    setTransactions([]);
+  } finally {
+    setTransactionLoading(false);
+  }
+};
+
 
   // Function to determine availability status
   const getAvailabilityStatus = (quantity) => {
@@ -481,29 +461,18 @@ const Logs = () => {
                       {formatDateTime(transaction.created_at)}
                     </TableCell>
                     <TableCell align="left">
-                      {currency(transaction.total_amount)}
+                      ₱{transaction.total_amount?.toFixed(2) || "0.00"}
                     </TableCell>
                     <TableCell align="left">
                       <div style={{ maxWidth: "200px", overflow: "hidden" }}>
-                        {transaction.transaction_items?.length
-                          ? transaction.transaction_items.map((item, idx) => {
-                              const meta = productMap[item.product_code] || {
-                                name: item.product_code,
-                              };
-                              return (
-                                <div
-                                  key={idx}
-                                  style={{
-                                    fontSize: "0.8rem",
-                                    lineHeight: "1.2",
-                                  }}
-                                  title={meta.name}
-                                >
-                                  {meta.name} ×{item.qty}
-                                </div>
-                              );
-                            })
-                          : "N/A"}
+                        {transaction.transaction_items?.map((item, idx) => (
+                          <div
+                            key={idx}
+                            style={{ fontSize: "0.8rem", lineHeight: "1.2" }}
+                          >
+                            {item.product_code} x{item.qty}
+                          </div>
+                        )) || "N/A"}
                       </div>
                     </TableCell>
                     <TableCell align="left">
@@ -514,7 +483,8 @@ const Logs = () => {
                               key={idx}
                               style={{ fontSize: "0.8rem", lineHeight: "1.2" }}
                             >
-                              {payment.method}: {currency(payment.amount)}
+                              {payment.method}: ₱
+                              {payment.amount?.toFixed(2) || "0.00"}
                             </div>
                           )
                         ) || "N/A"}
@@ -732,39 +702,37 @@ const Logs = () => {
       </div>
 
       {/* Tab Navigation */}
-      {staffRole === "admin" ||
-        (staffRole === "super_admin" && (
-          <Nav variant="tabs" className="mx-3 mb-0">
-            <Nav.Item style={{ flex: "1" }}>
-              <Nav.Link
-                active={activeTab === "inventory"}
-                onClick={() => setActiveTab("inventory")}
-                className="cursor-pointer text-center"
-                style={{
-                  fontSize: "0.85rem",
-                  padding: "10px 8px",
-                  whiteSpace: "nowrap",
-                }}
-              >
-                Inventory ({products.length})
-              </Nav.Link>
-            </Nav.Item>
-            <Nav.Item style={{ flex: "1" }}>
-              <Nav.Link
-                active={activeTab === "transactions"}
-                onClick={() => setActiveTab("transactions")}
-                className="cursor-pointer text-center"
-                style={{
-                  fontSize: "0.85rem",
-                  padding: "10px 8px",
-                  whiteSpace: "nowrap",
-                }}
-              >
-                Transactions ({transactions.length})
-              </Nav.Link>
-            </Nav.Item>
-          </Nav>
-        ))}
+
+      <Nav variant="tabs" className="mx-3 mb-0">
+        <Nav.Item style={{ flex: "1" }}>
+          <Nav.Link
+            active={activeTab === "inventory"}
+            onClick={() => setActiveTab("inventory")}
+            className="cursor-pointer text-center"
+            style={{
+              fontSize: "0.85rem",
+              padding: "10px 8px",
+              whiteSpace: "nowrap",
+            }}
+          >
+            Inventory ({products.length})
+          </Nav.Link>
+        </Nav.Item>
+        <Nav.Item style={{ flex: "1" }}>
+          <Nav.Link
+            active={activeTab === "transactions"}
+            onClick={() => setActiveTab("transactions")}
+            className="cursor-pointer text-center"
+            style={{
+              fontSize: "0.85rem",
+              padding: "10px 8px",
+              whiteSpace: "nowrap",
+            }}
+          >
+            Transactions ({transactions.length})
+          </Nav.Link>
+        </Nav.Item>
+      </Nav>
 
       {/* Tab Content */}
       <div className="tab-content">

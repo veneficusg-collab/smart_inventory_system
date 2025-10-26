@@ -4,7 +4,7 @@ import {
   Image,
   InputGroup,
   Form,
-  Modal,             // ⬅️ added
+  Modal, // ⬅️ added
 } from "react-bootstrap";
 import { useEffect, useState, useMemo } from "react";
 import { supabase } from "../supabaseClient";
@@ -66,8 +66,7 @@ const Archive = () => {
         if (typeof key === "string" && key.startsWith("http")) {
           map[r.product_code] = key;
         } else {
-          const { data: pub } = supabase
-            .storage
+          const { data: pub } = supabase.storage
             .from(BUCKET)
             .getPublicUrl(`products/${key}`);
           map[r.product_code] = pub?.publicUrl || "";
@@ -85,6 +84,47 @@ const Archive = () => {
   useEffect(() => {
     fetchArchive();
   }, []);
+
+  const getCurrentStaffName = async () => {
+    try {
+      // 1️⃣ Try Supabase-authenticated session first
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      console.log("🔎 Checking user and staff:");
+      console.log(await supabase.auth.getUser());
+
+      if (user.id) {
+        const { data, error } = await supabase
+          .from("staff")
+          .select("staff_name, staff_barcode")
+          .eq("id", user.id)
+          .limit(1);
+
+        if (!error && data && data.length > 0) {
+          return data[0].staff_name;
+        }
+      }
+    } catch (err) {
+      console.warn("Supabase staff lookup failed:", err);
+    }
+
+    // 2️⃣ Fallback: QR / localStorage login
+    try {
+      const raw = localStorage.getItem("user");
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        // prefer explicit staff_name; fallback to barcode if name missing
+        return parsed.staff_name || parsed.staff_barcode || "Unknown";
+      }
+    } catch (err) {
+      console.warn("Local storage parse failed:", err);
+    }
+
+    // 3️⃣ Ultimate fallback
+    return "Unknown";
+  };
 
   const filtered = useMemo(() => {
     if (!search) return rows;
@@ -114,9 +154,10 @@ const Archive = () => {
     const d = row.product_expiry ? new Date(row.product_expiry) : null;
     const asYMD =
       d && !isNaN(d)
-        ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
-            d.getDate()
-          ).padStart(2, "0")}`
+        ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(
+            2,
+            "0"
+          )}-${String(d.getDate()).padStart(2, "0")}`
         : "";
     setRestoreExpiry(asYMD);
     setShowRestore(true);
@@ -131,7 +172,7 @@ const Archive = () => {
     setRestoreErr("");
   };
 
-    const submitRestore = async () => {
+  const submitRestore = async () => {
     if (!restoreRow) return;
     setRestoreErr("");
 
@@ -150,14 +191,7 @@ const Archive = () => {
     setBusyId(restoreRow.id);
     try {
       // ✅ 1) Log BEFORE restoring
-      const storedUser = localStorage.getItem("user");
-      let staffName = "System";
-      if (storedUser) {
-        try {
-          const u = JSON.parse(storedUser);
-          staffName = u.staff_name || "System";
-        } catch {}
-      }
+      const staffName = await getCurrentStaffName();
 
       const logRow = {
         product_id: restoreRow.product_code,
@@ -239,14 +273,7 @@ const Archive = () => {
     setBusyId(row.id);
     try {
       // ✅ 1) Log BEFORE delete
-      const storedUser = localStorage.getItem("user");
-      let staffName = "System";
-      if (storedUser) {
-        try {
-          const u = JSON.parse(storedUser);
-          staffName = u.staff_name || "System";
-        } catch {}
-      }
+      const staffName = await getCurrentStaffName();
 
       const logRow = {
         product_id: row.product_code,
@@ -284,7 +311,6 @@ const Archive = () => {
     }
   };
 
-
   // ------- UI -------
   if (loading) {
     return (
@@ -302,7 +328,11 @@ const Archive = () => {
   }
 
   return (
-    <Container className="bg-white mx-4 my-2 rounded p-0" fluid style={{ width: "140vh" }}>
+    <Container
+      className="bg-white mx-4 my-2 rounded p-0"
+      fluid
+      style={{ width: "140vh" }}
+    >
       {/* Header */}
       <div className="d-flex flex-wrap justify-content-between align-items-center mx-2">
         <span className="mx-1 mt-3 d-inline-block">
@@ -337,7 +367,11 @@ const Archive = () => {
       )}
 
       {/* Table */}
-      <TableContainer component={Paper} className="my-3" sx={{ maxHeight: 500 }}>
+      <TableContainer
+        component={Paper}
+        className="my-3"
+        sx={{ maxHeight: 500 }}
+      >
         <Table stickyHeader>
           <TableHead>
             <TableRow>
@@ -377,7 +411,9 @@ const Archive = () => {
                             objectFit: "cover",
                             border: "1px solid #eee",
                           }}
-                          onError={(e) => (e.currentTarget.style.display = "none")}
+                          onError={(e) =>
+                            (e.currentTarget.style.display = "none")
+                          }
                         />
                       ) : (
                         <div
@@ -401,13 +437,19 @@ const Archive = () => {
                     <TableCell>{row.product_name}</TableCell>
                     <TableCell>{row.product_code}</TableCell>
                     <TableCell>{row.product_category || "N/A"}</TableCell>
-                    <TableCell>₱{Number(row.supplier_price ?? 0).toFixed(2)}</TableCell>
-                    <TableCell>₱{Number(row.product_price ?? 0).toFixed(2)}</TableCell>
+                    <TableCell>
+                      ₱{Number(row.supplier_price ?? 0).toFixed(2)}
+                    </TableCell>
+                    <TableCell>
+                      ₱{Number(row.product_price ?? 0).toFixed(2)}
+                    </TableCell>
                     <TableCell>{row.product_quantity}</TableCell>
                     <TableCell>{row.product_unit || "N/A"}</TableCell>
                     <TableCell>
                       {row.product_expiry
-                        ? new Date(row.product_expiry).toLocaleDateString("en-US")
+                        ? new Date(row.product_expiry).toLocaleDateString(
+                            "en-US"
+                          )
                         : "—"}
                     </TableCell>
                     <TableCell>
@@ -491,10 +533,18 @@ const Archive = () => {
           </Form>
         </Modal.Body>
         <Modal.Footer>
-          <Button variant="secondary" disabled={restoreSaving} onClick={closeRestoreModal}>
+          <Button
+            variant="secondary"
+            disabled={restoreSaving}
+            onClick={closeRestoreModal}
+          >
             Cancel
           </Button>
-          <Button variant="success" disabled={restoreSaving} onClick={submitRestore}>
+          <Button
+            variant="success"
+            disabled={restoreSaving}
+            onClick={submitRestore}
+          >
             {restoreSaving ? "Restoring..." : "Restore"}
           </Button>
         </Modal.Footer>
