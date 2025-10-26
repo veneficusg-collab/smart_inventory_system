@@ -254,6 +254,7 @@ const StaffRestock = ({ setRender, scannedId }) => {
             product_name: baseProduct.product_name,
             product_quantity: parseInt(quantity, 10),
             product_expiry: inputExpiryDate,
+            product_brand: baseProduct.product_brand,
             product_price: baseProduct.product_price,
             product_category: baseProduct.product_category,
             product_unit: baseProduct.product_unit,
