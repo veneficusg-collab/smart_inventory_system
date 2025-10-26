@@ -4,7 +4,6 @@ import Sidebar from "../components/sidebar";
 import Header from "../components/header";
 import AdminDashboard from "../components/Admin-Dashboard";
 import Inventory from "../components/Inventory";
-import Reports from "../components/Report";
 import ManageStaff from "../components/Manage-Staff";
 import StaffInfo from "../components/staff-info";
 import Logs from "../components/Logs";
