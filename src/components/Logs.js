@@ -100,19 +100,19 @@ const Logs = () => {
       let logsRes;
 
       if (["admin", "super_admin"].includes(staff.staff_position)) {
+        // Admins see all logs
         logsRes = await supabase
           .from("logs")
           .select("*")
           .order("created_at", { ascending: false });
-      } else if (staff.staff_barcode) {
-        // ✅ staff filter by barcode
+      } else if (staff.staff_name) {
+        // ✅ Staff sees only their own logs (match by staff_name)
         logsRes = await supabase
           .from("logs")
           .select("*")
-          .eq("staff_barcode", staff.staff_barcode)
+          .eq("staff", staff.staff_name)
           .order("created_at", { ascending: false });
       } else {
-        // Fallback if barcode missing (optional): show none
         logsRes = { data: [] };
       }
 
@@ -172,49 +172,45 @@ const Logs = () => {
   };
 
   const fetchTransactions = async () => {
-  try {
-    setTransactionLoading(true);
-    setError("");
+    try {
+      setTransactionLoading(true);
+      setError("");
 
-    const staff = await getCurrentStaff();
+      const staff = await getCurrentStaff();
 
-    let txRes;
+      // ✅ Only admins and super_admins can see transactions
+      if (!["admin", "super_admin"].includes(staff.staff_position)) {
+        setTransactions([]); // Clear transactions
+        setTransactionLoading(false);
+        return;
+      }
 
-    if (["admin", "super_admin"].includes(staff.staff_position)) {
-      txRes = await supabase
+      const { data, error } = await supabase
         .from("transactions")
-        .select(`
-          *,
-          transaction_items (product_code, qty, price, subtotal),
-          transaction_payments (method, amount)
-        `)
+        .select(
+          `
+        *,
+        transaction_items (product_code, qty, price, subtotal),
+        transaction_payments (method, amount)
+      `
+        )
         .order("created_at", { ascending: false });
-    } else if (staff.staff_barcode) {
-      // ✅ staff filter by barcode
-      txRes = await supabase
-        .from("transactions")
-        .select(`
-          *,
-          transaction_items (product_code, qty, price, subtotal),
-          transaction_payments (method, amount)
-        `)
-        .eq("staff_barcode", staff.staff_barcode)
-        .order("created_at", { ascending: false });
-    } else {
-      // Fallback if barcode missing (optional): show none
-      txRes = { data: [] };
+
+      if (error) {
+        console.error("Transactions fetch error:", error);
+        setError("Failed to load transactions. Please try again.");
+        setTransactions([]);
+      } else {
+        setTransactions(data || []);
+      }
+    } catch (err) {
+      console.error("Error fetching transactions:", err);
+      setError("Failed to load transactions. Please try again.");
+      setTransactions([]);
+    } finally {
+      setTransactionLoading(false);
     }
-
-    setTransactions(txRes.data || []);
-  } catch (err) {
-    console.error("Error fetching transactions:", err);
-    setError("Failed to load transactions. Please try again.");
-    setTransactions([]);
-  } finally {
-    setTransactionLoading(false);
-  }
-};
-
+  };
 
   // Function to determine availability status
   const getAvailabilityStatus = (quantity) => {
@@ -701,45 +697,56 @@ const Logs = () => {
         </span>
       </div>
 
-      {/* Tab Navigation */}
+   
+      {["admin", "super_admin"].includes(staffRole) ? (
+        <>
+          {/* Tab Navigation */}
+          <Nav variant="tabs" className="mx-3 mb-0">
+            <Nav.Item style={{ flex: "1" }}>
+              <Nav.Link
+                active={activeTab === "inventory"}
+                onClick={() => setActiveTab("inventory")}
+                className="cursor-pointer text-center"
+                style={{
+                  fontSize: "0.85rem",
+                  padding: "10px 8px",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                Inventory ({products.length})
+              </Nav.Link>
+            </Nav.Item>
 
-      <Nav variant="tabs" className="mx-3 mb-0">
-        <Nav.Item style={{ flex: "1" }}>
-          <Nav.Link
-            active={activeTab === "inventory"}
-            onClick={() => setActiveTab("inventory")}
-            className="cursor-pointer text-center"
-            style={{
-              fontSize: "0.85rem",
-              padding: "10px 8px",
-              whiteSpace: "nowrap",
-            }}
-          >
-            Inventory ({products.length})
-          </Nav.Link>
-        </Nav.Item>
-        <Nav.Item style={{ flex: "1" }}>
-          <Nav.Link
-            active={activeTab === "transactions"}
-            onClick={() => setActiveTab("transactions")}
-            className="cursor-pointer text-center"
-            style={{
-              fontSize: "0.85rem",
-              padding: "10px 8px",
-              whiteSpace: "nowrap",
-            }}
-          >
-            Transactions ({transactions.length})
-          </Nav.Link>
-        </Nav.Item>
-      </Nav>
+            <Nav.Item style={{ flex: "1" }}>
+              <Nav.Link
+                active={activeTab === "transactions"}
+                onClick={() => setActiveTab("transactions")}
+                className="cursor-pointer text-center"
+                style={{
+                  fontSize: "0.85rem",
+                  padding: "10px 8px",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                Transactions ({transactions.length})
+              </Nav.Link>
+            </Nav.Item>
+          </Nav>
 
-      {/* Tab Content */}
-      <div className="tab-content">
-        {activeTab === "inventory" && renderInventoryTable()}
-        {activeTab === "transactions" && renderTransactionsTable()}
-      </div>
+          {/* Tab Content */}
+          <div className="tab-content">
+            {activeTab === "inventory" && renderInventoryTable()}
+            {activeTab === "transactions" && renderTransactionsTable()}
+          </div>
+        </>
+      ) : (
+        <>
+          {/* ✅ Non-admin: show inventory logs only */}
+          <div className="mx-3 mt-3">{renderInventoryTable()}</div>
+        </>
+      )}
 
+      {/* Error alert */}
       {error && (
         <div className="alert alert-danger mx-3 mt-3" role="alert">
           {error}

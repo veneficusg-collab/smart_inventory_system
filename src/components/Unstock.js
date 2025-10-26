@@ -115,7 +115,6 @@ const Unstock = ({ setRender, Id }) => {
           product_expiry: updatedProduct.product_expiry,
           product_action: "Unstock", // 👈 key difference
           staff: staffName,
-          product_uuid: updatedProduct.id, // for traceability
         },
       ]);
 

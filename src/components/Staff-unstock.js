@@ -128,7 +128,6 @@ const StaffUnstock = ({ setRender, scannedId }) => {
                 product_expiry: expiryDate,
                 staff: staffName,
                 product_action: "Unstock",
-                product_uuid:product.id
              },
         ])
         .select();

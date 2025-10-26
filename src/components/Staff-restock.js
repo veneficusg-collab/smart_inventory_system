@@ -235,10 +235,6 @@ const StaffRestock = ({ setRender, scannedId }) => {
             product_expiry: inputExpiryDate,
             staff: staffName,
             product_action: "Restock",
-            product_uuid: product.id,
-            supplier_name: supplierName,
-            supplier_number: supplierNumber,
-            supplier_price: parseFloat(supplierPrice) || 0,
           },
         ]);
 
@@ -282,10 +278,7 @@ const StaffRestock = ({ setRender, scannedId }) => {
             product_expiry: inputExpiryDate,
             staff: staffName,
             product_action: "Restock",
-            product_uuid: baseProduct.id,
-            supplier_name: supplierName,
-            supplier_number: supplierNumber,
-            supplier_price: parseFloat(supplierPrice) || 0,
+          
           },
         ]);
 
