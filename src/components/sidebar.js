@@ -13,7 +13,6 @@ import { supabase } from "../supabaseClient";
 import { HiArchiveBoxXMark } from "react-icons/hi2";
 import { FaCalendarTimes } from "react-icons/fa";
 
-
 const Sidebar = ({ setRender, staffRole }) => {
   const handleLogout = async () => {
     try {
@@ -109,7 +108,6 @@ const Sidebar = ({ setRender, staffRole }) => {
                   <span className="mx-3">Manage Staff</span>
                 </div>
               </Link>
-            
 
               <Link
                 underline="hover"
@@ -122,8 +120,8 @@ const Sidebar = ({ setRender, staffRole }) => {
                   <span className="mx-3">Logs</span>
                 </div>
               </Link>
-              
-                <Link
+
+              <Link
                 underline="hover"
                 color="inherit"
                 component="button"
@@ -134,13 +132,51 @@ const Sidebar = ({ setRender, staffRole }) => {
                   <span className="mx-3">Archive</span>
                 </div>
               </Link>
-            
 
+              <Link
+                underline="hover"
+                color="inherit"
+                component="button"
+                onClick={() => setRender("MainInventory")}
+              >
+                <div className="d-flex align-items-center my-3">
+                  <HiArchiveBoxXMark style={{ width: "16px" }} />
+                  <span className="mx-3">Main Stock Room</span>
+                </div>
+              </Link>
+
+              <Link
+                underline="hover"
+                color="inherit"
+                component="button"
+                onClick={() => setRender("MainArchive")}
+              >
+                <div className="d-flex align-items-center my-3">
+                  <HiArchiveBoxXMark style={{ width: "16px" }} />
+                  <span className="mx-3">Main Archive</span>
+                </div>
+              </Link>
+            </>
+          ) : staffRole === "secretary" ? (
+            // ✅ Pharmacy Secretary role
+            <>
+              <div className="d-flex flex-column" style={{ marginLeft: "10px" }}>
+                <Link
+                  underline="hover"
+                  color="inherit"
+                  component="button"
+                  onClick={() => setRender("PharmacySecretary")}
+                >
+                  <div className="d-flex align-items-center my-3">
+                    <FaCalendarTimes style={{ width: "16px" }} />
+                    <span className="mx-3">Retrieval</span>
+                  </div>
+                </Link>
+              </div>
             </>
           ) : (
-            // ✅ Staff role = only Logs
+            // ✅ Staff role = only staff links
             <>
-              {/* Middle section */}
               <div
                 className="d-flex flex-column" // 🔹 makes children stack vertically
                 style={{ marginLeft: "10px" }}
@@ -180,7 +216,6 @@ const Sidebar = ({ setRender, staffRole }) => {
                     <span className="mx-3">Inventory</span>
                   </div>
                 </Link>
-                
 
                 <Link
                   underline="hover"
@@ -193,6 +228,7 @@ const Sidebar = ({ setRender, staffRole }) => {
                     <span className="mx-3">Logs</span>
                   </div>
                 </Link>
+
                 <Link
                   underline="hover"
                   color="inherit"
@@ -202,6 +238,30 @@ const Sidebar = ({ setRender, staffRole }) => {
                   <div className="d-flex align-items-center my-3">
                     <HiArchiveBoxXMark style={{ width: "16px" }} />
                     <span className="mx-3">Archive</span>
+                  </div>
+                </Link>
+
+                <Link
+                  underline="hover"
+                  color="inherit"
+                  component="button"
+                  onClick={() => setRender("MainInventory")}
+                >
+                  <div className="d-flex align-items-center my-3">
+                    <HiArchiveBoxXMark style={{ width: "16px" }} />
+                    <span className="mx-3">Main Inventory</span>
+                  </div>
+                </Link>
+
+                <Link
+                  underline="hover"
+                  color="inherit"
+                  component="button"
+                  onClick={() => setRender("Retrieval")}
+                >
+                  <div className="d-flex align-items-center my-3">
+                    <HiArchiveBoxXMark style={{ width: "16px" }} />
+                    <span className="mx-3">Retrieval</span>
                   </div>
                 </Link>
               </div>

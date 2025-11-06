@@ -286,14 +286,6 @@ const QuickReport = ({ refreshTrigger }) => {
     }
   };
 
-  /**
-   * Restore stock on void AND return details of what we changed
-   * so we can write logs:
-   *  - product_code
-   *  - qty (restored)
-   *  - product_expiry (batch we added back to; 'yyyy-mm-dd' or null)
-   *  - product_uuid (products.id of the batch row we updated)
-   */
   const restoreStockForTransaction = async (transactionId) => {
     const { data: txItems, error: itemsError } = await supabase
       .from("transaction_items")

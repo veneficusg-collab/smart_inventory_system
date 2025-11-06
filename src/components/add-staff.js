@@ -301,6 +301,7 @@ const AddStaff = (props) => {
                 </option>
                 <option value="admin">Admin</option>
                 <option value="staff">Staff</option>
+                <option value="secretary">Secretary</option>
               </Form.Select>
             </Form.Group>
             <Form.Group className="mb-3">

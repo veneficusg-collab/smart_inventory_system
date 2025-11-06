@@ -15,6 +15,10 @@ import StaffUnstock from "../components/Staff-unstock";
 import POS from "../components/POS";
 import Archive from "../components/Archive";
 import DTR from "../components/DTR";
+import MainInventory from "../components/MainInventory";
+import MainArchive from "../components/MainArchive";
+import StaffRetrieval from "../components/StaffRetrieval";
+import PharmacySecretary from "../components/PharmacySecretary";
 
 const Dashboard = () => {
   const [render, setRender] = useState("AdminDashboard");
@@ -45,6 +49,7 @@ const Dashboard = () => {
 
   const setDefaultRender = () => {
     if (staffRole === "staff") setRender("StaffDashboard");
+    else if (staffRole === "secretary") setRender("PharmacySecretary");
     else setRender("AdminDashboard");
   };
 
@@ -259,10 +264,20 @@ const Dashboard = () => {
           )}
           {render === "Logs" && <Logs />}
           {render === "Reports" && <DTR />}
+          {render === "MainInventory" && (
+            <MainInventory staffRole={staffRole} />
+          )}
 
           {/* Staff Links */}
           {render === "StaffDashboard" && (
             <StaffDashboard setScannedId={setScannedId} setRender={setRender} />
+          )}
+          {render === "Retrieval" && (
+            <StaffRetrieval
+              staffId={staffId}
+              staffName={staffName}
+              setRender={setRender}
+            />
           )}
           {render === "Restock" && (
             <StaffRestock scannedId={scannedId} setRender={setRender} />
@@ -272,8 +287,12 @@ const Dashboard = () => {
           )}
           {render === "POS" && <POS />}
 
+          {/* Secretary Links */}
+          {render === "PharmacySecretary" && (<PharmacySecretary staffId={staffId} staffName={staffName} setRender={setRender} />)}
+
           {/* All Users */}
           {render === "Archive" && <Archive />}
+          {render === "MainArchive" && <MainArchive />}
         </Col>
       </Row>
     </Container>
