@@ -324,45 +324,79 @@ const PharmacySecretary = ({ staffId = "", staffName = "", setRender }) => {
       max-width: 7.5in;
       margin: 20px auto;
       padding: 20px;
-      font-size: 12pt;
-      line-height: 1.4;
+      font-size: 10pt;
+      line-height: 1.3;
     }
     .header {
-      text-align: center;
-      border-bottom: 2px solid #000;
-      padding-bottom: 15px;
-      margin-bottom: 20px;
+      margin-bottom: 15px;
     }
-    .header h2 { margin: 8px 0; font-size: 20pt; }
-    .header p { margin: 4px 0; font-size: 11pt; }
-    table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 11pt; }
-    th, td { padding: 8px 6px; text-align: left; border-bottom: 1px solid #ccc; }
-    th { font-weight: bold; background: #f0f0f0; font-size: 11pt; }
-    .separator { border: none; height: 12px; }
+    .header .date-line {
+      font-size: 9pt;
+      margin-bottom: 8px;
+    }
+    .header h2 {
+      text-align: center;
+      margin: 8px 0;
+      font-size: 14pt;
+      font-weight: bold;
+    }
+    .header .info-line {
+      font-size: 9pt;
+      margin: 2px 0;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+      font-size: 9pt;
+      border: 1px solid #000;
+    }
+    th, td {
+      padding: 6px 8px;
+      text-align: left;
+      border: 1px solid #000;
+    }
+    th {
+      font-weight: bold;
+      background: #fff;
+      font-size: 9pt;
+      text-align: center;
+    }
+    td {
+      vertical-align: top;
+    }
     .footer {
       text-align: center;
-      margin-top: 20px;
-      padding-top: 15px;
-      border-top: 2px solid #000;
-      font-size: 11pt;
+      margin-top: 15px;
+      font-size: 9pt;
+      font-weight: bold;
     }
-    .summary { margin-top: 15px; font-weight: bold; font-size: 12pt; }
-    .no-print { margin-top: 20px; text-align: center; }
+    .no-print {
+      margin-top: 20px;
+      text-align: center;
+    }
     @media print {
       .no-print { display: none; }
     }
   </style>
 </head>
 <body>
-  <div class="header">
-    <h2>🐾 Pet Matters</h2>
-    <p>123 Main St, City</p>
-    <p>Tel: 0999-999-9999</p>
-    <p style="margin-top:10px; font-weight:bold; font-size:14pt;">RETRIEVAL REPORT</p>
-    <p>Range: ${escapeHtml(rangeLabel)}</p>
-    <p>Date: ${escapeHtml(new Date().toLocaleDateString())}</p>
-    <p>Time: ${escapeHtml(new Date().toLocaleTimeString())}</p>
-    <p>Staff (retrieval): ${escapeHtml(staffName || "Secretary")}</p>
+ <div class="header">
+    <div style="text-align: center; margin-bottom: 15px; border-bottom: 2px solid #000; padding-bottom: 12px;">
+      <h2 style="font-size: 16pt; margin: 8px 0;">🐾 Pet Matters</h2>
+      <div style="font-size: 9pt; margin: 2px 0;">123 Main St, City</div>
+      <div style="font-size: 9pt; margin: 2px 0;">Tel: 0999-999-9999</div>
+      <div style="font-size: 11pt; font-weight: bold; margin-top: 8px;">RETRIEVAL REPORT</div>
+      <div style="font-size: 9pt; margin-top: 5px;">Range: ${escapeHtml(
+        rangeLabel
+      )}</div>
+      <div style="font-size: 9pt;">Date: ${escapeHtml(
+        new Date().toLocaleDateString()
+      )} | Time: ${escapeHtml(new Date().toLocaleTimeString())}</div>
+      <div style="font-size: 9pt;">Staff: ${escapeHtml(
+        staffName || "Secretary"
+      )}</div>
+    </div>
   </div>
 `;
 
@@ -407,52 +441,41 @@ const PharmacySecretary = ({ staffId = "", staffName = "", setRender }) => {
 
           // Show retrieval number only on first item of each group
           if (itemIdx === 0) {
-            html += `<td rowspan="${items.length}" style="font-weight:bold;vertical-align:top;">#${escapeHtml(
+            html += `<td rowspan="${
+              items.length
+            }" style="font-weight:bold;text-align:center;">${escapeHtml(
               group.retrieval_id
             )}</td>`;
           }
 
           html += `
             <td>${escapeHtml(it.product_name)}</td>
-            <td>${escapeHtml(it.qty ?? it.quantity ?? "-")}</td>
-            <td>${escapeHtml(statusLabel)}</td>
+            <td style="text-align:center;">${escapeHtml(
+              it.qty ?? it.quantity ?? "-"
+            )}</td>
+            <td style="text-align:center;">${escapeHtml(statusLabel)}</td>
             `;
 
           // show staff name (retrieval owner)
           if (itemIdx === 0) {
-            html += `<td rowspan="${items.length}" style="vertical-align:top;">${staffOfRetrieval}</td>`;
+            html += `<td rowspan="${items.length}">${staffOfRetrieval}</td>`;
           }
 
           // Show secretary only on first item of each group
           if (itemIdx === 0) {
-            html += `<td rowspan="${items.length}" style="vertical-align:top;">${secretary}</td>`;
+            html += `<td rowspan="${items.length}">${secretary}</td>`;
           }
 
           html += `</tr>`;
         });
-
-        // Add separator row between retrievals
-        if (idx < reportRows.length - 1) {
-          html += `<tr class="separator"><td colspan="6"></td></tr>`;
-        }
       });
 
       html += `</tbody></table>`;
 
-      html += `<div class="summary">Total Retrievals: ${reportRows.length} | Total Items: ${totalItems}</div>`;
+      html += `<div class="footer">Total Retrievals: ${reportRows.length} &nbsp; | &nbsp; Total Items: ${totalItems}</div>`;
     }
 
-    html += `
-  <div class="footer">
-    <p>*** End of Report ***</p>
-    <p>Thank you!</p>
-  </div>
-  <div class="no-print">
-    <button onclick="window.print()" style="padding:10px 20px; font-size:12pt; cursor:pointer;">🖨️ Print</button>
-    <button onclick="window.close()" style="padding:10px 20px; font-size:12pt; cursor:pointer; margin-left:10px;">Close</button>
-  </div>
-</body>
-</html>`;
+    html += `<div class="no-print"><button onclick="window.print()" style="padding:10px 20px; font-size:10pt; cursor:pointer;">🖨️ Print</button><button onclick="window.close()" style="padding:10px 20px; font-size:10pt; cursor:pointer; margin-left:10px;">Close</button></div></body></html>`;
 
     // Fallback: print in same window using iframe
     const iframe = document.createElement("iframe");
@@ -594,20 +617,22 @@ const PharmacySecretary = ({ staffId = "", staffName = "", setRender }) => {
         centered
       >
         <Modal.Header closeButton>
-          <Modal.Title style={{ fontSize: '1.5rem' }}>Confirmed Retrievals Report</Modal.Title>
+          <Modal.Title style={{ fontSize: "1.5rem" }}>
+            Confirmed Retrievals Report
+          </Modal.Title>
         </Modal.Header>
-        <Modal.Body style={{ fontSize: '1.1rem' }}>
+        <Modal.Body style={{ fontSize: "1.1rem" }}>
           <div className="mb-3 d-flex gap-2 align-items-center">
             <Form.Label
               className="mb-0"
-              style={{ fontWeight: 600, marginRight: 8, fontSize: '1.1rem' }}
+              style={{ fontWeight: 600, marginRight: 8, fontSize: "1.1rem" }}
             >
               Range:
             </Form.Label>
             <Form.Select
               value={reportRange}
               onChange={(e) => setReportRange(e.target.value)}
-              style={{ width: 160, fontSize: '1rem' }}
+              style={{ width: 160, fontSize: "1rem" }}
               size="sm"
             >
               <option value="daily">Daily</option>
@@ -619,69 +644,145 @@ const PharmacySecretary = ({ staffId = "", staffName = "", setRender }) => {
               size="sm"
               onClick={() => generateReport(reportRange)}
               disabled={reportLoading}
-              style={{ marginLeft: 8, fontSize: '1rem' }}
+              style={{ marginLeft: 8, fontSize: "1rem" }}
             >
               Refresh
             </Button>
           </div>
 
-          <div style={{ textAlign: 'center', marginBottom: '20px', borderBottom: '2px solid #000', paddingBottom: '15px' }}>
-            <h4 style={{ fontSize: '1.5rem', marginBottom: '10px' }}>🐾 Pet Matters</h4>
-            <p style={{ fontSize: '1rem', margin: '2px 0' }}>123 Main St, City</p>
-            <p style={{ fontSize: '1rem', margin: '2px 0' }}>Tel: 0999-999-9999</p>
-            <p style={{ fontSize: '1.2rem', fontWeight: 'bold', marginTop: '10px' }}>RETRIEVAL REPORT</p>
-            <p style={{ fontSize: '1rem' }}>Range: {reportRange === "weekly" ? "Weekly" : reportRange === "monthly" ? "Monthly" : "Daily"}</p>
-            <p style={{ fontSize: '1rem' }}>Date: {new Date().toLocaleDateString()}</p>
-            <p style={{ fontSize: '1rem' }}>Staff: {staffName || "Secretary"}</p>
+          <div
+            style={{
+              textAlign: "center",
+              marginBottom: "20px",
+              borderBottom: "2px solid #000",
+              paddingBottom: "15px",
+            }}
+          >
+            <h4 style={{ fontSize: "1.5rem", marginBottom: "10px" }}>
+              🐾 Pet Matters
+            </h4>
+            <p style={{ fontSize: "1rem", margin: "2px 0" }}>
+              123 Main St, City
+            </p>
+            <p style={{ fontSize: "1rem", margin: "2px 0" }}>
+              Tel: 0999-999-9999
+            </p>
+            <p
+              style={{
+                fontSize: "1.2rem",
+                fontWeight: "bold",
+                marginTop: "10px",
+              }}
+            >
+              RETRIEVAL REPORT
+            </p>
+            <p style={{ fontSize: "1rem" }}>
+              Range:{" "}
+              {reportRange === "weekly"
+                ? "Weekly"
+                : reportRange === "monthly"
+                ? "Monthly"
+                : "Daily"}
+            </p>
+            <p style={{ fontSize: "1rem" }}>
+              Date: {new Date().toLocaleDateString()}
+            </p>
+            <p style={{ fontSize: "1rem" }}>
+              Staff: {staffName || "Secretary"}
+            </p>
           </div>
 
           {reportRows.length === 0 ? (
-            <div className="text-muted" style={{ fontSize: '1.1rem', textAlign: 'center' }}>No confirmed retrievals for this period.</div>
+            <div
+              className="text-muted"
+              style={{ fontSize: "1.1rem", textAlign: "center" }}
+            >
+              No confirmed retrievals for this period.
+            </div>
           ) : (
             <>
-              <Table bordered hover style={{ fontSize: '1rem' }}>
-                <thead style={{ backgroundColor: '#f0f0f0' }}>
+              <Table bordered hover style={{ fontSize: "1rem" }}>
+                <thead style={{ backgroundColor: "#f0f0f0" }}>
                   <tr>
-                    <th style={{ padding: '10px', fontSize: '1.1rem' }}>Ret#</th>
-                    <th style={{ padding: '10px', fontSize: '1.1rem' }}>Product</th>
-                    <th style={{ padding: '10px', fontSize: '1.1rem' }}>Qty</th>
-                    <th style={{ padding: '10px', fontSize: '1.1rem' }}>Status</th>
-                    <th style={{ padding: '10px', fontSize: '1.1rem' }}>Staff</th>
-                    <th style={{ padding: '10px', fontSize: '1.1rem' }}>Secretary</th>
+                    <th style={{ padding: "10px", fontSize: "1.1rem" }}>
+                      Ret#
+                    </th>
+                    <th style={{ padding: "10px", fontSize: "1.1rem" }}>
+                      Product
+                    </th>
+                    <th style={{ padding: "10px", fontSize: "1.1rem" }}>Qty</th>
+                    <th style={{ padding: "10px", fontSize: "1.1rem" }}>
+                      Status
+                    </th>
+                    <th style={{ padding: "10px", fontSize: "1.1rem" }}>
+                      Staff
+                    </th>
+                    <th style={{ padding: "10px", fontSize: "1.1rem" }}>
+                      Secretary
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
                   {reportRows.map((group, idx) => {
                     const items = group.items || [];
-                    const secretary = group.secretary_name || group.secretary_id || "N/A";
+                    const secretary =
+                      group.secretary_name || group.secretary_id || "N/A";
                     const staffOfRetrieval = group.staff_name || "N/A";
-                    
+
                     return items.map((it, itemIdx) => {
                       const statusLabel =
-                        it.status === 'pharmacy_stock'
-                          ? 'Stock'
-                          : it.status === 'sold'
-                          ? 'Sold'
-                          : it.status === 'returned'
-                          ? 'Returned'
+                        it.status === "pharmacy_stock"
+                          ? "Stock"
+                          : it.status === "sold"
+                          ? "Sold"
+                          : it.status === "returned"
+                          ? "Returned"
                           : it.status;
-                      
+
                       return (
                         <tr key={`${group.retrieval_id}-${itemIdx}`}>
                           {itemIdx === 0 && (
-                            <td rowSpan={items.length} style={{ padding: '10px', fontWeight: 'bold', verticalAlign: 'top', fontSize: '1rem' }}>
+                            <td
+                              rowSpan={items.length}
+                              style={{
+                                padding: "10px",
+                                fontWeight: "bold",
+                                verticalAlign: "top",
+                                fontSize: "1rem",
+                              }}
+                            >
                               #{group.retrieval_id}
                             </td>
                           )}
-                          <td style={{ padding: '10px', fontSize: '1rem' }}>{it.product_name}</td>
-                          <td style={{ padding: '10px', fontSize: '1rem' }}>{it.qty ?? it.quantity ?? "-"}</td>
-                          <td style={{ padding: '10px', fontSize: '1rem' }}>{statusLabel}</td>
+                          <td style={{ padding: "10px", fontSize: "1rem" }}>
+                            {it.product_name}
+                          </td>
+                          <td style={{ padding: "10px", fontSize: "1rem" }}>
+                            {it.qty ?? it.quantity ?? "-"}
+                          </td>
+                          <td style={{ padding: "10px", fontSize: "1rem" }}>
+                            {statusLabel}
+                          </td>
                           {itemIdx === 0 && (
                             <>
-                              <td rowSpan={items.length} style={{ padding: '10px', verticalAlign: 'top', fontSize: '1rem' }}>
+                              <td
+                                rowSpan={items.length}
+                                style={{
+                                  padding: "10px",
+                                  verticalAlign: "top",
+                                  fontSize: "1rem",
+                                }}
+                              >
                                 {staffOfRetrieval}
                               </td>
-                              <td rowSpan={items.length} style={{ padding: '10px', verticalAlign: 'top', fontSize: '1rem' }}>
+                              <td
+                                rowSpan={items.length}
+                                style={{
+                                  padding: "10px",
+                                  verticalAlign: "top",
+                                  fontSize: "1rem",
+                                }}
+                              >
                                 {secretary}
                               </td>
                             </>
@@ -692,21 +793,34 @@ const PharmacySecretary = ({ staffId = "", staffName = "", setRender }) => {
                   })}
                 </tbody>
               </Table>
-              <div style={{ marginTop: '15px', fontWeight: 'bold', fontSize: '1.1rem', borderTop: '2px solid #000', paddingTop: '15px' }}>
-                Total Retrievals: {reportRows.length} | Total Items: {reportRows.reduce((sum, g) => sum + (g.items?.length || 0), 0)}
+              <div
+                style={{
+                  marginTop: "15px",
+                  fontWeight: "bold",
+                  fontSize: "1.1rem",
+                  borderTop: "2px solid #000",
+                  paddingTop: "15px",
+                }}
+              >
+                Total Retrievals: {reportRows.length} | Total Items:{" "}
+                {reportRows.reduce((sum, g) => sum + (g.items?.length || 0), 0)}
               </div>
             </>
           )}
         </Modal.Body>
         <Modal.Footer>
-          <Button variant="secondary" onClick={() => setShowReportModal(false)} style={{ fontSize: '1rem' }}>
+          <Button
+            variant="secondary"
+            onClick={() => setShowReportModal(false)}
+            style={{ fontSize: "1rem" }}
+          >
             Close
           </Button>
           <Button
             variant="primary"
             onClick={printReport}
             disabled={reportRows.length === 0}
-            style={{ fontSize: '1rem' }}
+            style={{ fontSize: "1rem" }}
           >
             🖨️ Print
           </Button>

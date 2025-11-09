@@ -426,44 +426,72 @@ const AdminPendingConfirmations = () => {
       max-width: 7.5in;
       margin: 20px auto;
       padding: 20px;
-      font-size: 12pt;
-      line-height: 1.4;
+      font-size: 10pt;
+      line-height: 1.3;
     }
     .header {
-      text-align: center;
-      border-bottom: 2px solid #000;
-      padding-bottom: 15px;
-      margin-bottom: 20px;
+      margin-bottom: 15px;
     }
-    .header h2 { margin: 8px 0; font-size: 20pt; }
-    .header p { margin: 4px 0; font-size: 11pt; }
-    table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 11pt; }
-    th, td { padding: 8px 6px; text-align: left; border-bottom: 1px solid #ccc; }
-    th { font-weight: bold; background: #f0f0f0; font-size: 11pt; }
-    .separator { border: none; height: 12px; }
+    .header .date-line {
+      font-size: 9pt;
+      margin-bottom: 8px;
+    }
+    .header h2 {
+      text-align: center;
+      margin: 8px 0;
+      font-size: 14pt;
+      font-weight: bold;
+    }
+    .header .info-line {
+      font-size: 9pt;
+      margin: 2px 0;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+      font-size: 9pt;
+      border: 1px solid #000;
+    }
+    th, td {
+      padding: 6px 8px;
+      text-align: left;
+      border: 1px solid #000;
+    }
+    th {
+      font-weight: bold;
+      background: #fff;
+      font-size: 9pt;
+      text-align: center;
+    }
+    td {
+      vertical-align: top;
+    }
     .footer {
       text-align: center;
-      margin-top: 20px;
-      padding-top: 15px;
-      border-top: 2px solid #000;
-      font-size: 11pt;
+      margin-top: 15px;
+      font-size: 9pt;
+      font-weight: bold;
     }
-    .summary { margin-top: 15px; font-weight: bold; font-size: 12pt; }
-    .no-print { margin-top: 20px; text-align: center; }
+    .no-print {
+      margin-top: 20px;
+      text-align: center;
+    }
     @media print {
       .no-print { display: none; }
     }
   </style>
 </head>
 <body>
-  <div class="header">
-    <h2>🐾 Pet Matters</h2>
-    <p>123 Main St, City</p>
-    <p>Tel: 0999-999-9999</p>
-    <p style="margin-top:10px; font-weight:bold; font-size:14pt;">RETRIEVAL REPORT</p>
-    <p>Range: ${escapeHtml(rangeLabel)}</p>
-    <p>Date: ${escapeHtml(new Date().toLocaleDateString())}</p>
-    <p>Time: ${escapeHtml(new Date().toLocaleTimeString())}</p>
+ <div class="header">
+    <div style="text-align: center; margin-bottom: 15px; border-bottom: 2px solid #000; padding-bottom: 12px;">
+      <h2 style="font-size: 16pt; margin: 8px 0;">🐾 Pet Matters</h2>
+      <div style="font-size: 9pt; margin: 2px 0;">123 Main St, City</div>
+      <div style="font-size: 9pt; margin: 2px 0;">Tel: 0999-999-9999</div>
+      <div style="font-size: 11pt; font-weight: bold; margin-top: 8px;">RETRIEVAL REPORT</div>
+      <div style="font-size: 9pt; margin-top: 5px;">Range: ${escapeHtml(rangeLabel)}</div>
+      <div style="font-size: 9pt;">Date: ${escapeHtml(new Date().toLocaleDateString())} | Time: ${escapeHtml(new Date().toLocaleTimeString())}</div>
+    </div>
   </div>
 `;
 
@@ -508,52 +536,37 @@ const AdminPendingConfirmations = () => {
 
           // Show retrieval number only on first item of each group
           if (itemIdx === 0) {
-            html += `<td rowspan="${items.length}" style="font-weight:bold;vertical-align:top;">#${escapeHtml(
+            html += `<td rowspan="${items.length}" style="font-weight:bold;text-align:center;">${escapeHtml(
               group.retrieval_id
             )}</td>`;
           }
 
           html += `
             <td>${escapeHtml(it.product_name)}</td>
-            <td>${escapeHtml(it.qty ?? it.quantity ?? "-")}</td>
-            <td>${escapeHtml(statusLabel)}</td>
+            <td style="text-align:center;">${escapeHtml(it.qty ?? it.quantity ?? "-")}</td>
+            <td style="text-align:center;">${escapeHtml(statusLabel)}</td>
             `;
 
           // show staff name (retrieval owner)
           if (itemIdx === 0) {
-            html += `<td rowspan="${items.length}" style="vertical-align:top;">${staffOfRetrieval}</td>`;
+            html += `<td rowspan="${items.length}">${staffOfRetrieval}</td>`;
           }
 
           // Show secretary only on first item of each group
           if (itemIdx === 0) {
-            html += `<td rowspan="${items.length}" style="vertical-align:top;">${secretary}</td>`;
+            html += `<td rowspan="${items.length}">${secretary}</td>`;
           }
 
           html += `</tr>`;
         });
-
-        // Add separator row between retrievals
-        if (idx < reportRows.length - 1) {
-          html += `<tr class="separator"><td colspan="6"></td></tr>`;
-        }
       });
 
       html += `</tbody></table>`;
 
-      html += `<div class="summary">Total Retrievals: ${reportRows.length} | Total Items: ${totalItems}</div>`;
+      html += `<div class="footer">Total Retrievals: ${reportRows.length} &nbsp; | &nbsp; Total Items: ${totalItems}</div>`;
     }
 
-    html += `
-  <div class="footer">
-    <p>*** End of Report ***</p>
-    <p>Thank you!</p>
-  </div>
-  <div class="no-print">
-    <button onclick="window.print()" style="padding:10px 20px; font-size:12pt; cursor:pointer;">🖨️ Print</button>
-    <button onclick="window.close()" style="padding:10px 20px; font-size:12pt; cursor:pointer; margin-left:10px;">Close</button>
-  </div>
-</body>
-</html>`;
+    html += `<div class="no-print"><button onclick="window.print()" style="padding:10px 20px; font-size:10pt; cursor:pointer;">🖨️ Print</button><button onclick="window.close()" style="padding:10px 20px; font-size:10pt; cursor:pointer; margin-left:10px;">Close</button></div></body></html>`;
 
     const iframe = document.createElement("iframe");
     iframe.style.position = "fixed";
