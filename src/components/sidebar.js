@@ -257,18 +257,6 @@ const Sidebar = ({ setRender, staffRole }) => {
                     <span className="mx-3">Main Inventory</span>
                   </div>
                 </Link>
-
-                <Link
-                  underline="hover"
-                  color="inherit"
-                  component="button"
-                  onClick={() => setRender("Retrieval")}
-                >
-                  <div className="d-flex align-items-center my-3">
-                    <FaTruckLoading style={{ width: "16px" }} />
-                    <span className="mx-3">Retrieval</span>
-                  </div>
-                </Link>
               </div>
             </>
           )}
