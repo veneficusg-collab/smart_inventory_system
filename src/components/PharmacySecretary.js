@@ -1,4 +1,3 @@
-// ...existing code...
 import React, { useEffect, useState } from "react";
 import {
   Container,
@@ -30,6 +29,7 @@ const PharmacySecretary = ({ staffId = "", staffName = "", setRender }) => {
   const [reportRows, setReportRows] = useState([]);
   const [showReportModal, setShowReportModal] = useState(false);
   const [reportLoading, setReportLoading] = useState(false);
+  const [reportRange, setReportRange] = useState("daily"); // "daily" | "weekly" | "monthly"
 
   useEffect(() => {
     fetchPendingRetrievals();
@@ -188,25 +188,48 @@ const PharmacySecretary = ({ staffId = "", staffName = "", setRender }) => {
     }
   };
 
-  // new: fetch today's confirmed retrievals and show printable modal
-  const generateDailyReport = async () => {
+  // new: fetch confirmed retrievals for a given range and show printable modal
+  const generateReport = async (range = "daily") => {
     setError("");
     setSuccess("");
     setReportLoading(true);
+    setReportRange(range);
     try {
       const today = new Date();
-      const start = new Date(
-        today.getFullYear(),
-        today.getMonth(),
-        today.getDate()
-      ).toISOString();
-      const end = new Date(
-        today.getFullYear(),
-        today.getMonth(),
-        today.getDate() + 1
-      ).toISOString();
+      let start, end;
 
-      // fetch pharmacy_waiting entries confirmed by admin today
+      if (range === "weekly") {
+        // last 7 days (including today)
+        const s = new Date(
+          today.getFullYear(),
+          today.getMonth(),
+          today.getDate() - 6
+        );
+        start = new Date(s.getFullYear(), s.getMonth(), s.getDate()).toISOString();
+        end = new Date(
+          today.getFullYear(),
+          today.getMonth(),
+          today.getDate() + 1
+        ).toISOString();
+      } else if (range === "monthly") {
+        const s = new Date(today.getFullYear(), today.getMonth(), 1);
+        const e = new Date(today.getFullYear(), today.getMonth() + 1, 1);
+        start = s.toISOString();
+        end = e.toISOString();
+      } else {
+        // daily
+        start = new Date(
+          today.getFullYear(),
+          today.getMonth(),
+          today.getDate()
+        ).toISOString();
+        end = new Date(
+          today.getFullYear(),
+          today.getMonth(),
+          today.getDate() + 1
+        ).toISOString();
+      }
+
       const { data: entries, error: e } = await supabase
         .from("pharmacy_waiting")
         .select("*")
@@ -241,17 +264,19 @@ const PharmacySecretary = ({ staffId = "", staffName = "", setRender }) => {
 
       setReportRows(arr);
       setShowReportModal(true);
-    } catch (e) {
-      console.error("generateDailyReport", e);
-      setError("Failed to generate today's report.");
+    } catch (err) {
+      console.error("generateReport", err);
+      setError("Failed to generate report.");
     } finally {
       setReportLoading(false);
     }
   };
 
-// new: print the report modal contents by opening a new window (prettier receipt style)
+  // new: print the report modal contents by opening a new window (prettier receipt style)
   const printReport = () => {
-    const title = `Today's Confirmed Retrievals - ${new Date().toLocaleDateString()}`;
+    const rangeLabel =
+      reportRange === "weekly" ? "Weekly" : reportRange === "monthly" ? "Monthly" : "Daily";
+    const title = `${rangeLabel} Confirmed Retrievals - ${new Date().toLocaleDateString()}`;
     const escapeHtml = (s) =>
       String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
@@ -355,6 +380,7 @@ const PharmacySecretary = ({ staffId = "", staffName = "", setRender }) => {
           <p style="text-align:center;margin:0;font-size:10px;">Tel: 0999-999-9999</p>
           <hr />
           <p><b>RETRIEVAL REPORT</b></p>
+          <p><b>Range:</b> ${escapeHtml(rangeLabel)}</p>
           <p><b>Date:</b> ${escapeHtml(new Date().toLocaleDateString())}</p>
           <p><b>Time:</b> ${escapeHtml(new Date().toLocaleTimeString())}</p>
           <p><b>Staff:</b> ${escapeHtml(staffName || "Secretary")}</p>
@@ -393,7 +419,7 @@ const PharmacySecretary = ({ staffId = "", staffName = "", setRender }) => {
           
           // Show retrieval number only on first item of each group
           if (itemIdx === 0) {
-            html += `<td rowspan="${items.length}" style="font-weight:bold;vertical-align:top;border-right:2px solid #333;">#${it.id}</td>`;
+            html += `<td rowspan="${items.length}" style="font-weight:bold;vertical-align:top;border-right:2px solid #333;">#${escapeHtml(group.retrieval_id)}</td>`;
           }
           
           html += `
@@ -433,33 +459,6 @@ const PharmacySecretary = ({ staffId = "", staffName = "", setRender }) => {
       </html>
     `;
 
-    // Try to open in new window first
-    const w = window.open("", "_blank", "noopener,noreferrer");
-    if (w) {
-      w.document.open();
-      w.document.write(html);
-      w.document.close();
-
-      // ensure focus then print once content loads
-      w.onload = () => {
-        try {
-          w.focus();
-          w.print();
-        } catch (err) {
-          console.warn("print error", err);
-        }
-      };
-
-      // fallback: trigger print after small delay
-      setTimeout(() => {
-        try {
-          w.focus();
-          w.print();
-        } catch (err) {
-          /* ignore */
-        }
-      }, 600);
-    } else {
       // Fallback: print in same window using iframe
       const iframe = document.createElement('iframe');
       iframe.style.position = 'fixed';
@@ -489,7 +488,7 @@ const PharmacySecretary = ({ staffId = "", staffName = "", setRender }) => {
           setError("Print failed. Please try again.");
         }
       };
-    }
+    
   };
 
   if (loading)
@@ -511,12 +510,23 @@ const PharmacySecretary = ({ staffId = "", staffName = "", setRender }) => {
         {success && <Alert variant="success">{success}</Alert>}
 
         <div className="mb-3">
+          <Form.Select
+            value={reportRange}
+            onChange={(e) => setReportRange(e.target.value)}
+            style={{ width: 180, display: "inline-block", marginRight: 8 }}
+            size="sm"
+          >
+            <option value="daily">Daily</option>
+            <option value="weekly">Weekly</option>
+            <option value="monthly">Monthly</option>
+          </Form.Select>
+
           <Button
             variant="primary"
-            onClick={generateDailyReport}
+            onClick={() => generateReport(reportRange)}
             disabled={reportLoading}
           >
-            {reportLoading ? "Preparing..." : "Print Today's Confirmed Retrievals"}
+            {reportLoading ? "Preparing..." : "Print Retrievals"}
           </Button>{" "}
           <Button variant="secondary" onClick={() => fetchPendingRetrievals()}>
             Refresh
@@ -591,6 +601,29 @@ const PharmacySecretary = ({ staffId = "", staffName = "", setRender }) => {
           <Modal.Title>Today's Confirmed Retrievals</Modal.Title>
         </Modal.Header>
         <Modal.Body>
+          <div className="mb-2 d-flex gap-2 align-items-center">
+            <Form.Label className="mb-0" style={{ fontWeight: 600, marginRight: 8 }}>Range:</Form.Label>
+            <Form.Select
+              value={reportRange}
+              onChange={(e) => setReportRange(e.target.value)}
+              style={{ width: 160 }}
+              size="sm"
+            >
+              <option value="daily">Daily</option>
+              <option value="weekly">Weekly</option>
+              <option value="monthly">Monthly</option>
+            </Form.Select>
+            <Button
+              variant="outline-primary"
+              size="sm"
+              onClick={() => generateReport(reportRange)}
+              disabled={reportLoading}
+              style={{ marginLeft: 8 }}
+            >
+              Refresh
+            </Button>
+          </div>
+
           {reportRows.length === 0 ? (
             <div className="text-muted">No confirmed retrievals for today.</div>
           ) : (
@@ -635,4 +668,3 @@ const PharmacySecretary = ({ staffId = "", staffName = "", setRender }) => {
 };
 
 export default PharmacySecretary;
-// ...existing code...

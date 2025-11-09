@@ -1,3 +1,4 @@
+// ...existing code...
 import React, { useEffect, useState } from "react";
 import { Table, Button, Spinner, Modal, Alert, Container } from "react-bootstrap";
 import { supabase } from "../supabaseClient";
@@ -9,7 +10,33 @@ const ConfirmedRetrievals = ({ staffId = "", staffName = "", limit = 50 }) => {
   const [selected, setSelected] = useState(null); // selected retrieval for modal
   const [showModal, setShowModal] = useState(false);
 
-  const fetchConfirmedRetrievals = async (l = limit) => {
+  // new: period toggle (daily | weekly | monthly | all)
+  const [period, setPeriod] = useState("daily");
+
+  const computeRange = (p) => {
+    const now = new Date();
+    if (p === "daily") {
+      const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const end = new Date(start);
+      end.setDate(start.getDate() + 1);
+      return { start: start.toISOString(), end: end.toISOString() };
+    }
+    if (p === "weekly") {
+      const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      start.setDate(start.getDate() - start.getDay());
+      const end = new Date(start);
+      end.setDate(start.getDate() + 7);
+      return { start: start.toISOString(), end: end.toISOString() };
+    }
+    if (p === "monthly") {
+      const start = new Date(now.getFullYear(), now.getMonth(), 1);
+      const end = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+      return { start: start.toISOString(), end: end.toISOString() };
+    }
+    return { start: null, end: null };
+  };
+
+  const fetchConfirmedRetrievals = async (l = limit, p = period) => {
     setError("");
     setLoading(true);
     try {
@@ -21,7 +48,14 @@ const ConfirmedRetrievals = ({ staffId = "", staffName = "", limit = 50 }) => {
         .order("created_at", { ascending: false })
         .limit(l);
 
+      // apply staff filter if provided
       if (staffId) query = query.eq("secretary_id", staffId);
+
+      // apply period filter if applicable
+      const { start, end } = computeRange(p);
+      if (start && end) {
+        query = query.gte("created_at", start).lt("created_at", end);
+      }
 
       const { data: waiting, error: waitErr } = await query;
       if (waitErr) throw waitErr;
@@ -56,7 +90,7 @@ const ConfirmedRetrievals = ({ staffId = "", staffName = "", limit = 50 }) => {
   useEffect(() => {
     fetchConfirmedRetrievals();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [staffId]);
+  }, [staffId, period]);
 
   const handleRowClick = (r) => {
     setSelected(r);
@@ -98,10 +132,46 @@ const ConfirmedRetrievals = ({ staffId = "", staffName = "", limit = 50 }) => {
       >
       <div className="mb-3 d-flex justify-content-between align-items-center">
         <div><strong>Confirmed Retrievals</strong></div>
-        <div>
-          <Button size="sm" variant="outline-secondary" onClick={() => fetchConfirmedRetrievals()}>
-            Refresh
-          </Button>
+        <div className="d-flex align-items-center gap-2">
+          <div style={{ display: "flex", gap: 6 }}>
+            <Button
+              size="sm"
+              variant={period === "daily" ? "primary" : "outline-secondary"}
+              onClick={() => setPeriod("daily")}
+              aria-pressed={period === "daily"}
+            >
+              Daily
+            </Button>
+            <Button
+              size="sm"
+              variant={period === "weekly" ? "primary" : "outline-secondary"}
+              onClick={() => setPeriod("weekly")}
+              aria-pressed={period === "weekly"}
+            >
+              Weekly
+            </Button>
+            <Button
+              size="sm"
+              variant={period === "monthly" ? "primary" : "outline-secondary"}
+              onClick={() => setPeriod("monthly")}
+              aria-pressed={period === "monthly"}
+            >
+              Monthly
+            </Button>
+            <Button
+              size="sm"
+              variant={period === "all" ? "primary" : "outline-secondary"}
+              onClick={() => setPeriod("all")}
+              aria-pressed={period === "all"}
+            >
+              All
+            </Button>
+          </div>
+          <div>
+            <Button size="sm" variant="outline-secondary" onClick={() => fetchConfirmedRetrievals()}>
+              Refresh
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -169,3 +239,4 @@ const ConfirmedRetrievals = ({ staffId = "", staffName = "", limit = 50 }) => {
 };
 
 export default ConfirmedRetrievals;
+// ...existing code...

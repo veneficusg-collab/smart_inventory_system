@@ -274,8 +274,6 @@ const Dashboard = () => {
           )}
           {render === "Retrieval" && (
             <StaffRetrieval
-              staffId={staffId}
-              staffName={staffName}
               setRender={setRender}
             />
           )}

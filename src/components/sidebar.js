@@ -12,6 +12,9 @@ import { ClipboardClock, Logs } from "lucide-react";
 import { supabase } from "../supabaseClient";
 import { HiArchiveBoxXMark } from "react-icons/hi2";
 import { FaCalendarTimes } from "react-icons/fa";
+import { FaTruckLoading } from "react-icons/fa";
+import { MdOutlineInventory2 } from "react-icons/md";
+import { IoTrashBinOutline } from "react-icons/io5";
 
 const Sidebar = ({ setRender, staffRole }) => {
   const handleLogout = async () => {
@@ -140,7 +143,7 @@ const Sidebar = ({ setRender, staffRole }) => {
                 onClick={() => setRender("MainInventory")}
               >
                 <div className="d-flex align-items-center my-3">
-                  <HiArchiveBoxXMark style={{ width: "16px" }} />
+                  <MdOutlineInventory2 style={{ width: "16px" }} />
                   <span className="mx-3">Main Stock Room</span>
                 </div>
               </Link>
@@ -152,7 +155,7 @@ const Sidebar = ({ setRender, staffRole }) => {
                 onClick={() => setRender("MainArchive")}
               >
                 <div className="d-flex align-items-center my-3">
-                  <HiArchiveBoxXMark style={{ width: "16px" }} />
+                  <IoTrashBinOutline style={{ width: "16px" }} />
                   <span className="mx-3">Main Archive</span>
                 </div>
               </Link>
@@ -160,7 +163,19 @@ const Sidebar = ({ setRender, staffRole }) => {
           ) : staffRole === "secretary" ? (
             // ✅ Pharmacy Secretary role
             <>
+                       
               <div className="d-flex flex-column" style={{ marginLeft: "10px" }}>
+                     <Link
+                  underline="hover"
+                  color="inherit"
+                  component="button"
+                  onClick={() => setRender("POS")}
+                >
+                  <div className="d-flex align-items-center my-2">
+                    <RiProductHuntFill style={{ width: "16px" }} />
+                    <span className="mx-3">POS</span>
+                  </div>
+                </Link>
                 <Link
                   underline="hover"
                   color="inherit"
@@ -181,17 +196,7 @@ const Sidebar = ({ setRender, staffRole }) => {
                 className="d-flex flex-column" // 🔹 makes children stack vertically
                 style={{ marginLeft: "10px" }}
               >
-                <Link
-                  underline="hover"
-                  color="inherit"
-                  component="button"
-                  onClick={() => setRender("POS")}
-                >
-                  <div className="d-flex align-items-center my-2">
-                    <RiProductHuntFill style={{ width: "16px" }} />
-                    <span className="mx-3">POS</span>
-                  </div>
-                </Link>
+
 
                 <Link
                   underline="hover"
@@ -248,7 +253,7 @@ const Sidebar = ({ setRender, staffRole }) => {
                   onClick={() => setRender("MainInventory")}
                 >
                   <div className="d-flex align-items-center my-3">
-                    <HiArchiveBoxXMark style={{ width: "16px" }} />
+                    <MdOutlineInventory2 style={{ width: "16px" }} />
                     <span className="mx-3">Main Inventory</span>
                   </div>
                 </Link>
@@ -260,7 +265,7 @@ const Sidebar = ({ setRender, staffRole }) => {
                   onClick={() => setRender("Retrieval")}
                 >
                   <div className="d-flex align-items-center my-3">
-                    <HiArchiveBoxXMark style={{ width: "16px" }} />
+                    <FaTruckLoading style={{ width: "16px" }} />
                     <span className="mx-3">Retrieval</span>
                   </div>
                 </Link>

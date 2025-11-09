@@ -1,3 +1,4 @@
+// ...existing code...
 import React, { useEffect, useState } from "react";
 import { Table, Button, Container } from "react-bootstrap";
 import { supabase } from "../supabaseClient";
@@ -5,27 +6,55 @@ import { supabase } from "../supabaseClient";
 const RetrievalLogs = ({ staffId = "", limit = 20 }) => {
   const [retrievalLogs, setRetrievalLogs] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [period, setPeriod] = useState("daily"); // "daily" | "weekly" | "monthly" | "all"
 
-  const fetchRetrievalLogs = async (l = limit) => {
+  const computeRange = (p) => {
+    const now = new Date();
+    if (p === "daily") {
+      const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const end = new Date(start);
+      end.setDate(start.getDate() + 1);
+      return { start: start.toISOString(), end: end.toISOString() };
+    }
+    if (p === "weekly") {
+      // week starting Sunday
+      const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      start.setDate(start.getDate() - start.getDay());
+      const end = new Date(start);
+      end.setDate(start.getDate() + 7);
+      return { start: start.toISOString(), end: end.toISOString() };
+    }
+    if (p === "monthly") {
+      const start = new Date(now.getFullYear(), now.getMonth(), 1);
+      const end = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+      return { start: start.toISOString(), end: end.toISOString() };
+    }
+    return { start: null, end: null };
+  };
+
+  const fetchRetrievalLogs = async (l = limit, p = period) => {
     setLoading(true);
     try {
-        console.log("Fetching retrieval logs for staffId:", staffId, "with limit:", l);
+      console.log("Fetching retrieval logs for staffId:", staffId, "with limit:", l, "period:", p);
       if (!staffId) {
-        // show nothing if no staff id supplied
         setRetrievalLogs([]);
         setLoading(false);
         return;
       }
 
-      const { data, error } = await supabase
+      let q = supabase
         .from("main_retrievals")
-        .select(
-          "id, staff_id, staff_name, items, retrieved_at, status"
-        )
+        .select("id, staff_id, staff_name, items, retrieved_at, status")
         .eq("staff_id", staffId)
         .order("retrieved_at", { ascending: false })
         .limit(l);
 
+      const { start, end } = computeRange(p);
+      if (start && end) {
+        q = q.gte("retrieved_at", start).lt("retrieved_at", end);
+      }
+
+      const { data, error } = await q;
       if (error) throw error;
       setRetrievalLogs(data || []);
     } catch (e) {
@@ -38,9 +67,9 @@ const RetrievalLogs = ({ staffId = "", limit = 20 }) => {
 
   useEffect(() => {
     fetchRetrievalLogs();
-    // re-fetch when staffId changes
+    // re-fetch when staffId or period changes
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [staffId]);
+  }, [staffId, period]);
 
   const renderItemsSummary = (items) => {
     if (!items || !Array.isArray(items) || items.length === 0) return "-";
@@ -59,11 +88,46 @@ const RetrievalLogs = ({ staffId = "", limit = 20 }) => {
         <div>
           <strong>My Recent Retrievals</strong>
         </div>
-        <div>
+        <div className="d-flex align-items-center gap-2">
+          <div className="me-2" style={{ display: "flex", gap: 6 }}>
+            <Button
+              size="sm"
+              variant={period === "daily" ? "primary" : "outline-secondary"}
+              onClick={() => setPeriod("daily")}
+              aria-pressed={period === "daily"}
+            >
+              Daily
+            </Button>
+            <Button
+              size="sm"
+              variant={period === "weekly" ? "primary" : "outline-secondary"}
+              onClick={() => setPeriod("weekly")}
+              aria-pressed={period === "weekly"}
+            >
+              Weekly
+            </Button>
+            <Button
+              size="sm"
+              variant={period === "monthly" ? "primary" : "outline-secondary"}
+              onClick={() => setPeriod("monthly")}
+              aria-pressed={period === "monthly"}
+            >
+              Monthly
+            </Button>
+            <Button
+              size="sm"
+              variant={period === "all" ? "primary" : "outline-secondary"}
+              onClick={() => setPeriod("all")}
+              aria-pressed={period === "all"}
+            >
+              All
+            </Button>
+          </div>
+
           <Button
             size="sm"
             variant="outline-secondary"
-            onClick={() => fetchRetrievalLogs()}
+            onClick={() => fetchRetrievalLogs(undefined, period)}
           >
             Refresh
           </Button>
@@ -129,3 +193,4 @@ const RetrievalLogs = ({ staffId = "", limit = 20 }) => {
 };
 
 export default RetrievalLogs;
+// ...existing code...
