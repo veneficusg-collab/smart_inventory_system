@@ -141,6 +141,15 @@ const LoginForm = () => {
             >
               Login with QR Code
             </Button>
+
+            {/* Main Stock Room button — go to dedicated page */}
+            <Button
+              variant="secondary"
+              className="w-100 mt-2"
+              onClick={() => navigate("/main-stock-room")}
+            >
+              Main Stock Room
+            </Button>
           </div>
         </Col>
       </Row>
@@ -164,6 +173,8 @@ const LoginForm = () => {
           </Button>
         </Modal.Footer>
       </Modal>
+
+      {/* Main Stock Room is now a separate route/page at /main-stock-room */}
     </Container>
   );
 };

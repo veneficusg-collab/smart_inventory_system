@@ -1,5 +1,4 @@
 import React, { useState } from "react";
-import { Container } from "react-bootstrap";
 import {
   Button,
   Form,
@@ -10,6 +9,7 @@ import {
   Card,
   Row,
   Col,
+  Container,
 } from "react-bootstrap";
 import { supabase } from "../supabaseClient";
 import RetrievalLogs from "./retrievalLogs";
@@ -52,14 +52,14 @@ const StaffRetrieval = ({
   const handleStaffScanned = async (scannedId) => {
     if (!scannedId) return;
 
-  let { data: staff, error } = await supabase
-    .from('staff')
-    .select('id')
-    .eq('staff_barcode', scannedId)
-    .single();
+    let { data: staff, error } = await supabase
+      .from("staff")
+      .select("id")
+      .eq("staff_barcode", scannedId)
+      .single();
 
-    if(error){
-      alert('Staff not found');
+    if (error) {
+      alert("Staff not found");
       return;
     }
 
@@ -76,17 +76,17 @@ const StaffRetrieval = ({
   };
 
   const handleScanStaffQR = async (e) => {
-    e.preventDefault();
+    e && e.preventDefault();
     setError("");
     if (!staffQR) return setError("Please scan / enter staff QR (staff id).");
     await lookupStaff(staffQR);
   };
 
   const handleAddBarcode = async (e) => {
-    e.preventDefault();
+    e && e.preventDefault();
     setError("");
     setSuccess("");
-    const code = barcode.trim();
+    const code = (barcode || "").trim();
     if (!code) return setError("Enter a barcode first.");
     // prevent duplicates: add one more to existing if exists
     const existing = items.find((it) => it.product_id === code);
@@ -214,185 +214,194 @@ const StaffRetrieval = ({
     }
   };
 
+  // ---------- Render (responsive) ----------
   return (
     <>
-      <Container
-        fluid
-        className="bg-white m-4 rounded p-4"
-        style={{ width: "140vh" }}
-      >
-        {/* Staff QR card (like StaffDashboard) */}
-        <Row className="mb-3 justify-content-center">
-          <Col md={6} lg={5} className="mb-3 d-flex justify-content-center" style={{ minHeight: "18vh" }}>
-            <Card className="shadow-sm p-3" style={{ width: "100%", maxWidth: 460 }}>
-               <div className="d-flex flex-column align-items-center">
-                 <h5 className="mb-2 text-center">Scan / Enter Staff QR</h5>
- 
-                 <Button
-                   variant="primary"
-                   className="d-flex justify-content-center align-items-center mb-2"
-                   style={{ width: "90px", height: "90px", borderRadius: "12px" }}
-                   onClick={() => setStaffScannerShow(true)}
-                 >
-                   <LuScanBarcode size={36} />
-                 </Button>
- 
-                 <div className="w-100 mt-2">
-                   {/* hide input once staff is identified; show again when cleared */}
-                   {!staffName ? (
-                     <Form onSubmit={handleScanStaffQR} className="d-flex gap-2">
-                       <Form.Control
-                         size="sm"
-                         placeholder="Type staff QR / ID"
-                         value={staffQR}
-                         onChange={(e) => setStaffQR(e.target.value)}
-                       />
-                       <Button type="submit" size="sm" variant="outline-primary">
-                         Set
-                       </Button>
-                     </Form>
-                   ) : null}
-                 </div>
- 
-                 <div className="mt-2 text-center" style={{ fontSize: 13 }}>
-                   {staffName ? (
-                     <>
-                       <div>Staff: <strong>{staffName}</strong></div>
-                       <Button size="sm" variant="outline-danger" className="mt-2" onClick={clearStaff}>
-                         Clear Staff
-                       </Button>
-                     </>
-                   ) : (
-                     <div style={{ fontSize: 12, color: "#666" }}>
-                       Tap scan button or type staff QR to begin
-                     </div>
-                   )}
-                 </div>
-               </div>
-             </Card>
-          </Col>
-        </Row>
- 
-        {/* Barcode modals */}
-        {staffScannerShow && (
-          <BarcodeModal
-            show={staffScannerShow}
-            setBarcodeModalShow={setStaffScannerShow}
-            setProductId={handleStaffScanned}
-          />
-        )}
-        {barcodeModalShow && (
-          <BarcodeModal
-            show={barcodeModalShow}
-            setBarcodeModalShow={setBarcodeModalShow}
-            setProductId={setBarcode}
-          />
-        )}
- 
-        {/* only reveal retrieval UI after staff is identified */}
-        {!staffName ? (
-          <div className="text-center text-muted" style={{ marginTop: 20 }}>
-            Please scan staff QR to reveal retrieval form and start adding items.
-          </div>
-        ) : (
-          <>
-            <h4>Staff — Retrieve Items (Main Stock Room)</h4>
- 
-            {error && <Alert variant="danger">{error}</Alert>}
-            {success && <Alert variant="success">{success}</Alert>}
- 
-            <Form onSubmit={handleAddBarcode} className="mb-3">
-              <Form.Label>Scan / Enter Product Barcode</Form.Label>
-              <InputGroup>
-                <FormControl
-                  placeholder="Scan barcode or type product code and press Add"
-                  value={barcode}
-                  onChange={(e) => setBarcode(e.target.value)}
-                  autoFocus
-                />
-                <Button
-                  variant="outline-secondary"
-                  onClick={() => setBarcodeModalShow(true)}
-                >
-                  <LuScanBarcode />
-                </Button>
-                <Button type="submit" variant="outline-success">
-                  Add
-                </Button>
-              </InputGroup>
-              <div className="form-text">
-                You can scan multiple barcodes. Duplicate scans increase quantity.
-              </div>
-            </Form>
- 
-            <Table striped bordered hover size="sm">
-              <thead>
-                <tr>
-                  <th>Barcode</th>
-                  <th>Product</th>
-                  <th>Unit</th>
-                  <th style={{ width: 120 }}>Qty</th>
-                  <th>Stock</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {items.length === 0 && (
-                  <tr>
-                    <td colSpan="6" className="text-center text-muted">
-                      No items added
-                    </td>
-                  </tr>
+      <Container fluid className="py-4" style={{ background: "transparent" }}>
+        <div className="d-flex justify-content-center">
+          <div style={{ width: "100%", maxWidth: 1200, minWidth: 1000 }}>
+            <Card className="shadow-sm">
+              <Card.Body>
+                <Row className="justify-content-center mb-3">
+                  <Col xs={12} sm={10} md={8} lg={6}>
+                    <Card className="text-center border-0">
+                      <Card.Body>
+                        <h5 className="mb-2">Scan / Enter Staff QR</h5>
+
+                        <Button
+                          variant="primary"
+                          className="d-flex justify-content-center align-items-center mb-2 mx-auto"
+                          style={{ width: 90, height: 90, borderRadius: 12 }}
+                          onClick={() => setStaffScannerShow(true)}
+                        >
+                          <LuScanBarcode size={36} />
+                        </Button>
+
+                        <div className="w-100 mt-2">
+                          {!staffName ? (
+                            <Form onSubmit={handleScanStaffQR} className="d-flex gap-2">
+                              <Form.Control
+                                size="sm"
+                                placeholder="Type staff QR / ID"
+                                value={String(staffQR || "")}
+                                onChange={(e) => setStaffQR(e.target.value)}
+                                style={{ minWidth: 0 }}
+                              />
+                              <Button type="submit" size="sm" variant="outline-primary">
+                                Set
+                              </Button>
+                            </Form>
+                          ) : null}
+                        </div>
+
+                        <div className="mt-2" style={{ fontSize: 13 }}>
+                          {staffName ? (
+                            <>
+                              <div>Staff: <strong>{staffName}</strong></div>
+                              <Button size="sm" variant="outline-danger" className="mt-2" onClick={clearStaff}>
+                                Clear Staff
+                              </Button>
+                            </>
+                          ) : (
+                            <div style={{ fontSize: 12, color: "#666" }}>
+                              Tap scan button or type staff QR to begin
+                            </div>
+                          )}
+                        </div>
+                      </Card.Body>
+                    </Card>
+                  </Col>
+                </Row>
+
+                {staffScannerShow && (
+                  <BarcodeModal
+                    show={staffScannerShow}
+                    setBarcodeModalShow={setStaffScannerShow}
+                    setProductId={handleStaffScanned}
+                  />
                 )}
-                {items.map((it) => (
-                  <tr key={it.product_id}>
-                    <td>{it.product_id}</td>
-                    <td>{it.product_name}</td>
-                    <td>{it.unit}</td>
-                    <td>
-                      <Form.Control
-                        type="number"
-                        min="1"
-                        value={it.qty}
-                        onChange={(e) => updateQty(it.product_id, e.target.value)}
-                      />
-                    </td>
-                    <td>{it.stock}</td>
-                    <td>
-                      <Button
-                        size="sm"
-                        variant="danger"
-                        onClick={() => removeItem(it.product_id)}
-                      >
-                        Remove
-                      </Button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </Table>
- 
-            <div className="d-flex gap-2">
-              <Button variant="primary" onClick={handleConfirm} disabled={loading}>
-                {loading ? "Processing..." : "OK — Confirm Retrieval"}
-              </Button>
-              <Button
-                variant="secondary"
-                onClick={() => {
-                  setItems([]);
-                  setError("");
-                  setSuccess("");
-                }}
-              >
-                Clear
-              </Button>
+                {barcodeModalShow && (
+                  <BarcodeModal
+                    show={barcodeModalShow}
+                    setBarcodeModalShow={setBarcodeModalShow}
+                    setProductId={setBarcode}
+                  />
+                )}
+
+                {!staffName ? (
+                  <div className="text-center text-muted my-4">
+                    Please scan staff QR to reveal retrieval form and start adding items.
+                  </div>
+                ) : (
+                  <>
+                    <h4 className="mt-3">Staff — Retrieve Items (Main Stock Room)</h4>
+
+                    {error && <Alert variant="danger">{error}</Alert>}
+                    {success && <Alert variant="success">{success}</Alert>}
+
+                    <Form onSubmit={handleAddBarcode} className="mb-3">
+                      <Form.Label>Scan / Enter Product Barcode</Form.Label>
+                      <InputGroup className="mb-2" style={{ gap: 8, flexWrap: "wrap" }}>
+                        <FormControl
+                          placeholder="Scan barcode or type product code and press Add"
+                          value={barcode}
+                          onChange={(e) => setBarcode(e.target.value)}
+                          autoFocus
+                          style={{ flex: 1, minWidth: 0 }}
+                        />
+                        <div className="d-flex" style={{ gap: 8 }}>
+                          <Button variant="outline-secondary" onClick={() => setBarcodeModalShow(true)}>
+                            <LuScanBarcode />
+                          </Button>
+                          <Button type="submit" variant="outline-success">
+                            Add
+                          </Button>
+                        </div>
+                      </InputGroup>
+                      <div className="form-text mb-2">
+                        You can scan multiple barcodes. Duplicate scans increase quantity.
+                      </div>
+
+                      <div className="table-responsive mb-3">
+                        <Table striped bordered hover size="sm" className="mb-0">
+                          <thead>
+                            <tr>
+                              <th>Barcode</th>
+                              <th>Product</th>
+                              <th>Unit</th>
+                              <th style={{ width: 120 }}>Qty</th>
+                              <th>Stock</th>
+                              <th></th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {items.length === 0 && (
+                              <tr>
+                                <td colSpan="6" className="text-center text-muted">
+                                  No items added
+                                </td>
+                              </tr>
+                            )}
+                            {items.map((it) => (
+                              <tr key={it.product_id}>
+                                <td style={{ whiteSpace: "nowrap" }}>{it.product_id}</td>
+                                <td style={{ minWidth: 120 }}>{it.product_name}</td>
+                                <td>{it.unit}</td>
+                                <td style={{ width: 120 }}>
+                                  <Form.Control
+                                    type="number"
+                                    min="1"
+                                    value={it.qty}
+                                    onChange={(e) => updateQty(it.product_id, e.target.value)}
+                                  />
+                                </td>
+                                <td>{it.stock}</td>
+                                <td>
+                                  <Button size="sm" variant="danger" onClick={() => removeItem(it.product_id)}>
+                                    Remove
+                                  </Button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </Table>
+                      </div>
+
+                      <div className="d-flex flex-wrap gap-2">
+                        <Button variant="primary" onClick={handleConfirm} disabled={loading}>
+                          {loading ? "Processing..." : "OK — Confirm Retrieval"}
+                        </Button>
+                        <Button
+                          variant="secondary"
+                          onClick={() => {
+                            setItems([]);
+                            setError("");
+                            setSuccess("");
+                          }}
+                        >
+                          Clear
+                        </Button>
+                      </div>
+                    </Form>
+                  </>
+                )}
+              </Card.Body>
+            </Card>
+          </div>
+        </div>
+
+        {staffName ? (
+          <div className="d-flex justify-content-center mt-4">
+            <div style={{ width: "100%", maxWidth: 1200, minWidth: 1000 }}>
+              <Card className="shadow-sm">
+                <Card.Body>
+                  <RetrievalLogs staffId={staffQR || initialStaffId} limit={20} />
+                </Card.Body>
+              </Card>
             </div>
-          </>
-        )}
+          </div>
+        ) : null}
       </Container>
-      {staffName ? (
-        <RetrievalLogs staffId={staffQR || initialStaffId} limit={20} />
-      ) : null}
     </>
   );
 };

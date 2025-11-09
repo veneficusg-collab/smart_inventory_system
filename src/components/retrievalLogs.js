@@ -1,4 +1,3 @@
-// ...existing code...
 import React, { useEffect, useState } from "react";
 import { Table, Button, Container } from "react-bootstrap";
 import { supabase } from "../supabaseClient";
@@ -79,118 +78,118 @@ const RetrievalLogs = ({ staffId = "", limit = 20 }) => {
   };
 
   return (
-    <Container
-      fluid
-      className="bg-white m-4 rounded p-4"
-      style={{ width: "140vh" }}
-    >
-      <div className="d-flex justify-content-between align-items-center mb-2">
-        <div>
-          <strong>My Recent Retrievals</strong>
-        </div>
-        <div className="d-flex align-items-center gap-2">
-          <div className="me-2" style={{ display: "flex", gap: 6 }}>
-            <Button
-              size="sm"
-              variant={period === "daily" ? "primary" : "outline-secondary"}
-              onClick={() => setPeriod("daily")}
-              aria-pressed={period === "daily"}
-            >
-              Daily
-            </Button>
-            <Button
-              size="sm"
-              variant={period === "weekly" ? "primary" : "outline-secondary"}
-              onClick={() => setPeriod("weekly")}
-              aria-pressed={period === "weekly"}
-            >
-              Weekly
-            </Button>
-            <Button
-              size="sm"
-              variant={period === "monthly" ? "primary" : "outline-secondary"}
-              onClick={() => setPeriod("monthly")}
-              aria-pressed={period === "monthly"}
-            >
-              Monthly
-            </Button>
-            <Button
-              size="sm"
-              variant={period === "all" ? "primary" : "outline-secondary"}
-              onClick={() => setPeriod("all")}
-              aria-pressed={period === "all"}
-            >
-              All
-            </Button>
+    <div className="d-flex justify-content-center" style={{ padding: 20 }}>
+      <div style={{ width: "100%", maxWidth: 1200 }}>
+        <div className="bg-white m-0 rounded shadow-sm p-4">
+          <div className="d-flex justify-content-between align-items-center mb-2">
+            <div>
+              <strong>My Recent Retrievals</strong>
+            </div>
+            <div className="d-flex align-items-center gap-2">
+              <div className="me-2" style={{ display: "flex", gap: 6 }}>
+                <Button
+                  size="sm"
+                  variant={period === "daily" ? "primary" : "outline-secondary"}
+                  onClick={() => setPeriod("daily")}
+                  aria-pressed={period === "daily"}
+                >
+                  Daily
+                </Button>
+                <Button
+                  size="sm"
+                  variant={period === "weekly" ? "primary" : "outline-secondary"}
+                  onClick={() => setPeriod("weekly")}
+                  aria-pressed={period === "weekly"}
+                >
+                  Weekly
+                </Button>
+                <Button
+                  size="sm"
+                  variant={period === "monthly" ? "primary" : "outline-secondary"}
+                  onClick={() => setPeriod("monthly")}
+                  aria-pressed={period === "monthly"}
+                >
+                  Monthly
+                </Button>
+                <Button
+                  size="sm"
+                  variant={period === "all" ? "primary" : "outline-secondary"}
+                  onClick={() => setPeriod("all")}
+                  aria-pressed={period === "all"}
+                >
+                  All
+                </Button>
+              </div>
+
+              <Button
+                size="sm"
+                variant="outline-secondary"
+                onClick={() => fetchRetrievalLogs(undefined, period)}
+              >
+                Refresh
+              </Button>
+            </div>
           </div>
 
-          <Button
-            size="sm"
-            variant="outline-secondary"
-            onClick={() => fetchRetrievalLogs(undefined, period)}
-          >
-            Refresh
-          </Button>
+          <div className="table-responsive">
+            <Table striped bordered hover size="sm" className="mb-0">
+              <thead>
+                <tr>
+                  <th style={{ width: 180 }}>Retrieval ID</th>
+                  <th>Staff</th>
+                  <th>Items</th>
+                  <th style={{ width: 180 }}>Retrieved At</th>
+                  <th style={{ width: 120 }}>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {loading && (
+                  <tr>
+                    <td colSpan="5" className="text-center text-muted">
+                      Loading...
+                    </td>
+                  </tr>
+                )}
+
+                {!loading && retrievalLogs.length === 0 && (
+                  <tr>
+                    <td colSpan="5" className="text-center text-muted">
+                      No retrievals found for this staff
+                    </td>
+                  </tr>
+                )}
+
+                {!loading &&
+                  retrievalLogs.map((r) => (
+                    <tr key={r.id}>
+                      <td style={{ fontSize: 12 }}>{r.id}</td>
+                      <td>{r.staff_name || r.staff_id}</td>
+                      <td
+                        style={{
+                          maxWidth: 400,
+                          whiteSpace: "normal",
+                          wordBreak: "break-word",
+                        }}
+                      >
+                        {renderItemsSummary(r.items)}
+                      </td>
+                      <td>
+                        {r.retrieved_at_local
+                          ? r.retrieved_at_local
+                          : r.retrieved_at
+                          ? new Date(r.retrieved_at).toLocaleString()
+                          : "-"}
+                      </td>
+                      <td>{r.status || "-"}</td>
+                    </tr>
+                  ))}
+              </tbody>
+            </Table>
+          </div>
         </div>
       </div>
-
-      <Table striped bordered hover size="sm">
-        <thead>
-          <tr>
-            <th style={{ width: 180 }}>Retrieval ID</th>
-            <th>Staff</th>
-            <th>Items</th>
-            <th style={{ width: 180 }}>Retrieved At</th>
-            <th style={{ width: 120 }}>Status</th>
-          </tr>
-        </thead>
-        <tbody>
-          {loading && (
-            <tr>
-              <td colSpan="5" className="text-center text-muted">
-                Loading...
-              </td>
-            </tr>
-          )}
-
-          {!loading && retrievalLogs.length === 0 && (
-            <tr>
-              <td colSpan="5" className="text-center text-muted">
-                No retrievals found for this staff
-              </td>
-            </tr>
-          )}
-
-          {!loading &&
-            retrievalLogs.map((r) => (
-              <tr key={r.id}>
-                <td style={{ fontSize: 12 }}>{r.id}</td>
-                <td>{r.staff_name || r.staff_id}</td>
-                <td
-                  style={{
-                    maxWidth: 400,
-                    whiteSpace: "nowrap",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                  }}
-                >
-                  {renderItemsSummary(r.items)}
-                </td>
-                <td>
-                  {r.retrieved_at_local
-                    ? r.retrieved_at_local
-                    : r.retrieved_at
-                    ? new Date(r.retrieved_at).toLocaleString()
-                    : "-"}
-                </td>
-                <td>{r.status || "-"}</td>
-              </tr>
-            ))}
-        </tbody>
-      </Table>
-    </Container>
+    </div>
   );
 };
 
 export default RetrievalLogs;
-// ...existing code...
