@@ -9,7 +9,7 @@ import StaffInfo from "../components/staff-info";
 import Logs from "../components/Logs";
 import StaffDashboard from "../components/StaffDashboard";
 import StaffRestock from "../components/Staff-restock";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { supabase } from "../supabaseClient";
 import StaffUnstock from "../components/Staff-unstock";
 import POS from "../components/POS";
@@ -28,6 +28,14 @@ const Dashboard = () => {
   const [scannedId, setScannedId] = useState("");
   const [loading, setLoading] = useState(true); // ✅ Added loading state
 
+  const setDefaultRender = useCallback(() => {
+  if (staffRole === "staff") setRender("StaffDashboard");
+  else if (staffRole === "secretary") setRender("PharmacySecretary");
+  else setRender("AdminDashboard");
+}, [staffRole]); // ✅ Add staffRole as a dependency since it's used inside
+
+
+
   useEffect(() => {
     fetchCurrentUser();
   }, []);
@@ -37,7 +45,7 @@ const Dashboard = () => {
       setDefaultRender();
       setLoading(false); // ✅ stop loading once role is known
     }
-  }, [staffRole]);
+  }, [staffRole, setDefaultRender]);
 
   useEffect(() => {
     (async () => {
@@ -47,11 +55,6 @@ const Dashboard = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const setDefaultRender = () => {
-    if (staffRole === "staff") setRender("StaffDashboard");
-    else if (staffRole === "secretary") setRender("PharmacySecretary");
-    else setRender("AdminDashboard");
-  };
 
   const fetchCurrentUser = async () => {
     try {
