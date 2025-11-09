@@ -271,7 +271,7 @@ const AdminPendingConfirmations = () => {
     try {
       const now = new Date().toISOString();
       // fetch waiting rows for this retrieval_id (still unconfirmed)
-      const { data: waitingRows, error: fetchWaitErr } = await supabase
+      const {  error: fetchWaitErr } = await supabase
         .from("pharmacy_waiting")
         .select("*")
         .eq("retrieval_id", retrievalId)

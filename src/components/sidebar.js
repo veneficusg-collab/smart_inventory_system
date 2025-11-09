@@ -8,7 +8,7 @@ import { RiProductHuntFill } from "react-icons/ri";
 import { AiFillProduct } from "react-icons/ai";
 import { CiLogout } from "react-icons/ci";
 import { Link } from "@mui/material";
-import { ClipboardClock, Logs } from "lucide-react";
+import { ClipboardClock } from "lucide-react";
 import { supabase } from "../supabaseClient";
 import { HiArchiveBoxXMark } from "react-icons/hi2";
 import { FaCalendarTimes } from "react-icons/fa";

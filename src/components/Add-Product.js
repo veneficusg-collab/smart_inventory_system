@@ -1,6 +1,5 @@
 import { Col, Container, Row } from "react-bootstrap";
 import { Form, Button, Alert, InputGroup } from "react-bootstrap"; // merged imports
-import Modal from "react-bootstrap/Modal";
 import { useEffect, useState } from "react";
 import { supabase } from "../supabaseClient";
 import BarcodeModal from "./barcode-modal";
@@ -216,6 +215,8 @@ const AddProduct = ({ setRender }) => {
     const name = newCategoryName.trim();
     if (!name) {
       setCategoryError("Category name cannot be empty.");
+      console.warn(categoryError);
+      
       return;
     }
 
@@ -356,7 +357,7 @@ const AddProduct = ({ setRender }) => {
         .substring(2)}.${fileExt}`;
       const filePath = `products/${fileName}`;
 
-      const { data, error } = await supabase.storage
+      const { error } = await supabase.storage
         .from("Smart-Inventory-System-(Pet Matters)") // Make sure this bucket exists in your Supabase Storage
         .upload(filePath, file, {
           cacheControl: "3600",
@@ -422,7 +423,7 @@ const AddProduct = ({ setRender }) => {
         created_at: new Date().toISOString(),
       };
 
-      const { data: insertedProducts, error: insertError } = await supabase
+      const {  error: insertError } = await supabase
         .from("products")
         .insert([productData])
         .select();

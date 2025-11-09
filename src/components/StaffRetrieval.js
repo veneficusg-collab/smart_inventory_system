@@ -29,7 +29,6 @@ const StaffRetrieval = ({
   const [success, setSuccess] = useState("");
   const [loading, setLoading] = useState(false);
   const [barcodeModalShow, setBarcodeModalShow] = useState(false);
-  const [productId, setProductId] = useState("");
 
   // staff QR scanner modal state
   const [staffScannerShow, setStaffScannerShow] = useState(false);

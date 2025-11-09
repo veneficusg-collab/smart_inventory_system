@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Table, Button, Container } from "react-bootstrap";
+import { Table, Button } from "react-bootstrap";
 import { supabase } from "../supabaseClient";
 
 const RetrievalLogs = ({ staffId = "", limit = 20 }) => {
