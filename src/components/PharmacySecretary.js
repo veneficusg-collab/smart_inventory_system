@@ -13,7 +13,6 @@ import ConfirmedRetrievals from "./confirmedRetrievals";
 
 const STATUS_OPTIONS = [
   { value: "pharmacy_stock", label: "For Pharmacy Stock (Pending)" },
-  { value: "sold", label: "Sold" },
   { value: "returned", label: "Returned" },
 ];
 
@@ -111,6 +110,30 @@ const PharmacySecretary = ({ staffId = "", staffName = "", setRender }) => {
     );
   };
 
+  const checkAndUpdateRetrievalStatus = async (retrievalId) => {
+  try {
+    const { data, error } = await supabase
+      .from("pharmacy_waiting")
+      .select("status")
+      .eq("retrieval_id", retrievalId);
+
+    if (error) throw error;
+
+    const allReturned = data.every((item) => item.status === "returned");
+
+    if (allReturned) {
+      const { error: updErr } = await supabase
+        .from("main_retrievals")
+        .update({ status: "returned" })
+        .eq("id", retrievalId);
+
+      if (updErr) console.warn("failed to update main_retrievals", updErr);
+    }
+  } catch (e) {
+    console.error("checkAndUpdateRetrievalStatus error", e);
+  }
+};
+
   const moveToWaiting = async (retrieval) => {
     setError("");
     setSuccess("");
@@ -134,11 +157,18 @@ const PharmacySecretary = ({ staffId = "", staffName = "", setRender }) => {
         product_uuid: it.product_uuid || it.uuid || null,
       }));
 
+      // Check if all items are returned
+      const allReturned = waitingRows.every(
+        (item) => item.status === "returned"
+      );
+
       // insert waiting rows (no stock changes here)
       const { error: waitErr } = await supabase
         .from("pharmacy_waiting")
         .insert(waitingRows);
       if (waitErr) throw waitErr;
+
+      await checkAndUpdateRetrievalStatus(retrieval.id);
 
       // mark retrieval as processed by secretary but pending admin
       const { error: updErr } = await supabase
@@ -146,7 +176,7 @@ const PharmacySecretary = ({ staffId = "", staffName = "", setRender }) => {
         .update({
           secretary_processed: true,
           secretary_processed_at: now,
-          status: "pending_admin",
+          status: allReturned ? "returned" : "pending_admin",
         })
         .eq("id", retrieval.id);
       if (updErr)
@@ -164,13 +194,15 @@ const PharmacySecretary = ({ staffId = "", staffName = "", setRender }) => {
           status: w.status,
         })),
         timestamp: now,
-        note: "Pending admin confirmation",
+        note: allReturned ? "All items returned" : "Pending admin confirmation",
       };
 
       const { error: notifErr } = await supabase.from("notifications").insert([
         {
           target_role: "admin",
-          title: `Pending Retrieval — ${retrieval.id}`,
+          title: allReturned
+            ? `Retrieval Returned — ${retrieval.id}`
+            : `Pending Retrieval — ${retrieval.id}`,
           body: JSON.stringify(notifPayload),
           read: false,
         },
@@ -179,7 +211,11 @@ const PharmacySecretary = ({ staffId = "", staffName = "", setRender }) => {
 
       // remove moved retrieval from local list so UI re-renders immediately (no full refresh)
       setRetrievals((prev) => prev.filter((r) => r.id !== retrieval.id));
-      setSuccess("Items moved to waiting list (pending admin confirmation).");
+      setSuccess(
+        allReturned
+          ? "Retrieval marked as returned."
+          : "Items moved to waiting list (pending admin confirmation)."
+      );
     } catch (e) {
       console.error("moveToWaiting error", e);
       setError("Failed to move items to waiting. See console.");
@@ -431,8 +467,6 @@ const PharmacySecretary = ({ staffId = "", staffName = "", setRender }) => {
           const statusLabel =
             it.status === "pharmacy_stock"
               ? "Stock"
-              : it.status === "sold"
-              ? "Sold"
               : it.status === "returned"
               ? "Returned"
               : it.status;
@@ -590,7 +624,7 @@ const PharmacySecretary = ({ staffId = "", staffName = "", setRender }) => {
                     <td>{it.qty ?? it.quantity ?? "-"}</td>
                     <td>
                       <Form.Select
-                        value={it.status || "pharmacy_stock"}
+                        value={it.status}
                         onChange={(e) =>
                           setItemStatus(r.id, it.product_id, e.target.value)
                         }
@@ -733,8 +767,6 @@ const PharmacySecretary = ({ staffId = "", staffName = "", setRender }) => {
                       const statusLabel =
                         it.status === "pharmacy_stock"
                           ? "Stock"
-                          : it.status === "sold"
-                          ? "Sold"
                           : it.status === "returned"
                           ? "Returned"
                           : it.status;

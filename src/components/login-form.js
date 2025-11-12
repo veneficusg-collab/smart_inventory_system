@@ -11,6 +11,8 @@ const LoginForm = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showModal, setShowModal] = useState(false); // ✅ Modal toggle
+  const [forgotPasswordEmail, setForgotPasswordEmail] = useState("");
+  const [showForgotPasswordModal, setShowForgotPasswordModal] = useState(false);
   const navigate = useNavigate();
 
   // email/password login
@@ -29,7 +31,6 @@ const LoginForm = () => {
     }
   };
 
-  // handle QR scan result
   // handle QR scan result
   const handleQrResult = async (result) => {
     try {
@@ -58,6 +59,21 @@ const LoginForm = () => {
       window.location.href = "/dashboard";
     } catch (err) {
       console.error("QR login failed:", err.message);
+    }
+  };
+
+  const handleForgotPassword = async (e) => {
+    e.preventDefault();
+
+    let { error } = await supabase.auth.resetPasswordForEmail(forgotPasswordEmail, {
+      redirectTo: `${window.location.origin}/reset-password`,
+    });
+    if (error) {
+      console.log(error);
+      alert("Forgot password failed: " + error.message);
+    } else {
+      alert("Password reset email sent. Please check your email.");
+      setShowForgotPasswordModal(false);
     }
   };
 
@@ -123,7 +139,12 @@ const LoginForm = () => {
                   />
                 </Form.Group>
 
-                <Button variant="link" size="sm" style={{ marginTop: "-3px" }}>
+                <Button
+                  variant="link"
+                  size="sm"
+                  style={{ marginTop: "-3px" }}
+                  onClick={() => setShowForgotPasswordModal(true)}
+                >
                   Forgot password?
                 </Button>
               </div>
@@ -174,7 +195,42 @@ const LoginForm = () => {
         </Modal.Footer>
       </Modal>
 
-      {/* Main Stock Room is now a separate route/page at /main-stock-room */}
+      {/* Forgot Password Modal */}
+      <Modal
+        show={showForgotPasswordModal}
+        onHide={() => setShowForgotPasswordModal(false)}
+        centered
+        size="md"
+      >
+        <Modal.Header closeButton>
+          <Modal.Title>Forgot Password</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          <Form onSubmit={handleForgotPassword}>
+            <Form.Group className="mb-3" controlId="forgotPasswordEmail">
+              <Form.Label>Email</Form.Label>
+              <Form.Control
+                type="email"
+                placeholder="Enter your email"
+                value={forgotPasswordEmail}
+                onChange={(e) => setForgotPasswordEmail(e.target.value)}
+                required
+              />
+            </Form.Group>
+            <Button variant="primary" type="submit" className="w-100">
+              Send Reset Password Email
+            </Button>
+          </Form>
+        </Modal.Body>
+        <Modal.Footer>
+          <Button
+            variant="secondary"
+            onClick={() => setShowForgotPasswordModal(false)}
+          >
+            Cancel
+          </Button>
+        </Modal.Footer>
+      </Modal>
     </Container>
   );
 };

@@ -13,16 +13,21 @@ const NearExpiration = () => {
     const fetchNearExpiration = async () => {
       setLoading(true);
 
-      // next 7 days window
-      const in7Days = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
-        .toISOString();
+      // --- CHANGE START ---
+      // 6 months window (approximately 182.5 days)
+      const months = 6;
+      const daysInSixMonths = months * 30.4375; // average days in a month
+      const millisecondsInSixMonths = daysInSixMonths * 24 * 60 * 60 * 1000;
+      
+      const inSixMonths = new Date(Date.now() + millisecondsInSixMonths).toISOString();
+      // --- CHANGE END ---
 
       const { data, error } = await supabase
         .from("products")
         .select(
           "product_ID, product_name, product_quantity, product_expiry, product_img"
         )
-        .lte("product_expiry", in7Days)
+        .lte("product_expiry", inSixMonths)
         .not("product_expiry", "is", null); // ignore null expiries
 
       if (error) {

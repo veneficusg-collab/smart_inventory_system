@@ -356,7 +356,7 @@ const DTR = () => {
                 <TableCell>Total</TableCell>
                 <TableCell>Items</TableCell>
                 <TableCell>Payments</TableCell>
-                <TableCell>Staff</TableCell>
+                <TableCell>Personnel</TableCell>
                 <TableCell>Status</TableCell>
               </TableRow>
             </TableHead>

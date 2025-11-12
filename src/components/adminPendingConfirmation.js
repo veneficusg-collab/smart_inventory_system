@@ -141,6 +141,86 @@ const AdminPendingConfirmations = () => {
     }
   };
 
+  const _AddProductsForItems = async (items) => {
+    for (const item of items || []) {
+      try {
+        const addQty = Number(item.qty ?? item.quantity ?? 0);
+        if (!addQty) continue;
+
+        // find product in products by product_ID
+        const { data: pByBarcode, error: pByBarcodeErr } = await supabase
+          .from("products")
+          .select("*")
+          .eq("product_ID", item.product_id)
+          .limit(1);
+
+        if (pByBarcodeErr) {
+          console.error("product lookup error", pByBarcodeErr);
+          continue;
+        }
+        const prod = (pByBarcode && pByBarcode.length && pByBarcode[0]) || null;
+        if (!prod) {
+          console.warn(`Product not found for item ${item.product_id}`);
+          alert(
+            "Product not found in Pharmacy, Creating Product to Pharmacy: " +
+              item.product_id
+          );
+
+          let { data: main_stock_room_products, error: mainError } =
+            await supabase
+              .from("main_stock_room_products")
+              .select("*")
+              .eq("product_ID", item.product_id);
+          if (mainError) {
+            console.error("product lookup error", mainError);
+            continue;
+          }
+
+          const product = main_stock_room_products[0];
+
+          const { data, error } = await supabase
+            .from("products")
+            .insert([
+              {
+                product_ID: product.product_ID,
+                product_name: product.product_name,
+                product_quantity: addQty,
+                product_price: product.product_price,
+                product_unit: product.product_unit,
+                product_category: product.product_category,
+                product_expiry: product.product_expiry,
+                product_img: product.product_img,
+                supplier_name: product.supplier_name,
+                supplier_number: product.supplier_number,
+                product_brand: product.product_brand,
+                supplier_price: product.supplier_price,
+                id: product.id,
+              },
+            ])
+            .select();
+
+          if (error) {
+            console.error("Failed creating product in Pharmacy", error);
+          }
+        }
+
+        const currentQty = Number(prod.product_quantity ?? 0);
+        const newQty = Math.max(0, currentQty + addQty);
+
+        const { error: updProdErr } = await supabase
+          .from("products")
+          .update({ product_quantity: newQty })
+          .eq("id", prod.id);
+
+        if (updProdErr) {
+          console.error("Failed updating product qty for", prod.id, updProdErr);
+        }
+      } catch (innerErr) {
+        console.error("Error deducting product qty for item", item, innerErr);
+      }
+    }
+  };
+
   const confirmGroup = async (retrievalId) => {
     setProcessingId(retrievalId);
     setError("");
@@ -171,7 +251,8 @@ const AdminPendingConfirmations = () => {
         .from("main_retrievals")
         .update({ status: "admin_confirmed" })
         .eq("id", retrievalId);
-      if (updMainErr) console.warn("main_retrievals update warning:", updMainErr);
+      if (updMainErr)
+        console.warn("main_retrievals update warning:", updMainErr);
 
       // notify secretary/staff
       const notif = {
@@ -180,7 +261,9 @@ const AdminPendingConfirmations = () => {
         body: JSON.stringify({ retrieval_id: retrievalId, confirmed_at: now }),
         read: false,
       };
-      const { error: notifErr } = await supabase.from("notifications").insert([notif]);
+      const { error: notifErr } = await supabase
+        .from("notifications")
+        .insert([notif]);
       if (notifErr) console.warn("notification insert issue:", notifErr);
 
       setGroups((prev) => prev.filter((g) => g.retrieval_id !== retrievalId));
@@ -218,6 +301,7 @@ const AdminPendingConfirmations = () => {
 
           // deduct product stock for this group's items
           await _deductProductsForItems(waitingRows);
+          await _AddProductsForItems(waitingRows);
 
           // mark waiting rows confirmed
           const { error: updWaitErr } = await supabase
@@ -231,16 +315,22 @@ const AdminPendingConfirmations = () => {
             .from("main_retrievals")
             .update({ status: "admin_confirmed" })
             .eq("id", g.retrieval_id);
-          if (updMainErr) console.warn("main_retrievals update warning:", updMainErr);
+          if (updMainErr)
+            console.warn("main_retrievals update warning:", updMainErr);
 
           // notify per retrieval (optional)
           const notif = {
             target_role: "secretary",
             title: `Retrieval ${g.retrieval_id} confirmed by admin`,
-            body: JSON.stringify({ retrieval_id: g.retrieval_id, confirmed_at: now }),
+            body: JSON.stringify({
+              retrieval_id: g.retrieval_id,
+              confirmed_at: now,
+            }),
             read: false,
           };
-          const { error: notifErr } = await supabase.from("notifications").insert([notif]);
+          const { error: notifErr } = await supabase
+            .from("notifications")
+            .insert([notif]);
           if (notifErr) console.warn("notification insert issue:", notifErr);
         } catch (innerErr) {
           console.error("confirmAll - failed for", g.retrieval_id, innerErr);
@@ -253,7 +343,9 @@ const AdminPendingConfirmations = () => {
         setGroups([]);
         setSuccess("All pending retrievals confirmed.");
       } else {
-        setGroups((prev) => prev.filter((g) => failed.includes(g.retrieval_id)));
+        setGroups((prev) =>
+          prev.filter((g) => failed.includes(g.retrieval_id))
+        );
         setError(`Failed to confirm retrievals: ${failed.join(", ")}`);
         setSuccess(`Confirmed others successfully.`);
       }
@@ -271,7 +363,7 @@ const AdminPendingConfirmations = () => {
     try {
       const now = new Date().toISOString();
       // fetch waiting rows for this retrieval_id (still unconfirmed)
-      const {  error: fetchWaitErr } = await supabase
+      const { error: fetchWaitErr } = await supabase
         .from("pharmacy_waiting")
         .select("*")
         .eq("retrieval_id", retrievalId)
@@ -295,7 +387,8 @@ const AdminPendingConfirmations = () => {
           status: "admin_declined",
         })
         .eq("id", retrievalId);
-      if (updMainErr) console.warn("main_retrievals update warning:", updMainErr);
+      if (updMainErr)
+        console.warn("main_retrievals update warning:", updMainErr);
 
       // notify secretary/staff
       const notif = {
@@ -307,7 +400,9 @@ const AdminPendingConfirmations = () => {
         }),
         read: false,
       };
-      const { error: notifErr } = await supabase.from("notifications").insert([notif]);
+      const { error: notifErr } = await supabase
+        .from("notifications")
+        .insert([notif]);
       if (notifErr) console.warn("notification insert issue:", notifErr);
 
       setGroups((prev) => prev.filter((g) => g.retrieval_id !== retrievalId));
@@ -332,17 +427,37 @@ const AdminPendingConfirmations = () => {
       const today = new Date();
       let start, end;
       if (range === "weekly") {
-        const s = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 6);
-        start = new Date(s.getFullYear(), s.getMonth(), s.getDate()).toISOString();
-        end = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1).toISOString();
+        const s = new Date(
+          today.getFullYear(),
+          today.getMonth(),
+          today.getDate() - 6
+        );
+        start = new Date(
+          s.getFullYear(),
+          s.getMonth(),
+          s.getDate()
+        ).toISOString();
+        end = new Date(
+          today.getFullYear(),
+          today.getMonth(),
+          today.getDate() + 1
+        ).toISOString();
       } else if (range === "monthly") {
         const s = new Date(today.getFullYear(), today.getMonth(), 1);
         const e = new Date(today.getFullYear(), today.getMonth() + 1, 1);
         start = s.toISOString();
         end = e.toISOString();
       } else {
-        start = new Date(today.getFullYear(), today.getMonth(), today.getDate()).toISOString();
-        end = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1).toISOString();
+        start = new Date(
+          today.getFullYear(),
+          today.getMonth(),
+          today.getDate()
+        ).toISOString();
+        end = new Date(
+          today.getFullYear(),
+          today.getMonth(),
+          today.getDate() + 1
+        ).toISOString();
       }
 
       const { data: entries, error } = await supabase
@@ -407,9 +522,18 @@ const AdminPendingConfirmations = () => {
 
   // print the current reportRows
   const printReport = () => {
-    const rangeLabel = reportRange === "weekly" ? "Weekly" : reportRange === "monthly" ? "Monthly" : "Daily";
+    const rangeLabel =
+      reportRange === "weekly"
+        ? "Weekly"
+        : reportRange === "monthly"
+        ? "Monthly"
+        : "Daily";
     const title = `${rangeLabel} Confirmed Retrievals - ${new Date().toLocaleDateString()}`;
-    const escapeHtml = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    const escapeHtml = (s) =>
+      String(s ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
 
     let html = `<!DOCTYPE html>
 <html>
@@ -489,8 +613,12 @@ const AdminPendingConfirmations = () => {
       <div style="font-size: 9pt; margin: 2px 0;">123 Main St, City</div>
       <div style="font-size: 9pt; margin: 2px 0;">Tel: 0999-999-9999</div>
       <div style="font-size: 11pt; font-weight: bold; margin-top: 8px;">RETRIEVAL REPORT</div>
-      <div style="font-size: 9pt; margin-top: 5px;">Range: ${escapeHtml(rangeLabel)}</div>
-      <div style="font-size: 9pt;">Date: ${escapeHtml(new Date().toLocaleDateString())} | Time: ${escapeHtml(new Date().toLocaleTimeString())}</div>
+      <div style="font-size: 9pt; margin-top: 5px;">Range: ${escapeHtml(
+        rangeLabel
+      )}</div>
+      <div style="font-size: 9pt;">Date: ${escapeHtml(
+        new Date().toLocaleDateString()
+      )} | Time: ${escapeHtml(new Date().toLocaleTimeString())}</div>
     </div>
   </div>
 `;
@@ -526,8 +654,6 @@ const AdminPendingConfirmations = () => {
           const statusLabel =
             it.status === "pharmacy_stock"
               ? "Stock"
-              : it.status === "sold"
-              ? "Sold"
               : it.status === "returned"
               ? "Returned"
               : it.status;
@@ -536,14 +662,18 @@ const AdminPendingConfirmations = () => {
 
           // Show retrieval number only on first item of each group
           if (itemIdx === 0) {
-            html += `<td rowspan="${items.length}" style="font-weight:bold;text-align:center;">${escapeHtml(
+            html += `<td rowspan="${
+              items.length
+            }" style="font-weight:bold;text-align:center;">${escapeHtml(
               group.retrieval_id
             )}</td>`;
           }
 
           html += `
             <td>${escapeHtml(it.product_name)}</td>
-            <td style="text-align:center;">${escapeHtml(it.qty ?? it.quantity ?? "-")}</td>
+            <td style="text-align:center;">${escapeHtml(
+              it.qty ?? it.quantity ?? "-"
+            )}</td>
             <td style="text-align:center;">${escapeHtml(statusLabel)}</td>
             `;
 
@@ -636,28 +766,37 @@ const AdminPendingConfirmations = () => {
               onClick={confirmAll}
               disabled={processingAll || loading || groups.length === 0}
             >
-              {processingAll ? "Confirming all..." : `Confirm All (${groups.length})`}
+              {processingAll
+                ? "Confirming all..."
+                : `Confirm All (${groups.length})`}
             </Button>
           </div>
         </div>
 
         {/* Report preview modal */}
-        <Modal show={showReportModal} onHide={() => setShowReportModal(false)} size="xl" centered>
+        <Modal
+          show={showReportModal}
+          onHide={() => setShowReportModal(false)}
+          size="xl"
+          centered
+        >
           <Modal.Header closeButton>
-            <Modal.Title style={{ fontSize: '1.5rem' }}>Confirmed Retrievals Report</Modal.Title>
+            <Modal.Title style={{ fontSize: "1.5rem" }}>
+              Confirmed Retrievals Report
+            </Modal.Title>
           </Modal.Header>
-          <Modal.Body style={{ fontSize: '1.1rem' }}>
+          <Modal.Body style={{ fontSize: "1.1rem" }}>
             <div className="mb-3 d-flex gap-2 align-items-center">
               <Form.Label
                 className="mb-0"
-                style={{ fontWeight: 600, marginRight: 8, fontSize: '1.1rem' }}
+                style={{ fontWeight: 600, marginRight: 8, fontSize: "1.1rem" }}
               >
                 Range:
               </Form.Label>
               <Form.Select
                 value={reportRange}
                 onChange={(e) => setReportRange(e.target.value)}
-                style={{ width: 160, fontSize: '1rem' }}
+                style={{ width: 160, fontSize: "1rem" }}
                 size="sm"
               >
                 <option value="daily">Daily</option>
@@ -669,68 +808,144 @@ const AdminPendingConfirmations = () => {
                 size="sm"
                 onClick={() => generateReport(reportRange)}
                 disabled={reportLoading}
-                style={{ marginLeft: 8, fontSize: '1rem' }}
+                style={{ marginLeft: 8, fontSize: "1rem" }}
               >
                 Refresh
               </Button>
             </div>
 
-            <div style={{ textAlign: 'center', marginBottom: '20px', borderBottom: '2px solid #000', paddingBottom: '15px' }}>
-              <h4 style={{ fontSize: '1.5rem', marginBottom: '10px' }}>🐾 Pet Matters</h4>
-              <p style={{ fontSize: '1rem', margin: '2px 0' }}>123 Main St, City</p>
-              <p style={{ fontSize: '1rem', margin: '2px 0' }}>Tel: 0999-999-9999</p>
-              <p style={{ fontSize: '1.2rem', fontWeight: 'bold', marginTop: '10px' }}>RETRIEVAL REPORT</p>
-              <p style={{ fontSize: '1rem' }}>Range: {reportRange === "weekly" ? "Weekly" : reportRange === "monthly" ? "Monthly" : "Daily"}</p>
-              <p style={{ fontSize: '1rem' }}>Date: {new Date().toLocaleDateString()}</p>
+            <div
+              style={{
+                textAlign: "center",
+                marginBottom: "20px",
+                borderBottom: "2px solid #000",
+                paddingBottom: "15px",
+              }}
+            >
+              <h4 style={{ fontSize: "1.5rem", marginBottom: "10px" }}>
+                🐾 Pet Matters
+              </h4>
+              <p style={{ fontSize: "1rem", margin: "2px 0" }}>
+                123 Main St, City
+              </p>
+              <p style={{ fontSize: "1rem", margin: "2px 0" }}>
+                Tel: 0999-999-9999
+              </p>
+              <p
+                style={{
+                  fontSize: "1.2rem",
+                  fontWeight: "bold",
+                  marginTop: "10px",
+                }}
+              >
+                RETRIEVAL REPORT
+              </p>
+              <p style={{ fontSize: "1rem" }}>
+                Range:{" "}
+                {reportRange === "weekly"
+                  ? "Weekly"
+                  : reportRange === "monthly"
+                  ? "Monthly"
+                  : "Daily"}
+              </p>
+              <p style={{ fontSize: "1rem" }}>
+                Date: {new Date().toLocaleDateString()}
+              </p>
             </div>
 
             {reportRows.length === 0 ? (
-              <div className="text-muted" style={{ fontSize: '1.1rem', textAlign: 'center' }}>No confirmed retrievals for this period.</div>
+              <div
+                className="text-muted"
+                style={{ fontSize: "1.1rem", textAlign: "center" }}
+              >
+                No confirmed retrievals for this period.
+              </div>
             ) : (
               <>
-                <Table bordered hover style={{ fontSize: '1rem' }}>
-                  <thead style={{ backgroundColor: '#f0f0f0' }}>
+                <Table bordered hover style={{ fontSize: "1rem" }}>
+                  <thead style={{ backgroundColor: "#f0f0f0" }}>
                     <tr>
-                      <th style={{ padding: '10px', fontSize: '1.1rem' }}>Ret#</th>
-                      <th style={{ padding: '10px', fontSize: '1.1rem' }}>Product</th>
-                      <th style={{ padding: '10px', fontSize: '1.1rem' }}>Qty</th>
-                      <th style={{ padding: '10px', fontSize: '1.1rem' }}>Status</th>
-                      <th style={{ padding: '10px', fontSize: '1.1rem' }}>Staff</th>
-                      <th style={{ padding: '10px', fontSize: '1.1rem' }}>Secretary</th>
+                      <th style={{ padding: "10px", fontSize: "1.1rem" }}>
+                        Ret#
+                      </th>
+                      <th style={{ padding: "10px", fontSize: "1.1rem" }}>
+                        Product
+                      </th>
+                      <th style={{ padding: "10px", fontSize: "1.1rem" }}>
+                        Qty
+                      </th>
+                      <th style={{ padding: "10px", fontSize: "1.1rem" }}>
+                        Status
+                      </th>
+                      <th style={{ padding: "10px", fontSize: "1.1rem" }}>
+                        Staff
+                      </th>
+                      <th style={{ padding: "10px", fontSize: "1.1rem" }}>
+                        Secretary
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
                     {reportRows.map((group, idx) => {
                       const items = group.items || [];
-                      const secretary = group.secretary_name || group.secretary_id || "N/A";
+                      const secretary =
+                        group.secretary_name || group.secretary_id || "N/A";
                       const staffOfRetrieval = group.staff_name || "N/A";
-                      
+
                       return items.map((it, itemIdx) => {
                         const statusLabel =
-                          it.status === 'pharmacy_stock'
-                            ? 'Stock'
-                            : it.status === 'sold'
-                            ? 'Sold'
-                            : it.status === 'returned'
-                            ? 'Returned'
+                          it.status === "pharmacy_stock"
+                            ? "Stock"
+                            : it.status === "sold"
+                            ? "Sold"
+                            : it.status === "returned"
+                            ? "Returned"
                             : it.status;
-                        
+
                         return (
                           <tr key={`${group.retrieval_id}-${itemIdx}`}>
                             {itemIdx === 0 && (
-                              <td rowSpan={items.length} style={{ padding: '10px', fontWeight: 'bold', verticalAlign: 'top', fontSize: '1rem' }}>
+                              <td
+                                rowSpan={items.length}
+                                style={{
+                                  padding: "10px",
+                                  fontWeight: "bold",
+                                  verticalAlign: "top",
+                                  fontSize: "1rem",
+                                }}
+                              >
                                 #{group.retrieval_id}
                               </td>
                             )}
-                            <td style={{ padding: '10px', fontSize: '1rem' }}>{it.product_name}</td>
-                            <td style={{ padding: '10px', fontSize: '1rem' }}>{it.qty ?? it.quantity ?? "-"}</td>
-                            <td style={{ padding: '10px', fontSize: '1rem' }}>{statusLabel}</td>
+                            <td style={{ padding: "10px", fontSize: "1rem" }}>
+                              {it.product_name}
+                            </td>
+                            <td style={{ padding: "10px", fontSize: "1rem" }}>
+                              {it.qty ?? it.quantity ?? "-"}
+                            </td>
+                            <td style={{ padding: "10px", fontSize: "1rem" }}>
+                              {statusLabel}
+                            </td>
                             {itemIdx === 0 && (
                               <>
-                                <td rowSpan={items.length} style={{ padding: '10px', verticalAlign: 'top', fontSize: '1rem' }}>
+                                <td
+                                  rowSpan={items.length}
+                                  style={{
+                                    padding: "10px",
+                                    verticalAlign: "top",
+                                    fontSize: "1rem",
+                                  }}
+                                >
                                   {staffOfRetrieval}
                                 </td>
-                                <td rowSpan={items.length} style={{ padding: '10px', verticalAlign: 'top', fontSize: '1rem' }}>
+                                <td
+                                  rowSpan={items.length}
+                                  style={{
+                                    padding: "10px",
+                                    verticalAlign: "top",
+                                    fontSize: "1rem",
+                                  }}
+                                >
                                   {secretary}
                                 </td>
                               </>
@@ -741,15 +956,40 @@ const AdminPendingConfirmations = () => {
                     })}
                   </tbody>
                 </Table>
-                <div style={{ marginTop: '15px', fontWeight: 'bold', fontSize: '1.1rem', borderTop: '2px solid #000', paddingTop: '15px' }}>
-                  Total Retrievals: {reportRows.length} | Total Items: {reportRows.reduce((sum, g) => sum + (g.items?.length || 0), 0)}
+                <div
+                  style={{
+                    marginTop: "15px",
+                    fontWeight: "bold",
+                    fontSize: "1.1rem",
+                    borderTop: "2px solid #000",
+                    paddingTop: "15px",
+                  }}
+                >
+                  Total Retrievals: {reportRows.length} | Total Items:{" "}
+                  {reportRows.reduce(
+                    (sum, g) => sum + (g.items?.length || 0),
+                    0
+                  )}
                 </div>
               </>
             )}
           </Modal.Body>
           <Modal.Footer>
-            <Button variant="secondary" onClick={() => setShowReportModal(false)} style={{ fontSize: '1rem' }}>Close</Button>
-            <Button variant="primary" onClick={printReport} disabled={reportRows.length === 0} style={{ fontSize: '1rem' }}>🖨️ Print</Button>
+            <Button
+              variant="secondary"
+              onClick={() => setShowReportModal(false)}
+              style={{ fontSize: "1rem" }}
+            >
+              Close
+            </Button>
+            <Button
+              variant="primary"
+              onClick={printReport}
+              disabled={reportRows.length === 0}
+              style={{ fontSize: "1rem" }}
+            >
+              🖨️ Print
+            </Button>
           </Modal.Footer>
         </Modal>
 
@@ -802,7 +1042,9 @@ const AdminPendingConfirmations = () => {
                       .join(", ")}
                   </td>
                   <td>
-                    {g.created_at ? new Date(g.created_at).toLocaleString() : "-"}
+                    {g.created_at
+                      ? new Date(g.created_at).toLocaleString()
+                      : "-"}
                   </td>
                   <td>{g.items[0]?.status}</td>
                   <td>
@@ -810,7 +1052,9 @@ const AdminPendingConfirmations = () => {
                       size="sm"
                       variant="primary"
                       onClick={() => openGroup(g)}
-                      disabled={processingId === g.retrieval_id || processingAll}
+                      disabled={
+                        processingId === g.retrieval_id || processingAll
+                      }
                     >
                       View
                     </Button>{" "}
@@ -818,7 +1062,9 @@ const AdminPendingConfirmations = () => {
                       size="sm"
                       variant="danger"
                       onClick={() => declineGroup(g.retrieval_id)}
-                      disabled={processingId === g.retrieval_id || processingAll}
+                      disabled={
+                        processingId === g.retrieval_id || processingAll
+                      }
                     >
                       Decline
                     </Button>
