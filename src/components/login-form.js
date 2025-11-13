@@ -5,6 +5,7 @@ import logo from "../logo.png";
 import { supabase } from "../supabaseClient";
 import { useNavigate } from "react-router-dom";
 import QrScannerZXing from "./QrScannerZXing";
+import ResetPasswordForm from "../pages/ResetPasswordForm";
 
 const LoginForm = () => {
   const [showPassword, setShowPassword] = useState(false);
@@ -49,12 +50,12 @@ const LoginForm = () => {
         .single();
 
       if (error || !data) {
-        alert("❌ Invalid QR code");
+        alert(" Invalid QR code");
         return;
       }
 
       // Success → simulate login
-      alert(`✅ Welcome ${data.staff_name} (${data.staff_position})!`);
+      alert(` Welcome ${data.staff_name} (${data.staff_position})!`);
       localStorage.setItem("user", JSON.stringify(data));
       window.location.href = "/dashboard";
     } catch (err) {
@@ -175,7 +176,7 @@ const LoginForm = () => {
         </Col>
       </Row>
 
-      {/* ✅ QR Scanner Modal */}
+      {/* QR Scanner Modal */}
       <Modal
         show={showModal}
         onHide={() => setShowModal(false)}
