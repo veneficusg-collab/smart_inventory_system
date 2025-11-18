@@ -733,7 +733,7 @@ const AdminPendingConfirmations = () => {
             <strong>Admin - Pending Confirmations</strong>
           </div>
           <div>
-            <Form.Select
+            {/* <Form.Select
               size="sm"
               value={reportRange}
               onChange={(e) => setReportRange(e.target.value)}
@@ -742,7 +742,7 @@ const AdminPendingConfirmations = () => {
               <option value="daily">Daily</option>
               <option value="weekly">Weekly</option>
               <option value="monthly">Monthly</option>
-            </Form.Select>
+            </Form.Select> */}
             <Button
               size="sm"
               variant="primary"

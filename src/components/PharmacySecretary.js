@@ -28,7 +28,14 @@ const PharmacySecretary = ({ staffId = "", staffName = "", setRender }) => {
   const [reportRows, setReportRows] = useState([]);
   const [showReportModal, setShowReportModal] = useState(false);
   const [reportLoading, setReportLoading] = useState(false);
-  const [reportRange, setReportRange] = useState("daily"); // "daily" | "weekly" | "monthly"
+  // UPDATED: added 'custom' to options
+  const [reportRange, setReportRange] = useState("daily"); // "daily" | "weekly" | "monthly" | "custom"
+  
+  // NEW STATE: Custom dates
+  const today = new Date().toISOString().split('T')[0];
+  const [customStart, setCustomStart] = useState(today);
+  const [customEnd, setCustomEnd] = useState(today);
+
 
   useEffect(() => {
     fetchPendingRetrievals();
@@ -111,28 +118,28 @@ const PharmacySecretary = ({ staffId = "", staffName = "", setRender }) => {
   };
 
   const checkAndUpdateRetrievalStatus = async (retrievalId) => {
-  try {
-    const { data, error } = await supabase
-      .from("pharmacy_waiting")
-      .select("status")
-      .eq("retrieval_id", retrievalId);
+    try {
+      const { data, error } = await supabase
+        .from("pharmacy_waiting")
+        .select("status")
+        .eq("retrieval_id", retrievalId);
 
-    if (error) throw error;
+      if (error) throw error;
 
-    const allReturned = data.every((item) => item.status === "returned");
+      const allReturned = data.every((item) => item.status === "returned");
 
-    if (allReturned) {
-      const { error: updErr } = await supabase
-        .from("main_retrievals")
-        .update({ status: "returned" })
-        .eq("id", retrievalId);
+      if (allReturned) {
+        const { error: updErr } = await supabase
+          .from("main_retrievals")
+          .update({ status: "returned" })
+          .eq("id", retrievalId);
 
-      if (updErr) console.warn("failed to update main_retrievals", updErr);
+        if (updErr) console.warn("failed to update main_retrievals", updErr);
+      }
+    } catch (e) {
+      console.error("checkAndUpdateRetrievalStatus error", e);
     }
-  } catch (e) {
-    console.error("checkAndUpdateRetrievalStatus error", e);
-  }
-};
+  };
 
   const moveToWaiting = async (retrieval) => {
     setError("");
@@ -225,49 +232,80 @@ const PharmacySecretary = ({ staffId = "", staffName = "", setRender }) => {
   };
 
   // new: fetch confirmed retrievals for a given range and show printable modal
-  const generateReport = async (range = "daily") => {
+  const generateReport = async (range = "daily", customStart = null, customEnd = null) => {
     setError("");
     setSuccess("");
     setReportLoading(true);
     setReportRange(range);
+
     try {
-      const today = new Date();
       let start, end;
 
-      if (range === "weekly") {
-        // last 7 days (including today)
-        const s = new Date(
-          today.getFullYear(),
-          today.getMonth(),
-          today.getDate() - 6
-        );
-        start = new Date(
-          s.getFullYear(),
-          s.getMonth(),
-          s.getDate()
-        ).toISOString();
-        end = new Date(
-          today.getFullYear(),
-          today.getMonth(),
-          today.getDate() + 1
-        ).toISOString();
-      } else if (range === "monthly") {
-        const s = new Date(today.getFullYear(), today.getMonth(), 1);
-        const e = new Date(today.getFullYear(), today.getMonth() + 1, 1);
-        start = s.toISOString();
-        end = e.toISOString();
+      if (range === "custom") {
+        if (!customStart || !customEnd) {
+            setError("Please select both start and end dates for a custom report.");
+            setReportLoading(false);
+            return;
+        }
+        // Set start time to beginning of start date, end time to end of end date
+        const startDateObj = new Date(customStart);
+        startDateObj.setHours(0, 0, 0, 0);
+        start = startDateObj.toISOString();
+
+        const endDateObj = new Date(customEnd);
+        endDateObj.setHours(23, 59, 59, 999);
+        end = endDateObj.toISOString();
+
+        if (startDateObj > endDateObj) {
+            setError("Start date cannot be after end date.");
+            setReportLoading(false);
+            return;
+        }
+
       } else {
-        // daily
-        start = new Date(
-          today.getFullYear(),
-          today.getMonth(),
-          today.getDate()
-        ).toISOString();
-        end = new Date(
-          today.getFullYear(),
-          today.getMonth(),
-          today.getDate() + 1
-        ).toISOString();
+        const today = new Date();
+
+        if (range === "weekly") {
+          // last 7 days (including today)
+          const s = new Date(
+            today.getFullYear(),
+            today.getMonth(),
+            today.getDate() - 6
+          );
+          s.setHours(0, 0, 0, 0);
+          start = s.toISOString();
+          
+          const e = new Date(today);
+          e.setHours(23, 59, 59, 999);
+          end = e.toISOString();
+
+        } else if (range === "monthly") {
+          const s = new Date(today.getFullYear(), today.getMonth(), 1);
+          s.setHours(0, 0, 0, 0);
+          start = s.toISOString();
+          
+          const e = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+          e.setHours(23, 59, 59, 999);
+          end = e.toISOString();
+
+        } else {
+          // daily
+          const s = new Date(
+            today.getFullYear(),
+            today.getMonth(),
+            today.getDate()
+          );
+          s.setHours(0, 0, 0, 0);
+          start = s.toISOString();
+
+          const e = new Date(
+            today.getFullYear(),
+            today.getMonth(),
+            today.getDate()
+          );
+          e.setHours(23, 59, 59, 999);
+          end = e.toISOString();
+        }
       }
 
       const { data: entries, error: e } = await supabase
@@ -332,13 +370,21 @@ const PharmacySecretary = ({ staffId = "", staffName = "", setRender }) => {
 
   // new: print the report modal contents by opening a new window (prettier receipt style)
   const printReport = () => {
-    const rangeLabel =
-      reportRange === "weekly"
-        ? "Weekly"
-        : reportRange === "monthly"
-        ? "Monthly"
-        : "Daily";
-    const title = `${rangeLabel} Confirmed Retrievals - ${new Date().toLocaleDateString()}`;
+    // UPDATED: Report label logic
+    let rangeLabel = "";
+    if (reportRange === "daily") {
+        rangeLabel = "Daily";
+    } else if (reportRange === "weekly") {
+        rangeLabel = "Weekly";
+    } else if (reportRange === "monthly") {
+        rangeLabel = "Monthly";
+    } else if (reportRange === "custom") {
+        rangeLabel = `Custom: ${new Date(customStart).toLocaleDateString()} - ${new Date(customEnd).toLocaleDateString()}`;
+    }
+
+    const title = `${
+      reportRange.charAt(0).toUpperCase() + reportRange.slice(1)
+    } Confirmed Retrievals - ${new Date().toLocaleDateString()}`;
     const escapeHtml = (s) =>
       String(s ?? "")
         .replace(/&/g, "&amp;")
@@ -561,25 +607,15 @@ const PharmacySecretary = ({ staffId = "", staffName = "", setRender }) => {
         {success && <Alert variant="success">{success}</Alert>}
 
         <div className="mb-3">
-          <Form.Select
-            value={reportRange}
-            onChange={(e) => setReportRange(e.target.value)}
-            style={{ width: 180, display: "inline-block", marginRight: 8 }}
-            size="sm"
-          >
-            <option value="daily">Daily</option>
-            <option value="weekly">Weekly</option>
-            <option value="monthly">Monthly</option>
-          </Form.Select>
           <Button
             variant="primary"
             onClick={() => generateReport(reportRange)}
             disabled={reportLoading}
           >
-            {reportLoading ? "Preparing..." : "Print Retrievals"}
+            {reportLoading ? "Preparing..." : "Print Retrievals Report"}
           </Button>{" "}
           <Button variant="secondary" onClick={() => fetchPendingRetrievals()}>
-            Refresh
+            Refresh Pending
           </Button>
         </div>
 
@@ -656,7 +692,7 @@ const PharmacySecretary = ({ staffId = "", staffName = "", setRender }) => {
           </Modal.Title>
         </Modal.Header>
         <Modal.Body style={{ fontSize: "1.1rem" }}>
-          <div className="mb-3 d-flex gap-2 align-items-center">
+          <div className="mb-3 d-flex gap-2 align-items-center flex-wrap">
             <Form.Label
               className="mb-0"
               style={{ fontWeight: 600, marginRight: 8, fontSize: "1.1rem" }}
@@ -665,22 +701,50 @@ const PharmacySecretary = ({ staffId = "", staffName = "", setRender }) => {
             </Form.Label>
             <Form.Select
               value={reportRange}
-              onChange={(e) => setReportRange(e.target.value)}
+              onChange={(e) => {
+                setReportRange(e.target.value);
+                // Automatically refresh if not custom, or wait for date selection
+                if (e.target.value !== 'custom') {
+                    generateReport(e.target.value);
+                }
+              }}
               style={{ width: 160, fontSize: "1rem" }}
               size="sm"
             >
               <option value="daily">Daily</option>
               <option value="weekly">Weekly</option>
               <option value="monthly">Monthly</option>
+              <option value="custom">Custom Range</option>
             </Form.Select>
+
+            {/* NEW: Custom Date Pickers */}
+            {reportRange === 'custom' && (
+                <>
+                    <Form.Control
+                        type="date"
+                        value={customStart}
+                        onChange={(e) => setCustomStart(e.target.value)}
+                        style={{ width: 150, fontSize: "1rem" }}
+                        size="sm"
+                    />
+                    <Form.Control
+                        type="date"
+                        value={customEnd}
+                        onChange={(e) => setCustomEnd(e.target.value)}
+                        style={{ width: 150, fontSize: "1rem" }}
+                        size="sm"
+                    />
+                </>
+            )}
+
             <Button
               variant="outline-primary"
               size="sm"
-              onClick={() => generateReport(reportRange)}
+              onClick={() => generateReport(reportRange, customStart, customEnd)}
               disabled={reportLoading}
               style={{ marginLeft: 8, fontSize: "1rem" }}
             >
-              Refresh
+              {reportLoading ? "Refreshing..." : "Refresh"}
             </Button>
           </div>
 
@@ -712,10 +776,13 @@ const PharmacySecretary = ({ staffId = "", staffName = "", setRender }) => {
             </p>
             <p style={{ fontSize: "1rem" }}>
               Range:{" "}
+              {/* UPDATED: Report label display */}
               {reportRange === "weekly"
                 ? "Weekly"
                 : reportRange === "monthly"
                 ? "Monthly"
+                : reportRange === "custom"
+                ? `Custom: ${new Date(customStart).toLocaleDateString()} - ${new Date(customEnd).toLocaleDateString()}`
                 : "Daily"}
             </p>
             <p style={{ fontSize: "1rem" }}>

@@ -187,18 +187,7 @@ const Sidebar = ({ setRender, staffRole }) => {
                     <span className="mx-3">Retrieval</span>
                   </div>
                 </Link>
-              </div>
-            </>
-          ) : (
-            // ✅ Staff role = only staff links
-            <>
-              <div
-                className="d-flex flex-column" // 🔹 makes children stack vertically
-                style={{ marginLeft: "10px" }}
-              >
-
-
-                <Link
+                 <Link
                   underline="hover"
                   color="inherit"
                   component="button"
@@ -258,6 +247,18 @@ const Sidebar = ({ setRender, staffRole }) => {
                   </div>
                 </Link>
               </div>
+            </>
+          ) : (
+            // ✅ Staff role = only staff links
+            <>
+              {/* <div
+                className="d-flex flex-column" // 🔹 makes children stack vertically
+                style={{ marginLeft: "10px" }}
+              >
+
+
+               
+              </div> */}
             </>
           )}
         </div>

@@ -30,6 +30,15 @@ function monthToRange(ymStr) {
   return { startISO: start.toISOString(), endISO: end.toISOString() };
 }
 
+// NEW: Function to handle custom date range
+function customToRange(startStr, endStr) {
+  const start = new Date(startStr);
+  const end = new Date(endStr);
+  start.setHours(0, 0, 0, 0); // Start of the start day
+  end.setHours(23, 59, 59, 999); // End of the end day
+  return { startISO: start.toISOString(), endISO: end.toISOString() };
+}
+
 const currency = (n) =>
   `₱${Number(n || 0).toLocaleString("en-PH", { minimumFractionDigits: 2 })}`;
 
@@ -45,6 +54,10 @@ const DTR = () => {
 
   const [date, setDate] = useState(defaultDate);
   const [month, setMonth] = useState(defaultMonth);
+  // NEW: State for custom range
+  const [startDate, setStartDate] = useState(defaultDate);
+  const [endDate, setEndDate] = useState(defaultDate);
+
   const [staffRole, setStaffRole] = useState("");
   const [staffName, setStaffName] = useState("");
   const [productMap, setProductMap] = useState({});
@@ -104,9 +117,21 @@ const DTR = () => {
     }
   };
 
-  const getRange = () => (mode === "daily" ? dayToRange(date) : monthToRange(month));
+  // UPDATED: to handle 'custom' mode
+  const getRange = () => {
+    if (mode === "daily") return dayToRange(date);
+    if (mode === "monthly") return monthToRange(month);
+    if (mode === "custom") return customToRange(startDate, endDate);
+    return {}; // Default/fallback
+  };
 
   const fetchData = async () => {
+    // Basic validation for custom range
+    if (mode === "custom" && new Date(startDate) > new Date(endDate)) {
+      alert("Start Date cannot be after End Date.");
+      return;
+    }
+
     setLoading(true);
     try {
       const { staff_name, staff_position } = await getSessionStaff();
@@ -161,9 +186,10 @@ const DTR = () => {
     buildProductMap();
   }, []);
 
+  // UPDATED: added startDate and endDate dependencies
   useEffect(() => {
     fetchData();
-  }, [mode, date, month]);
+  }, [mode, date, month, startDate, endDate]);
 
   // ---------- summary ----------
   const summary = useMemo(() => {
@@ -199,7 +225,7 @@ const DTR = () => {
     printWindow.document.write(`
       <html>
         <head>
-          <title>${mode === "daily" ? "Daily" : "Monthly"} Report</title>
+          <title>${mode === "daily" ? "Daily" : mode === "monthly" ? "Monthly" : "Custom"} Report</title>
           <style>
             body { font-family: Arial, sans-serif; font-size: 12px; margin: 20px; }
             h4, h5, h6 { margin: 4px 0; text-align: center; }
@@ -216,13 +242,24 @@ const DTR = () => {
     printWindow.print();
   };
 
-  const rangeLabel =
-    mode === "daily"
-      ? new Date(date).toLocaleDateString()
-      : new Date(`${month}-01`).toLocaleDateString(undefined, {
-          year: "numeric",
-          month: "long",
-        });
+  // UPDATED: to handle 'custom' mode label
+  const rangeLabel = useMemo(() => {
+    if (mode === "daily") {
+      return new Date(date).toLocaleDateString();
+    }
+    if (mode === "monthly") {
+      return new Date(`${month}-01`).toLocaleDateString(undefined, {
+        year: "numeric",
+        month: "long",
+      });
+    }
+    if (mode === "custom") {
+      const start = new Date(startDate).toLocaleDateString();
+      const end = new Date(endDate).toLocaleDateString();
+      return `${start} - ${end}`;
+    }
+    return "";
+  }, [mode, date, month, startDate, endDate]);
 
   return (
     <Container fluid className="bg-white mx-4 my-2 rounded p-3" style={{ width: "140vh" }}>
@@ -247,18 +284,25 @@ const DTR = () => {
                 Monthly
               </Nav.Link>
             </Nav.Item>
+            {/* NEW: Custom mode link */}
+            <Nav.Item>
+              <Nav.Link active={mode === "custom"} onClick={() => setMode("custom")}>
+                Custom
+              </Nav.Link>
+            </Nav.Item>
           </Nav>
         </Col>
       </Row>
 
       {/* Filters + Print */}
       <Row className="no-print mt-2">
-        {mode === "daily" ? (
+        {mode === "daily" && (
           <Col xs={12} md={4}>
             <Form.Label>Select Date</Form.Label>
             <Form.Control type="date" value={date} onChange={(e) => setDate(e.target.value)} />
           </Col>
-        ) : (
+        )}
+        {mode === "monthly" && (
           <Col xs={12} md={4}>
             <Form.Label>Select Month</Form.Label>
             <Form.Control
@@ -268,7 +312,33 @@ const DTR = () => {
             />
           </Col>
         )}
-        <Col xs={12} md={8} className="d-flex justify-content-end align-items-end">
+        {/* NEW: Custom Date Range Controls */}
+        {mode === "custom" && (
+          <>
+            <Col xs={6} md={3}>
+              <Form.Label>Start Date</Form.Label>
+              <Form.Control
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+              />
+            </Col>
+            <Col xs={6} md={3}>
+              <Form.Label>End Date</Form.Label>
+              <Form.Control
+                type="date"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+              />
+            </Col>
+          </>
+        )}
+
+        <Col
+          xs={12}
+          md={mode === "custom" ? 6 : 8} // Adjust column size based on mode
+          className="d-flex justify-content-end align-items-end"
+        >
           <div className="d-flex gap-2">
             <Button variant="secondary" onClick={fetchData} disabled={loading}>
               Refresh
@@ -287,7 +357,7 @@ const DTR = () => {
           <h5>🐾 Pet Matters</h5>
           <p style={{ margin: 0 }}>123 Main St, City | Tel: 0999-999-9999</p>
           <p style={{ margin: "2px 0" }}>
-            <b>{mode === "daily" ? "Daily" : "Monthly"} Report — {rangeLabel}</b>
+            <b>{mode.charAt(0).toUpperCase() + mode.slice(1)} Report — {rangeLabel}</b>
           </p>
         </div>
 

@@ -390,6 +390,7 @@ const ProductInfo = ({ setRender, product }) => {
                 <TableCell>Quantity</TableCell>
                 <TableCell>Expiry Date</TableCell>
                 <TableCell>Supplier Name</TableCell>
+                <TableCell>Supplier #</TableCell>
                 <TableCell>Supplier Price</TableCell>
               </TableRow>
             </TableHead>
@@ -455,6 +456,25 @@ const ProductInfo = ({ setRender, product }) => {
                       />
                     ) : (
                       v.supplier_name || "—"
+                    )}
+                  </TableCell>
+                   <TableCell>
+                    {isEditing ? (
+                      <Form.Control
+                        type="text"
+                        size="sm"
+                        value={v.supplier_number || ""}
+                        onChange={(e) =>
+                          handleVariantChange(
+                            idx,
+                            "supplier_name",
+                            e.target.value
+                          )
+                        }
+                        style={{ width: "160px" }}
+                      />
+                    ) : (
+                      v.supplier_number || "—"
                     )}
                   </TableCell>
 
