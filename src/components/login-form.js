@@ -5,15 +5,15 @@ import logo from "../logo.png";
 import { supabase } from "../supabaseClient";
 import { useNavigate } from "react-router-dom";
 import QrScannerZXing from "./QrScannerZXing";
-import ResetPasswordForm from "../pages/ResetPasswordForm";
 
 const LoginForm = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [showModal, setShowModal] = useState(false); // ✅ Modal toggle
+  const [showModal, setShowModal] = useState(false);
   const [forgotPasswordEmail, setForgotPasswordEmail] = useState("");
   const [showForgotPasswordModal, setShowForgotPasswordModal] = useState(false);
+  const [manualQrCode, setManualQrCode] = useState(""); // ✅ Manual QR code input state
   const navigate = useNavigate();
 
   // email/password login
@@ -61,6 +61,17 @@ const LoginForm = () => {
     } catch (err) {
       console.error("QR login failed:", err.message);
     }
+  };
+
+  // ✅ Handle manual QR code submission
+  const handleManualQrSubmit = async (e) => {
+    e.preventDefault();
+    if (!manualQrCode.trim()) {
+      alert("Please enter a QR code");
+      return;
+    }
+    await handleQrResult(manualQrCode);
+    setManualQrCode(""); // Clear input after submission
   };
 
   const handleForgotPassword = async (e) => {
@@ -187,7 +198,37 @@ const LoginForm = () => {
           <Modal.Title>Scan your Staff QR</Modal.Title>
         </Modal.Header>
         <Modal.Body>
-          <QrScannerZXing onResult={handleQrResult} />
+          {/* QR Scanner Component */}
+          <div className="mb-4">
+            <QrScannerZXing onResult={handleQrResult} />
+          </div>
+          
+          {/* Divider */}
+          <div className="d-flex align-items-center my-4">
+            <div className="flex-grow-1 border-top"></div>
+            <div className="px-3">OR</div>
+            <div className="flex-grow-1 border-top"></div>
+          </div>
+
+          {/* Manual QR Code Input */}
+          <Form onSubmit={handleManualQrSubmit}>
+            <Form.Group className="mb-3" controlId="manualQrCode">
+              <Form.Label>Enter QR Code Manually</Form.Label>
+              <Form.Control
+                type="text"
+                placeholder="Enter your QR code"
+                value={manualQrCode}
+                onChange={(e) => setManualQrCode(e.target.value)}
+                required
+              />
+              <Form.Text className="text-muted">
+                Enter the QR code value from your staff ID
+              </Form.Text>
+            </Form.Group>
+            <Button variant="primary" type="submit" className="w-100">
+              Submit QR Code
+            </Button>
+          </Form>
         </Modal.Body>
         <Modal.Footer>
           <Button variant="secondary" onClick={() => setShowModal(false)}>
