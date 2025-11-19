@@ -4,7 +4,7 @@ import { ListGroup, Spinner, Nav } from "react-bootstrap";
 
 const PAGE_SIZE = 20;
 
-const Notifications = ({ onClose, onMarkAsRead, unreadNotificationIds }) => {
+const Notifications = ({ onClose, onMarkAsRead, readNotificationIds }) => {
   const [logs, setLogs] = useState([]);
   const [retrievals, setRetrievals] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -67,7 +67,7 @@ const Notifications = ({ onClose, onMarkAsRead, unreadNotificationIds }) => {
 
   // Mark notification as read
   const markAsRead = (id) => {
-    if (onMarkAsRead) {
+    if (onMarkAsRead && !readNotificationIds.has(id)) {
       onMarkAsRead([id]);
     }
   };
@@ -75,10 +75,12 @@ const Notifications = ({ onClose, onMarkAsRead, unreadNotificationIds }) => {
   // Mark all as read in current tab
   const markAllAsRead = () => {
     const currentItems = activeTab === "inventory" ? logs : retrievals;
-    const currentIds = currentItems.map(item => item.id);
+    const unreadIds = currentItems
+      .filter(item => !readNotificationIds.has(item.id))
+      .map(item => item.id);
     
-    if (onMarkAsRead) {
-      onMarkAsRead(currentIds);
+    if (onMarkAsRead && unreadIds.length > 0) {
+      onMarkAsRead(unreadIds);
     }
   };
 
@@ -122,95 +124,103 @@ const Notifications = ({ onClose, onMarkAsRead, unreadNotificationIds }) => {
   };
 
   // Count unread notifications per tab
-  const unreadInventoryCount = logs.filter(log => unreadNotificationIds.has(log.id)).length;
-  const unreadRetrievalsCount = retrievals.filter(retrieval => unreadNotificationIds.has(retrieval.id)).length;
+  const unreadInventoryCount = logs.filter(log => !readNotificationIds.has(log.id)).length;
+  const unreadRetrievalsCount = retrievals.filter(retrieval => !readNotificationIds.has(retrieval.id)).length;
 
   // Render inventory log item
-  const renderInventoryLog = (log) => (
-    <ListGroup.Item 
-      key={log.id} 
-      onClick={() => markAsRead(log.id)}
-      style={{ 
-        cursor: 'pointer',
-        borderLeft: unreadNotificationIds.has(log.id) ? '4px solid #dc3545' : '4px solid transparent'
-      }}
-    >
-      <div className="d-flex align-items-start">
-        {unreadNotificationIds.has(log.id) && (
-          <span 
-            className="me-2 mt-1"
-            style={{
-              width: '8px',
-              height: '8px',
-              backgroundColor: '#dc3545',
-              borderRadius: '50%',
-              flexShrink: 0
-            }}
-          />
-        )}
-        <div className="flex-grow-1">
-          <div>
-            <strong>{log.staff}</strong> {log.product_action}{" "}
-            <strong>{log.product_name}</strong>
+  const renderInventoryLog = (log) => {
+    const isUnread = !readNotificationIds.has(log.id);
+    return (
+      <ListGroup.Item 
+        key={log.id} 
+        onClick={() => markAsRead(log.id)}
+        style={{ 
+          cursor: 'pointer',
+          borderLeft: isUnread ? '4px solid #dc3545' : '4px solid transparent',
+          backgroundColor: isUnread ? '#f8f9fa' : 'transparent'
+        }}
+      >
+        <div className="d-flex align-items-start">
+          {isUnread && (
+            <span 
+              className="me-2 mt-1"
+              style={{
+                width: '8px',
+                height: '8px',
+                backgroundColor: '#dc3545',
+                borderRadius: '50%',
+                flexShrink: 0
+              }}
+            />
+          )}
+          <div className="flex-grow-1">
+            <div>
+              <strong>{log.staff}</strong> {log.product_action}{" "}
+              <strong>{log.product_name}</strong>
+            </div>
+            <small className="text-muted">
+              {new Date(log.created_at).toLocaleString()}
+            </small>
           </div>
-          <small className="text-muted">
-            {new Date(log.created_at).toLocaleString()}
-          </small>
         </div>
-      </div>
-    </ListGroup.Item>
-  );
+      </ListGroup.Item>
+    );
+  };
 
   // Render retrieval log item
-  const renderRetrievalLog = (retrieval) => (
-    <ListGroup.Item 
-      key={retrieval.id} 
-      onClick={() => markAsRead(retrieval.id)}
-      style={{ 
-        cursor: 'pointer',
-        borderLeft: unreadNotificationIds.has(retrieval.id) ? '4px solid #dc3545' : '4px solid transparent'
-      }}
-    >
-      <div className="d-flex align-items-start">
-        {unreadNotificationIds.has(retrieval.id) && (
-          <span 
-            className="me-2 mt-1"
-            style={{
-              width: '8px',
-              height: '8px',
-              backgroundColor: '#dc3545',
-              borderRadius: '50%',
-              flexShrink: 0
-            }}
-          />
-        )}
-        <div className="flex-grow-1">
-          <div>
-            <strong>{retrieval.staff_name}</strong> retrieved{" "}
-            <strong>
-              {retrieval.items?.length || 0} item{retrieval.items?.length !== 1 ? 's' : ''}
-            </strong>
-          </div>
-          <small className="text-muted">
-            {new Date(retrieval.retrieved_at).toLocaleString()}
-          </small>
-          {retrieval.items && (
-            <div style={{ fontSize: '0.8em', marginTop: '4px' }}>
-              {retrieval.items.slice(0, 2).map((item, idx) => (
-                <span key={idx} className="text-muted">
-                  {item.product_name || item.product_id} x{item.qty}
-                  {idx < Math.min(retrieval.items.length - 1, 1) ? ', ' : ''}
-                </span>
-              ))}
-              {retrieval.items.length > 2 && (
-                <span className="text-muted"> and {retrieval.items.length - 2} more...</span>
-              )}
-            </div>
+  const renderRetrievalLog = (retrieval) => {
+    const isUnread = !readNotificationIds.has(retrieval.id);
+    return (
+      <ListGroup.Item 
+        key={retrieval.id} 
+        onClick={() => markAsRead(retrieval.id)}
+        style={{ 
+          cursor: 'pointer',
+          borderLeft: isUnread ? '4px solid #dc3545' : '4px solid transparent',
+          backgroundColor: isUnread ? '#f8f9fa' : 'transparent'
+        }}
+      >
+        <div className="d-flex align-items-start">
+          {isUnread && (
+            <span 
+              className="me-2 mt-1"
+              style={{
+                width: '8px',
+                height: '8px',
+                backgroundColor: '#dc3545',
+                borderRadius: '50%',
+                flexShrink: 0
+              }}
+            />
           )}
+          <div className="flex-grow-1">
+            <div>
+              <strong>{retrieval.staff_name}</strong> retrieved{" "}
+              <strong>
+                {retrieval.items?.length || 0} item{retrieval.items?.length !== 1 ? 's' : ''}
+              </strong>
+            </div>
+            <small className="text-muted">
+              {new Date(retrieval.retrieved_at).toLocaleString()}
+            </small>
+            {retrieval.items && (
+              <div style={{ fontSize: '0.8em', marginTop: '4px' }}>
+                {retrieval.items.slice(0, 2).map((item, idx) => (
+                  <span key={idx} className="text-muted">
+                    {item.product_name || item.product_id} x{item.qty}
+                    {idx < Math.min(retrieval.items.length - 1, 1) ? ', ' : ''}
+                  </span>
+                ))}
+                {retrieval.items.length > 2 && (
+                  <span className="text-muted"> and {retrieval.items.length - 2} more...</span>
+                )}
+              </div>
+            )}
+          </div>
         </div>
-      </div>
-    </ListGroup.Item>
-  );
+      </ListGroup.Item>
+    );
+  };
 
   if (loading) {
     return (

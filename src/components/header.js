@@ -14,11 +14,21 @@ const Header = () => {
   const [staffId, setStaffId] = useState(null);
   const [showStaffModal, setShowStaffModal] = useState(false);
 
-  // Track unread notification IDs
-  const [unreadNotificationIds, setUnreadNotificationIds] = useState(new Set());
+  // Load read notifications from localStorage on component mount
+  const [readNotificationIds, setReadNotificationIds] = useState(() => {
+    const saved = localStorage.getItem('readNotifications');
+    return saved ? new Set(JSON.parse(saved)) : new Set();
+  });
+
+  // Save to localStorage whenever readNotificationIds changes
+  useEffect(() => {
+    localStorage.setItem('readNotifications', JSON.stringify([...readNotificationIds]));
+  }, [readNotificationIds]);
+
+  // Track all notification IDs (both read and unread)
+  const [allNotificationIds, setAllNotificationIds] = useState(new Set());
 
   useEffect(() => {
-    // Fetch initial unread count
     fetchUnreadCount();
     
     // Set up real-time listeners
@@ -33,8 +43,9 @@ const Header = () => {
         },
         (payload) => {
           console.log("New log notification:", payload.new);
-          setUnreadCount(prev => prev + 1);
-          setUnreadNotificationIds(prev => new Set([...prev, payload.new.id]));
+          const newId = payload.new.id;
+          setAllNotificationIds(prev => new Set([...prev, newId]));
+          // New notifications are unread by default
         }
       )
       .subscribe();
@@ -50,8 +61,9 @@ const Header = () => {
         },
         (payload) => {
           console.log("New retrieval notification:", payload.new);
-          setUnreadCount(prev => prev + 1);
-          setUnreadNotificationIds(prev => new Set([...prev, payload.new.id]));
+          const newId = payload.new.id;
+          setAllNotificationIds(prev => new Set([...prev, newId]));
+          // New notifications are unread by default
         }
       )
       .subscribe();
@@ -61,6 +73,12 @@ const Header = () => {
       supabase.removeChannel(retrievalsChannel);
     };
   }, []);
+
+  // Calculate unread count based on all IDs minus read IDs
+  useEffect(() => {
+    const unreadIds = new Set([...allNotificationIds].filter(id => !readNotificationIds.has(id)));
+    setUnreadCount(unreadIds.size);
+  }, [allNotificationIds, readNotificationIds]);
 
   const fetchUnreadCount = async () => {
     try {
@@ -83,13 +101,11 @@ const Header = () => {
         ...(retrievalsResponse.data || [])
       ];
 
-      // For initial load, consider all as unread, or use your logic
-      const initialUnreadIds = new Set(allNotifications.map(item => item.id));
-      setUnreadNotificationIds(initialUnreadIds);
-      setUnreadCount(initialUnreadIds.size);
+      const allIds = new Set(allNotifications.map(item => item.id));
+      setAllNotificationIds(allIds);
       
     } catch (error) {
-      console.error("Error fetching unread count:", error);
+      console.error("Error fetching notifications:", error);
     }
   };
 
@@ -141,20 +157,14 @@ const Header = () => {
     setShowNotifications(false);
   };
 
-  // Function to mark notifications as read (called from Notifications component)
+  // Function to mark notifications as read
   const handleMarkAsRead = (readIds = []) => {
     if (readIds.length === 0) {
-      // Mark all as read
-      setUnreadCount(0);
-      setUnreadNotificationIds(new Set());
+      // Mark all as read - add all current notification IDs to read set
+      setReadNotificationIds(prev => new Set([...prev, ...allNotificationIds]));
     } else {
       // Mark specific IDs as read
-      setUnreadNotificationIds(prev => {
-        const newSet = new Set(prev);
-        readIds.forEach(id => newSet.delete(id));
-        setUnreadCount(newSet.size);
-        return newSet;
-      });
+      setReadNotificationIds(prev => new Set([...prev, ...readIds]));
     }
   };
 
@@ -180,10 +190,9 @@ const Header = () => {
           >
             <IoMdNotificationsOutline size={28} />
             
-            {/* Red dot for unread notifications - always show when there are unread notifications */}
+            {/* Red dot for unread notifications */}
             {unreadCount > 0 && (
               <>
-                {/* Small red dot */}
                 <span
                   className="position-absolute top-0 start-100 translate-middle bg-danger rounded-circle"
                   style={{ 
@@ -193,8 +202,6 @@ const Header = () => {
                     transform: "translate(-30%, -30%)"
                   }}
                 />
-                
-                {/* Number badge */}
                 <span
                   className="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger"
                   style={{ 
@@ -213,7 +220,7 @@ const Header = () => {
             <Notifications 
               onClose={handleCloseNotifications}
               onMarkAsRead={handleMarkAsRead}
-              unreadNotificationIds={unreadNotificationIds}
+              readNotificationIds={readNotificationIds}
             />
           )}
 
