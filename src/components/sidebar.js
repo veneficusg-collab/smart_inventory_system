@@ -42,15 +42,22 @@ const Sidebar = ({ setRender, staffRole }) => {
         justifyContent: "space-between",
         minHeight: "100vh",
         padding: "20px",
-        position: "fixed", // ✅ makes it fixed
+        position: "fixed",
         top: 0,
         left: 0,
         bottom: 0,
-        width: "16.6667%", // ✅ 2/12 columns = ~16.67%
+        width: "16.6667%",
         borderRight: "1px solid #ccc",
-        backgroundColor: "white", // ✅ keep background solid
+        backgroundColor: "white",
         zIndex: 1000,
+        // ✅ Scrollable on small devices
+        overflowY: "auto",
+        // ✅ Responsive width for smaller screens
+        "@media (maxWidth: 768px)": {
+          width: "250px",
+        },
       }}
+      className="sidebar-container"
     >
       {/* Top section */}
       <div>
@@ -163,9 +170,8 @@ const Sidebar = ({ setRender, staffRole }) => {
           ) : staffRole === "secretary" ? (
             // ✅ Pharmacy Secretary role
             <>
-                       
               <div className="d-flex flex-column" style={{ marginLeft: "10px" }}>
-                     <Link
+                <Link
                   underline="hover"
                   color="inherit"
                   component="button"
@@ -187,7 +193,7 @@ const Sidebar = ({ setRender, staffRole }) => {
                     <span className="mx-3">Retrieval</span>
                   </div>
                 </Link>
-                 <Link
+                <Link
                   underline="hover"
                   color="inherit"
                   component="button"
@@ -282,6 +288,21 @@ const Sidebar = ({ setRender, staffRole }) => {
           </div>
         </Link>
       </div>
+
+      {/* ✅ Add CSS for responsive behavior */}
+      <style jsx>{`
+        @media (max-width: 768px) {
+          .sidebar-container {
+            width: 250px !important;
+          }
+        }
+        
+        @media (max-height: 600px) {
+          .sidebar-container {
+            overflow-y: auto !important;
+          }
+        }
+      `}</style>
     </Container>
   );
 };

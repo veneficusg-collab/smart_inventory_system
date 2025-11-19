@@ -34,6 +34,24 @@ const Header = () => {
     };
   }, []);
 
+  // ✅ Also listen to retrieval notifications
+  useEffect(() => {
+    const channel = supabase
+      .channel("retrievals-notif")
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "main_retrievals" },
+        () => {
+          setUnreadCount((prev) => prev + 1);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
   // ✅ Fetch staff_name + staff_img
   useEffect(() => {
     const fetchStaff = async () => {
@@ -76,9 +94,15 @@ const Header = () => {
 
   const toggleNotifications = () => {
     setShowNotifications((prev) => !prev);
-    if (!showNotifications) {
-      setUnreadCount(0);
-    }
+  };
+
+  const handleCloseNotifications = () => {
+    setShowNotifications(false);
+  };
+
+  // Function to mark all notifications as read
+  const handleMarkAllAsRead = () => {
+    setUnreadCount(0);
   };
 
   return (
@@ -102,18 +126,41 @@ const Header = () => {
             onClick={toggleNotifications}
           >
             <IoMdNotificationsOutline size={28} />
+            
+            {/* Red dot for unread notifications - always show when there are unread notifications */}
             {unreadCount > 0 && (
-              <span
-                className="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger"
-                style={{ fontSize: "12px", padding: "3px 6px" }}
-              >
-                {unreadCount}
-              </span>
+              <>
+                {/* Small red dot */}
+                <span
+                  className="position-absolute top-0 start-100 translate-middle bg-danger rounded-circle"
+                  style={{ 
+                    width: "12px", 
+                    height: "12px", 
+                    border: "2px solid white",
+                    transform: "translate(-30%, -30%)" // Position it slightly inside
+                  }}
+                />
+                
+                {/* Number badge */}
+                <span
+                  className="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger"
+                  style={{ 
+                    fontSize: "10px", 
+                    padding: "3px 6px",
+                    transform: "translate(-30%, -30%)"
+                  }}
+                >
+                  {unreadCount}
+                </span>
+              </>
             )}
           </div>
 
           {showNotifications && (
-            <Notifications onClose={() => setShowNotifications(false)} />
+            <Notifications 
+              onClose={handleCloseNotifications}
+              onMarkAllAsRead={handleMarkAllAsRead} // Pass callback to clear unread count
+            />
           )}
 
           {/* Staff Avatar + Name */}
