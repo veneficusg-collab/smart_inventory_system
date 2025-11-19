@@ -24,10 +24,37 @@ const LoginForm = () => {
       email,
       password,
     });
+    
     if (error) {
       console.log(error);
       alert("Login failed: " + error.message);
-    } else {
+      return;
+    }
+
+    // ✅ Check if user has allowed role (admin, super_admin, or secretary)
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      const { data: staff, error: staffError } = await supabase
+        .from("staff")
+        .select("staff_position")
+        .eq("id", user.id)
+        .single();
+
+      if (staffError) {
+        console.log(staffError);
+        alert("Error fetching staff information");
+        await supabase.auth.signOut(); // Sign out if we can't verify role
+        return;
+      }
+
+      // ✅ Check if staff role is allowed
+      if (staff.staff_position === "staff") {
+        alert("Access denied. Only administrators and secretaries can log in through this portal.");
+        await supabase.auth.signOut(); // Sign out unauthorized user
+        return;
+      }
+
+      // ✅ Allowed roles: admin, super_admin, secretary
       navigate("/dashboard");
     }
   };
@@ -54,7 +81,13 @@ const LoginForm = () => {
         return;
       }
 
-      // Success → simulate login
+      // ✅ Check if staff role is allowed
+      if (data.staff_position === "staff") {
+        alert("Access denied. Only administrators and secretaries can log in through this portal.");
+        return;
+      }
+
+      // Success → simulate login (only for admin, super_admin, secretary)
       alert(` Welcome ${data.staff_name} (${data.staff_position})!`);
       localStorage.setItem("user", JSON.stringify(data));
       window.location.href = "/dashboard";
@@ -115,6 +148,9 @@ const LoginForm = () => {
             <div className="text-center mb-4">
               <h2>Log in to your account</h2>
               <p>Welcome back! Please enter your details.</p>
+              {/* <small className="text-muted">
+                Only administrators and secretaries can log in here
+              </small> */}
             </div>
 
             {/* Email/password form */}
