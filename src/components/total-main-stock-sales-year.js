@@ -4,12 +4,12 @@ import Button from "@mui/material/Button";
 import Menu from "@mui/material/Menu";
 import MenuItem from "@mui/material/MenuItem";
 import { CiCalendar } from "react-icons/ci";
-import { FaMoneyBillWave } from "react-icons/fa"; // 👈 profit logo icon
+import { FaChartLine } from "react-icons/fa"; // 👈 sales icon
 import { supabase } from "../supabaseClient";
 
-const TotalProfitPerYear = () => {
+const MainTotalSalesPerYear = () => {
   const [year, setYear] = useState(new Date().getFullYear());
-  const [totalProfit, setTotalProfit] = useState(0);
+  const [totalSales, setTotalSales] = useState(0);
   const [loading, setLoading] = useState(true);
 
   // 🔹 Year menu state
@@ -29,60 +29,67 @@ const TotalProfitPerYear = () => {
   }, []);
 
   useEffect(() => {
-    fetchTotalProfit(year);
+    fetchTotalSales(year);
   }, [year]);
 
-  const fetchTotalProfit = async (selectedYear) => {
+  const fetchTotalSales = async (selectedYear) => {
     setLoading(true);
     try {
-      // ✅ Fetch products (for supplier_price)
+      // ✅ Fetch products (for product_price - selling price)
       const { data: products, error: prodError } = await supabase
-        .from("products")
-        .select("product_ID, supplier_price, product_price");
+        .from("main_stock_room_products")
+        .select("product_ID, product_price");
       if (prodError) throw prodError;
 
       const productMap = {};
       products.forEach((p) => {
         productMap[p.product_ID] = {
-          supplier_price: Number(p.supplier_price ?? 0),
           product_price: Number(p.product_price ?? 0),
         };
       });
 
-      // ✅ Fetch transactions for the selected year
-      const { data: transactions, error: transError } = await supabase
-        .from("transactions")
-        .select(
-          `
-          id, created_at, status,
-          transaction_items ( product_code, qty, price )
-        `
-        )
-        .eq("status", "completed")
+      // ✅ Fetch admin_confirmed retrievals for the selected year
+      const { data: retrievals, error: retrievalError } = await supabase
+        .from("main_retrievals")
+        .select("id, created_at, items, status")
+        .eq("status", "admin_confirmed")
         .gte("created_at", `${selectedYear}-01-01`)
         .lt("created_at", `${selectedYear + 1}-01-01`);
 
-      if (transError) throw transError;
+      if (retrievalError) throw retrievalError;
 
-      // ✅ Compute profit
+      // ✅ Compute total sales
       let total = 0;
-      transactions.forEach((t) => {
-        t.transaction_items?.forEach((item) => {
-          const pid = item.product_code;
-          const prod = productMap[pid];
+      retrievals.forEach((retrieval) => {
+        // Parse items JSON string if needed
+        let items = retrieval.items;
+        if (typeof items === "string") {
+          try {
+            items = JSON.parse(items);
+          } catch (e) {
+            console.error("Failed to parse items:", e);
+            return;
+          }
+        }
+
+        // Items should be an array
+        if (!Array.isArray(items)) return;
+
+        items.forEach((item) => {
+          const productId = item.product_id;
+          const prod = productMap[productId];
           if (!prod) return;
 
-          const sellPrice = Number(item.price ?? prod.product_price ?? 0);
-          const supplierPrice = Number(prod.supplier_price ?? 0);
+          const sellPrice = Number(prod.product_price ?? 0);
           const qty = Number(item.qty ?? 0);
 
-          total += (sellPrice - supplierPrice) * qty;
+          total += sellPrice * qty;
         });
       });
 
-      setTotalProfit(total);
+      setTotalSales(total);
     } catch (err) {
-      console.error("Error fetching total profit:", err);
+      console.error("Error fetching total sales:", err);
     } finally {
       setLoading(false);
     }
@@ -93,9 +100,9 @@ const TotalProfitPerYear = () => {
       <div className="d-flex justify-content-between align-items-center">
         {/* Title with Icon */}
         <div className="d-flex align-items-center gap-2">
-          <FaMoneyBillWave size={24} className="text-primary me-2" />{" "}
-          {/* 👈 Profit Icon */}
-          <h6 className="mb-0">Total Profit</h6>
+          <FaChartLine size={24} className="text-success me-2" />{" "}
+          {/* 👈 Sales Icon */}
+          <h6 className="mb-0">Main Total Sales</h6>
         </div>
 
         {/* Year picker */}
@@ -128,12 +135,12 @@ const TotalProfitPerYear = () => {
       {loading ? (
         <Spinner animation="border" size="sm" className="mt-3" />
       ) : (
-        <h4 className="fw-bold text-primary mt-3">
-          ₱{totalProfit.toLocaleString("en-PH", { minimumFractionDigits: 2 })}
+        <h4 className="fw-bold text-success mt-3">
+          ₱{totalSales.toLocaleString("en-PH", { minimumFractionDigits: 2 })}
         </h4>
       )}
     </Container>
   );
 };
 
-export default TotalProfitPerYear;
+export default MainTotalSalesPerYear;

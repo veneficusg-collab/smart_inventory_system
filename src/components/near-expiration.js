@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Badge, Container, Image, Spinner } from "react-bootstrap";
+import { Badge, Container, Image, Spinner, ButtonGroup, Button } from "react-bootstrap";
 import { supabase } from "../supabaseClient";
 
 const BUCKET = "Smart-Inventory-System-(Pet Matters)";
@@ -8,26 +8,24 @@ const NearExpiration = () => {
   const [items, setItems] = useState([]);
   const [imageMap, setImageMap] = useState({});
   const [loading, setLoading] = useState(true);
+  const [selectedMonths, setSelectedMonths] = useState(6); // Default to 6 months
 
   useEffect(() => {
     const fetchNearExpiration = async () => {
       setLoading(true);
 
-      // --- CHANGE START ---
-      // 6 months window (approximately 182.5 days)
-      const months = 6;
-      const daysInSixMonths = months * 30.4375; // average days in a month
-      const millisecondsInSixMonths = daysInSixMonths * 24 * 60 * 60 * 1000;
+      // Calculate expiration threshold based on selected months
+      const daysInSelectedMonths = selectedMonths * 30.4375; // average days in a month
+      const millisecondsInSelectedMonths = daysInSelectedMonths * 24 * 60 * 60 * 1000;
       
-      const inSixMonths = new Date(Date.now() + millisecondsInSixMonths).toISOString();
-      // --- CHANGE END ---
+      const thresholdDate = new Date(Date.now() + millisecondsInSelectedMonths).toISOString();
 
       const { data, error } = await supabase
         .from("products")
         .select(
           "product_ID, product_name, product_quantity, product_expiry, product_img"
         )
-        .lte("product_expiry", inSixMonths)
+        .lte("product_expiry", thresholdDate)
         .not("product_expiry", "is", null); // ignore null expiries
 
       if (error) {
@@ -70,16 +68,34 @@ const NearExpiration = () => {
     };
 
     fetchNearExpiration();
-  }, []);
+  }, [selectedMonths]); // Re-fetch when selectedMonths changes
+
+  const handleMonthsChange = (months) => {
+    setSelectedMonths(months);
+  };
 
   return (
     <Container
       className="bg-white mx-3 my-4 rounded p-0"
       style={{ height: 312, width: "370px", overflowY: "auto" }}
     >
-      {/* Header (same style) */}
+      {/* Header with filter buttons */}
       <div className="d-flex justify-content-between align-items-center mx-2 mb-3">
         <span className="mx-1 mt-3 d-inline-block">Near Expiration</span>
+        <ButtonGroup size="sm" className="mt-2">
+          <Button
+            variant={selectedMonths === 3 ? "primary" : "outline-primary"}
+            onClick={() => handleMonthsChange(3)}
+          >
+            3 Months
+          </Button>
+          <Button
+            variant={selectedMonths === 6 ? "primary" : "outline-primary"}
+            onClick={() => handleMonthsChange(6)}
+          >
+            6 Months
+          </Button>
+        </ButtonGroup>
       </div>
 
       {loading ? (

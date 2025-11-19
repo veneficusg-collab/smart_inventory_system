@@ -9,10 +9,10 @@ import AddedStocks from "./added-stocks";
 import LowStocks from "./low-stocks";
 import ProfitChart from "./profit-chart";
 import TotalSalesPerYear from "./total-sales-year";
-import TotalProfitPerYear from "./total-profit-year";
 import TotalExpensesPerYear from "./total-expenses-year";
 import SalesRangeContainer from "./sales-range-container";
 import StockCharts from "./stock-charts";
+import MainTotalSalesPerYear from "./total-main-stock-sales-year";
 
 const AdminDashboard = () => {
   return (
@@ -24,7 +24,7 @@ const AdminDashboard = () => {
               <TotalSalesPerYear />
             </Col>
             <Col md={4}>
-              <TotalProfitPerYear />
+              <MainTotalSalesPerYear />
             </Col>
             <Col md={4}>
               <TotalExpensesPerYear />

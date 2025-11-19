@@ -102,9 +102,10 @@ const AddProduct = ({ setRender }) => {
   useEffect(() => {
     const sp = parseFloat(supplierPrice);
     if (!isNaN(sp)) {
-      // ✅ Supplier price + 10%
-      const suggested = sp + sp * 0.1;
-      setBuyingPrice(suggested.toFixed(2));
+      // ✅ Supplier price + 12% VAT
+      const vatAmount = sp * 0.12;
+      const priceWithVat = sp + vatAmount;
+      setBuyingPrice(priceWithVat.toFixed(2));
     } else {
       setBuyingPrice("");
     }
@@ -397,7 +398,7 @@ const AddProduct = ({ setRender }) => {
 
       if (!productBrand.trim()) throw new Error("Product brand is required");
       if (!buyingPrice || buyingPrice <= 0)
-        throw new Error("Valid buying price is required");
+        throw new Error("Valid VAT price is required");
       if (!quantity || quantity <= 0)
         throw new Error("Valid quantity is required");
 
@@ -779,14 +780,14 @@ const AddProduct = ({ setRender }) => {
                   controlId="formBuyingPrice"
                 >
                   <Form.Label column sm={3} className="text-start">
-                    Buying Price
+                    VAT Price (12%)
                   </Form.Label>
                   <Col sm={9}>
                     <Form.Control
                       type="number"
                       step="0.01"
                       min="0"
-                      placeholder="Enter buying price"
+                      placeholder="Enter VAT price"
                       size="sm"
                       value={buyingPrice}
                       onChange={(e) => setBuyingPrice(e.target.value)}
@@ -794,15 +795,14 @@ const AddProduct = ({ setRender }) => {
                     />
                     {!supplierPrice || isNaN(parseFloat(supplierPrice)) ? (
                       <Form.Text className="text-muted">
-                        Enter Supplier Price first to get a Buying Price
-                        suggestion (10%).
+                        Enter Supplier Price first to get a VAT Price suggestion (12%).
                       </Form.Text>
                     ) : (
                       <Form.Text className="text-muted">
-                        Suggested Buying Price (10% added):{" "}
+                        Suggested VAT Price (12% added):{" "}
                         {(
                           parseFloat(supplierPrice) +
-                          parseFloat(supplierPrice) * 0.1
+                          parseFloat(supplierPrice) * 0.12
                         ).toFixed(2)}{" "}
                         — auto-filled above, you can override.
                       </Form.Text>
