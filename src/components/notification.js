@@ -2,22 +2,20 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { supabase } from "../supabaseClient";
 import { ListGroup, Spinner, Nav } from "react-bootstrap";
 
-const PAGE_SIZE = 20; // how many logs per page
+const PAGE_SIZE = 20;
 
-const Notifications = ({ onClose }) => {
+const Notifications = ({ onClose, onMarkAsRead, unreadNotificationIds }) => {
   const [logs, setLogs] = useState([]);
   const [retrievals, setRetrievals] = useState([]);
-  const [loading, setLoading] = useState(true);       // first load
+  const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [offset, setOffset] = useState(0);            // next offset to fetch
+  const [offset, setOffset] = useState(0);
   const [retrievalOffset, setRetrievalOffset] = useState(0);
-  const [hasMore, setHasMore] = useState(true);       // whether there is more to fetch
+  const [hasMore, setHasMore] = useState(true);
   const [hasMoreRetrievals, setHasMoreRetrievals] = useState(true);
-  const [activeTab, setActiveTab] = useState("inventory"); // "inventory" or "retrievals"
-  const [unreadNotifications, setUnreadNotifications] = useState(new Set());
+  const [activeTab, setActiveTab] = useState("inventory");
   const scrollRef = useRef(null);
 
-  // ---- helpers ----
   const dedupeById = (items) => {
     const seen = new Set();
     return items.filter((x) => {
@@ -27,71 +25,51 @@ const Notifications = ({ onClose }) => {
     });
   };
 
-  const fetchInventoryPage = useCallback(
-    async (startOffset) => {
-      const { data, error } = await supabase
-        .from("logs")
-        .select("id, product_name, product_action, staff, created_at")
-        .order("created_at", { ascending: false })
-        .range(startOffset, startOffset + PAGE_SIZE - 1);
+  const fetchInventoryPage = useCallback(async (startOffset) => {
+    const { data, error } = await supabase
+      .from("logs")
+      .select("id, product_name, product_action, staff, created_at")
+      .order("created_at", { ascending: false })
+      .range(startOffset, startOffset + PAGE_SIZE - 1);
 
-      if (error) throw error;
+    if (error) throw error;
 
-      // Add as unread when first loaded
-      const newIds = (data || []).map(item => item.id);
-      setUnreadNotifications(prev => new Set([...prev, ...newIds]));
+    if (startOffset === 0) {
+      setLogs(data || []);
+    } else {
+      setLogs((prev) => dedupeById([...prev, ...(data || [])]));
+    }
 
-      // update list
-      if (startOffset === 0) {
-        setLogs(data);
-      } else {
-        setLogs((prev) => dedupeById([...prev, ...(data || [])]));
-      }
+    const got = data?.length ?? 0;
+    setOffset(startOffset + got);
+    setHasMore(got === PAGE_SIZE);
+  }, []);
 
-      // set next offset + hasMore
-      const got = data?.length ?? 0;
-      setOffset(startOffset + got);
-      setHasMore(got === PAGE_SIZE);
-    },
-    []
-  );
+  const fetchRetrievalsPage = useCallback(async (startOffset) => {
+    const { data, error } = await supabase
+      .from("main_retrievals")
+      .select("id, staff_name, items, retrieved_at, status")
+      .order("retrieved_at", { ascending: false })
+      .range(startOffset, startOffset + PAGE_SIZE - 1);
 
-  const fetchRetrievalsPage = useCallback(
-    async (startOffset) => {
-      const { data, error } = await supabase
-        .from("main_retrievals")
-        .select("id, staff_name, items, retrieved_at, status")
-        .order("retrieved_at", { ascending: false })
-        .range(startOffset, startOffset + PAGE_SIZE - 1);
+    if (error) throw error;
 
-      if (error) throw error;
+    if (startOffset === 0) {
+      setRetrievals(data || []);
+    } else {
+      setRetrievals((prev) => dedupeById([...prev, ...(data || [])]));
+    }
 
-      // Add as unread when first loaded
-      const newIds = (data || []).map(item => item.id);
-      setUnreadNotifications(prev => new Set([...prev, ...newIds]));
-
-      // update list
-      if (startOffset === 0) {
-        setRetrievals(data);
-      } else {
-        setRetrievals((prev) => dedupeById([...prev, ...(data || [])]));
-      }
-
-      // set next offset + hasMore
-      const got = data?.length ?? 0;
-      setRetrievalOffset(startOffset + got);
-      setHasMoreRetrievals(got === PAGE_SIZE);
-    },
-    []
-  );
+    const got = data?.length ?? 0;
+    setRetrievalOffset(startOffset + got);
+    setHasMoreRetrievals(got === PAGE_SIZE);
+  }, []);
 
   // Mark notification as read
   const markAsRead = (id) => {
-    setUnreadNotifications(prev => {
-      const newSet = new Set(prev);
-      newSet.delete(id);
-      return newSet;
-    });
+    if (onMarkAsRead) {
+      onMarkAsRead([id]);
+    }
   };
 
   // Mark all as read in current tab
@@ -99,11 +77,9 @@ const Notifications = ({ onClose }) => {
     const currentItems = activeTab === "inventory" ? logs : retrievals;
     const currentIds = currentItems.map(item => item.id);
     
-    setUnreadNotifications(prev => {
-      const newSet = new Set(prev);
-      currentIds.forEach(id => newSet.delete(id));
-      return newSet;
-    });
+    if (onMarkAsRead) {
+      onMarkAsRead(currentIds);
+    }
   };
 
   // initial load
@@ -121,59 +97,10 @@ const Notifications = ({ onClose }) => {
     })();
   }, [fetchInventoryPage, fetchRetrievalsPage]);
 
-  // realtime inserts for inventory logs
-  useEffect(() => {
-    const channel = supabase
-      .channel("logs-changes")
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "logs" },
-        (payload) => {
-          setLogs((prev) => {
-            const newLogs = dedupeById([payload.new, ...prev]);
-            // Mark new notification as unread
-            setUnreadNotifications(prev => new Set([...prev, payload.new.id]));
-            return newLogs;
-          });
-          setOffset((prev) => prev + 1);
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, []);
-
-  // realtime inserts for retrievals
-  useEffect(() => {
-    const channel = supabase
-      .channel("retrievals-changes")
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "main_retrievals" },
-        (payload) => {
-          setRetrievals((prev) => {
-            const newRetrievals = dedupeById([payload.new, ...prev]);
-            // Mark new notification as unread
-            setUnreadNotifications(prev => new Set([...prev, payload.new.id]));
-            return newRetrievals;
-          });
-          setRetrievalOffset((prev) => prev + 1);
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, []);
-
   // load more when scrolling near bottom
   const onScroll = async (e) => {
     const el = e.currentTarget;
-    const nearBottom =
-      el.scrollTop + el.clientHeight >= el.scrollHeight - 24;
+    const nearBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 24;
 
     if (nearBottom && !loadingMore && !loading) {
       if (activeTab === "inventory" && hasMore) {
@@ -194,6 +121,10 @@ const Notifications = ({ onClose }) => {
     }
   };
 
+  // Count unread notifications per tab
+  const unreadInventoryCount = logs.filter(log => unreadNotificationIds.has(log.id)).length;
+  const unreadRetrievalsCount = retrievals.filter(retrieval => unreadNotificationIds.has(retrieval.id)).length;
+
   // Render inventory log item
   const renderInventoryLog = (log) => (
     <ListGroup.Item 
@@ -201,11 +132,11 @@ const Notifications = ({ onClose }) => {
       onClick={() => markAsRead(log.id)}
       style={{ 
         cursor: 'pointer',
-        borderLeft: unreadNotifications.has(log.id) ? '4px solid #dc3545' : '4px solid transparent'
+        borderLeft: unreadNotificationIds.has(log.id) ? '4px solid #dc3545' : '4px solid transparent'
       }}
     >
       <div className="d-flex align-items-start">
-        {unreadNotifications.has(log.id) && (
+        {unreadNotificationIds.has(log.id) && (
           <span 
             className="me-2 mt-1"
             style={{
@@ -237,11 +168,11 @@ const Notifications = ({ onClose }) => {
       onClick={() => markAsRead(retrieval.id)}
       style={{ 
         cursor: 'pointer',
-        borderLeft: unreadNotifications.has(retrieval.id) ? '4px solid #dc3545' : '4px solid transparent'
+        borderLeft: unreadNotificationIds.has(retrieval.id) ? '4px solid #dc3545' : '4px solid transparent'
       }}
     >
       <div className="d-flex align-items-start">
-        {unreadNotifications.has(retrieval.id) && (
+        {unreadNotificationIds.has(retrieval.id) && (
           <span 
             className="me-2 mt-1"
             style={{
@@ -280,10 +211,6 @@ const Notifications = ({ onClose }) => {
       </div>
     </ListGroup.Item>
   );
-
-  // Count unread notifications per tab
-  const unreadInventoryCount = logs.filter(log => unreadNotifications.has(log.id)).length;
-  const unreadRetrievalsCount = retrievals.filter(retrieval => unreadNotifications.has(retrieval.id)).length;
 
   if (loading) {
     return (

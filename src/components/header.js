@@ -4,7 +4,7 @@ import { IoMdNotificationsOutline } from "react-icons/io";
 import Notifications from "./notification";
 import { supabase } from "../supabaseClient";
 import { User } from "lucide-react";
-import StaffInfo from "./staff-info"; // ✅ reuse your existing component
+import StaffInfo from "./staff-info";
 
 const Header = () => {
   const [showNotifications, setShowNotifications] = useState(false);
@@ -12,45 +12,86 @@ const Header = () => {
   const [staffName, setStaffName] = useState("");
   const [staffImg, setStaffImg] = useState(null);
   const [staffId, setStaffId] = useState(null);
-
-  // Modal state
   const [showStaffModal, setShowStaffModal] = useState(false);
 
+  // Track unread notification IDs
+  const [unreadNotificationIds, setUnreadNotificationIds] = useState(new Set());
+
   useEffect(() => {
-    // ✅ Listen to new logs in realtime
-    const channel = supabase
-      .channel("logs-notif")
+    // Fetch initial unread count
+    fetchUnreadCount();
+    
+    // Set up real-time listeners
+    const logsChannel = supabase
+      .channel("logs-realtime")
       .on(
         "postgres_changes",
-        { event: "INSERT", schema: "public", table: "logs" },
-        () => {
-          setUnreadCount((prev) => prev + 1);
+        { 
+          event: "INSERT", 
+          schema: "public", 
+          table: "logs" 
+        },
+        (payload) => {
+          console.log("New log notification:", payload.new);
+          setUnreadCount(prev => prev + 1);
+          setUnreadNotificationIds(prev => new Set([...prev, payload.new.id]));
+        }
+      )
+      .subscribe();
+
+    const retrievalsChannel = supabase
+      .channel("retrievals-realtime")
+      .on(
+        "postgres_changes",
+        { 
+          event: "INSERT", 
+          schema: "public", 
+          table: "main_retrievals" 
+        },
+        (payload) => {
+          console.log("New retrieval notification:", payload.new);
+          setUnreadCount(prev => prev + 1);
+          setUnreadNotificationIds(prev => new Set([...prev, payload.new.id]));
         }
       )
       .subscribe();
 
     return () => {
-      supabase.removeChannel(channel);
+      supabase.removeChannel(logsChannel);
+      supabase.removeChannel(retrievalsChannel);
     };
   }, []);
 
-  // ✅ Also listen to retrieval notifications
-  useEffect(() => {
-    const channel = supabase
-      .channel("retrievals-notif")
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "main_retrievals" },
-        () => {
-          setUnreadCount((prev) => prev + 1);
-        }
-      )
-      .subscribe();
+  const fetchUnreadCount = async () => {
+    try {
+      // Get recent notifications (last 100 of each type)
+      const [logsResponse, retrievalsResponse] = await Promise.all([
+        supabase
+          .from("logs")
+          .select("id, created_at")
+          .order("created_at", { ascending: false })
+          .limit(100),
+        supabase
+          .from("main_retrievals")
+          .select("id, retrieved_at")
+          .order("retrieved_at", { ascending: false })
+          .limit(100)
+      ]);
 
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, []);
+      const allNotifications = [
+        ...(logsResponse.data || []),
+        ...(retrievalsResponse.data || [])
+      ];
+
+      // For initial load, consider all as unread, or use your logic
+      const initialUnreadIds = new Set(allNotifications.map(item => item.id));
+      setUnreadNotificationIds(initialUnreadIds);
+      setUnreadCount(initialUnreadIds.size);
+      
+    } catch (error) {
+      console.error("Error fetching unread count:", error);
+    }
+  };
 
   // ✅ Fetch staff_name + staff_img
   useEffect(() => {
@@ -100,9 +141,21 @@ const Header = () => {
     setShowNotifications(false);
   };
 
-  // Function to mark all notifications as read
-  const handleMarkAllAsRead = () => {
-    setUnreadCount(0);
+  // Function to mark notifications as read (called from Notifications component)
+  const handleMarkAsRead = (readIds = []) => {
+    if (readIds.length === 0) {
+      // Mark all as read
+      setUnreadCount(0);
+      setUnreadNotificationIds(new Set());
+    } else {
+      // Mark specific IDs as read
+      setUnreadNotificationIds(prev => {
+        const newSet = new Set(prev);
+        readIds.forEach(id => newSet.delete(id));
+        setUnreadCount(newSet.size);
+        return newSet;
+      });
+    }
   };
 
   return (
@@ -137,7 +190,7 @@ const Header = () => {
                     width: "12px", 
                     height: "12px", 
                     border: "2px solid white",
-                    transform: "translate(-30%, -30%)" // Position it slightly inside
+                    transform: "translate(-30%, -30%)"
                   }}
                 />
                 
@@ -159,7 +212,8 @@ const Header = () => {
           {showNotifications && (
             <Notifications 
               onClose={handleCloseNotifications}
-              onMarkAllAsRead={handleMarkAllAsRead} // Pass callback to clear unread count
+              onMarkAsRead={handleMarkAsRead}
+              unreadNotificationIds={unreadNotificationIds}
             />
           )}
 
@@ -167,7 +221,7 @@ const Header = () => {
           <div
             className="d-flex align-items-center gap-2 me-3"
             style={{ cursor: "pointer" }}
-            onClick={() => setShowStaffModal(true)} // 👈 open modal on click
+            onClick={() => setShowStaffModal(true)}
           >
             {staffImg ? (
               <Image
