@@ -181,8 +181,6 @@ const PharmacySecretary = ({ staffId = "", staffName = "", setRender }) => {
       const { error: updErr } = await supabase
         .from("main_retrievals")
         .update({
-          secretary_processed: true,
-          secretary_processed_at: now,
           status: allReturned ? "returned" : "pending_admin",
         })
         .eq("id", retrieval.id);

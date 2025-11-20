@@ -69,7 +69,7 @@ const ConfirmedRetrievals = ({ staffId = "", staffName = "", limit = 50 }) => {
       // 2) fetch the main_retrievals for those ids (latest first)
       const { data: retrievals, error: retErr } = await supabase
         .from("main_retrievals")
-        .select("id, staff_id, staff_name, items, retrieved_at, status, secretary_processed")
+        .select("id, staff_id, staff_name, items, retrieved_at, status")
         .in("id", retrievalIds)
         .order("retrieved_at", { ascending: false })
         .limit(l);
