@@ -30,6 +30,7 @@ const ProductInfo = ({ setRender, product }) => {
     product_brand: product.product_brand || "",
     unit: product.product_unit || "",
     supplier_price: product.supplier_price || 0,
+    vat: product.vat || 0,
     product_price: product.product_price || 0,
   });
 
@@ -110,6 +111,7 @@ const ProductInfo = ({ setRender, product }) => {
             product_brand: details.product_brand,
             product_unit: details.unit,
             supplier_price: details.supplier_price,
+            vat: details.vat,
             product_price: details.product_price,
             product_quantity: row.product_quantity,
             product_expiry: row.product_expiry,
@@ -392,6 +394,8 @@ const ProductInfo = ({ setRender, product }) => {
                 <TableCell>Supplier Name</TableCell>
                 <TableCell>Supplier #</TableCell>
                 <TableCell>Supplier Price</TableCell>
+                <TableCell>Vat</TableCell>
+
               </TableRow>
             </TableHead>
             <TableBody>
@@ -495,6 +499,25 @@ const ProductInfo = ({ setRender, product }) => {
                       />
                     ) : (
                       `₱${Number(v.supplier_price ?? 0).toFixed(2)}`
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    {isEditing ? (
+                      <Form.Control
+                        type="number"
+                        size="sm"
+                        value={v.vat ?? 0}
+                        onChange={(e) =>
+                          handleVariantChange(
+                            idx,
+                            "vat",
+                            parseFloat(e.target.value)
+                          )
+                        }
+                        style={{ width: "120px" }}
+                      />
+                    ) : (
+                      `₱${Number(v.vat ?? 0).toFixed(2)}`
                     )}
                   </TableCell>
                 </TableRow>

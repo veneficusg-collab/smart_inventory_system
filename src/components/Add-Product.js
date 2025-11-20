@@ -17,6 +17,7 @@ const AddProduct = ({ setRender }) => {
   const [productId, setProductId] = useState(""); // ← fix
   const [category, setCategory] = useState(""); // ← fix
   const [buyingPrice, setBuyingPrice] = useState("");
+  const [vat, setVAT] = useState("");
   const [supplierPrice, setSupplierPrice] = useState("");
   const [quantity, setQuantity] = useState("");
   const [unit, setUnit] = useState(""); // ← fix
@@ -101,12 +102,13 @@ const AddProduct = ({ setRender }) => {
 
   useEffect(() => {
     const sp = parseFloat(supplierPrice);
+
     if (!isNaN(sp)) {
-      // ✅ Supplier price + 12% VAT
       const vatAmount = sp * 0.12;
-      const priceWithVat = sp + vatAmount;
-      setBuyingPrice(priceWithVat.toFixed(2));
+      setVAT(vatAmount.toFixed(2));
+      setBuyingPrice((sp + vatAmount).toFixed(2));
     } else {
+      setVAT("");
       setBuyingPrice("");
     }
   }, [supplierPrice]);
@@ -217,7 +219,7 @@ const AddProduct = ({ setRender }) => {
     if (!name) {
       setCategoryError("Category name cannot be empty.");
       console.warn(categoryError);
-      
+
       return;
     }
 
@@ -420,11 +422,12 @@ const AddProduct = ({ setRender }) => {
         supplier_number: supplierNumber.trim() || null,
         supplier_price: parseFloat(supplierPrice),
         product_expiry: expiryDate || null,
+        vat: parseFloat(vat) || null,
         product_img: imageUrl,
         created_at: new Date().toISOString(),
       };
 
-      const {  error: insertError } = await supabase
+      const { error: insertError } = await supabase
         .from("products")
         .insert([productData])
         .select();
@@ -789,13 +792,14 @@ const AddProduct = ({ setRender }) => {
                       min="0"
                       placeholder="Enter VAT price"
                       size="sm"
-                      value={buyingPrice}
-                      onChange={(e) => setBuyingPrice(e.target.value)}
+                      value={vat}
+                      onChange={(e) => setVAT(e.target.value)}
                       required
                     />
                     {!supplierPrice || isNaN(parseFloat(supplierPrice)) ? (
                       <Form.Text className="text-muted">
-                        Enter Supplier Price first to get a VAT Price suggestion (12%).
+                        Enter Supplier Price first to get a VAT Price suggestion
+                        (12%).
                       </Form.Text>
                     ) : (
                       <Form.Text className="text-muted">
@@ -807,6 +811,27 @@ const AddProduct = ({ setRender }) => {
                         — auto-filled above, you can override.
                       </Form.Text>
                     )}
+                  </Col>
+                </Form.Group>
+                <Form.Group
+                  as={Row}
+                  className="mb-3 mt-4"
+                  controlId="formBuyingPrice"
+                >
+                  <Form.Label column sm={3} className="text-start">
+                    SRP
+                  </Form.Label>
+                  <Col sm={9}>
+                    <Form.Control
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      placeholder="Enter supplier price"
+                      size="sm"
+                      value={buyingPrice}
+                      onChange={(e) => setBuyingPrice(e.target.value)}
+                      required
+                    />
                   </Col>
                 </Form.Group>
 

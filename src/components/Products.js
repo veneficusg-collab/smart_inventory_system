@@ -355,6 +355,7 @@ const fetchProducts = async () => {
                 <TableCell align="left">Category</TableCell>
                 <TableCell align="left">Price</TableCell>
                 <TableCell align="left">Supplier Price</TableCell>
+                <TableCell align="left">VAT</TableCell>
                 <TableCell align="left">Quantity</TableCell>
                 <TableCell align="left">Unit</TableCell>
                 <TableCell align="left">Expiry Date</TableCell>
@@ -439,6 +440,9 @@ const fetchProducts = async () => {
                         </TableCell>
                         <TableCell>
                           ₱{product.supplier_price?.toFixed(2)}
+                        </TableCell>
+                        <TableCell>
+                          ₱{product.vat?.toFixed(2)}
                         </TableCell>
                         <TableCell>{product.product_quantity}</TableCell>
                         <TableCell>{product.product_unit || "N/A"}</TableCell>

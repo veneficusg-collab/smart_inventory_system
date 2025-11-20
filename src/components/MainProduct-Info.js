@@ -30,6 +30,7 @@ const MainProductInfo = ({ setRender, product }) => {
     product_brand: product.product_brand || "",
     unit: product.product_unit || "",
     supplier_price: product.supplier_price || 0,
+    vat: product.vat || 0,
     product_price: product.product_price || 0,
   });
 
@@ -110,9 +111,12 @@ const MainProductInfo = ({ setRender, product }) => {
             product_brand: details.product_brand,
             product_unit: details.unit,
             supplier_price: details.supplier_price,
+            vat: details.vat,
             product_price: details.product_price,
             product_quantity: row.product_quantity,
             product_expiry: row.product_expiry,
+            supplier_name: row.supplier_name,
+            supplier_number: row.supplier_number,
           })
           .eq("id", row.id);
 
@@ -130,8 +134,13 @@ const MainProductInfo = ({ setRender, product }) => {
   const handleCancel = () => {
     setEditedVariants(variants);
     setDetails({
+      product_ID: product.product_ID || "",
+      product_name: product.product_name || "",
+      product_category: product.product_category || "",
+      product_brand: product.product_brand || "",
       unit: product.product_unit || "",
       supplier_price: product.supplier_price || 0,
+      vat: product.vat || 0,
       product_price: product.product_price || 0,
     });
     setIsEditing(false);
@@ -156,6 +165,8 @@ const MainProductInfo = ({ setRender, product }) => {
           supplier_name: row.supplier_name ?? null,
           product_brand: row.product_brand ?? null,
           supplier_price: row.supplier_price ?? null,
+          vat: row.vat ?? null,
+          supplier_number: row.supplier_number ?? null,
         };
 
         const { error: insertError } = await supabase
@@ -169,7 +180,7 @@ const MainProductInfo = ({ setRender, product }) => {
 
         // 2) ✅ Insert a LOG for this archived variant (product_action = "Archive")
         const logRow = {
-          product_id: row.product_ID, // or product_code if your logs use that column name
+          product_id: row.product_ID,
           product_name: row.product_name ?? row.product_ID,
           product_category: row.product_category ?? null,
           product_unit: row.product_unit ?? null,
@@ -338,6 +349,45 @@ const MainProductInfo = ({ setRender, product }) => {
               )}
             </div>
 
+            {/* Supplier Price */}
+            <div className="d-flex justify-content-between align-items-center my-2">
+              <span>Supplier Price</span>
+              {isEditing ? (
+                <Form.Control
+                  type="number"
+                  size="sm"
+                  value={details.supplier_price}
+                  onChange={(e) =>
+                    handleDetailsChange(
+                      "supplier_price",
+                      parseFloat(e.target.value)
+                    )
+                  }
+                  style={{ width: "120px" }}
+                />
+              ) : (
+                <span>₱{Number(details.supplier_price).toFixed(2)}</span>
+              )}
+            </div>
+
+            {/* VAT */}
+            <div className="d-flex justify-content-between align-items-center my-2">
+              <span>VAT</span>
+              {isEditing ? (
+                <Form.Control
+                  type="number"
+                  size="sm"
+                  value={details.vat}
+                  onChange={(e) =>
+                    handleDetailsChange("vat", parseFloat(e.target.value))
+                  }
+                  style={{ width: "120px" }}
+                />
+              ) : (
+                <span>₱{Number(details.vat).toFixed(2)}</span>
+              )}
+            </div>
+
             {/* Product Price */}
             <div className="d-flex justify-content-between align-items-center my-2">
               <span>Product Price</span>
@@ -380,7 +430,7 @@ const MainProductInfo = ({ setRender, product }) => {
         </Col>
       </Row>
 
-      {/* Stock Entries (now shows per-variant Supplier Name & Supplier Price) */}
+      {/* Stock Entries */}
       <div className="mx-5 my-4">
         <h6>Stock Entries</h6>
         <TableContainer component={Paper}>
@@ -392,6 +442,7 @@ const MainProductInfo = ({ setRender, product }) => {
                 <TableCell>Supplier Name</TableCell>
                 <TableCell>Supplier #</TableCell>
                 <TableCell>Supplier Price</TableCell>
+                <TableCell>VAT</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -463,11 +514,11 @@ const MainProductInfo = ({ setRender, product }) => {
                       <Form.Control
                         type="text"
                         size="sm"
-                        value={v.supplier_number|| ""}
+                        value={v.supplier_number || ""}
                         onChange={(e) =>
                           handleVariantChange(
                             idx,
-                            "supplier_name",
+                            "supplier_number",
                             e.target.value
                           )
                         }
@@ -495,6 +546,25 @@ const MainProductInfo = ({ setRender, product }) => {
                       />
                     ) : (
                       `₱${Number(v.supplier_price ?? 0).toFixed(2)}`
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    {isEditing ? (
+                      <Form.Control
+                        type="number"
+                        size="sm"
+                        value={v.vat ?? 0}
+                        onChange={(e) =>
+                          handleVariantChange(
+                            idx,
+                            "vat",
+                            parseFloat(e.target.value)
+                          )
+                        }
+                        style={{ width: "120px" }}
+                      />
+                    ) : (
+                      `₱${Number(v.vat ?? 0).toFixed(2)}`
                     )}
                   </TableCell>
                 </TableRow>

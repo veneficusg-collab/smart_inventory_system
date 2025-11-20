@@ -1,10 +1,9 @@
 import { Col, Container, Row } from "react-bootstrap";
-import { Form, Button, Alert, InputGroup } from "react-bootstrap"; // merged imports
-import Modal from "react-bootstrap/Modal";
+import { Form, Button, Alert, InputGroup } from "react-bootstrap";
 import { useEffect, useState } from "react";
 import { supabase } from "../supabaseClient";
 import BarcodeModal from "./barcode-modal";
-import { LuScanBarcode, LuPlus, LuCheck, LuX } from "react-icons/lu"; // ← NEW icons
+import { LuScanBarcode, LuPlus, LuCheck, LuX } from "react-icons/lu";
 
 const MainAddProduct = ({ setRender }) => {
   const [dragActive, setDragActive] = useState(false);
@@ -15,40 +14,41 @@ const MainAddProduct = ({ setRender }) => {
   // Form state
   const [productName, setProductName] = useState("");
   const [productBrand, setProductBrand] = useState("");
-  const [productId, setProductId] = useState(""); // ← fix
-  const [category, setCategory] = useState(""); // ← fix
+  const [productId, setProductId] = useState("");
+  const [category, setCategory] = useState("");
   const [buyingPrice, setBuyingPrice] = useState("");
+  const [vat, setVAT] = useState("");
   const [supplierPrice, setSupplierPrice] = useState("");
   const [quantity, setQuantity] = useState("");
-  const [unit, setUnit] = useState(""); // ← fix
-  const [supplierName, setSupplierName] = useState(""); // ← fix
-  const [supplierNumber, setSupplierNumber] = useState(""); // ← fix
-  const [expiryDate, setExpiryDate] = useState(""); // safer than null
+  const [unit, setUnit] = useState("");
+  const [supplierName, setSupplierName] = useState("");
+  const [supplierNumber, setSupplierNumber] = useState("");
+  const [expiryDate, setExpiryDate] = useState("");
 
   // Loading and error states
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
-  // ✅ Product ID check state
-  const [prodIdStatus, setProdIdStatus] = useState("idle"); // 'idle' | 'checking' | 'exists' | 'available'
+  // Product ID check state
+  const [prodIdStatus, setProdIdStatus] = useState("idle");
   const [prodIdMsg, setProdIdMsg] = useState("");
 
-  // ====== BRAND DROPDOWN STATE (NEW) ======
-  const [brandList, setBrandList] = useState([]); // available brands
+  // Brand dropdown state
+  const [brandList, setBrandList] = useState([]);
   const [brandLoading, setBrandLoading] = useState(false);
   const [brandError, setBrandError] = useState("");
   const [isAddingBrand, setIsAddingBrand] = useState(false);
   const [newBrandName, setNewBrandName] = useState("");
 
-  // ====== CATEGORY DROPDOWN STATE ======
+  // Category dropdown state
   const [categoryList, setCategoryList] = useState([]);
   const [categoryLoading, setCategoryLoading] = useState(false);
   const [categoryError, setCategoryError] = useState("");
   const [isAddingCategory, setIsAddingCategory] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState("");
 
-  // ====== SUPPLIER DROPDOWN STATE ======
+  // Supplier dropdown state
   const [supplierList, setSupplierList] = useState([]);
   const [supplierLoading, setSupplierLoading] = useState(false);
   const [supplierError, setSupplierError] = useState("");
@@ -95,18 +95,20 @@ const MainAddProduct = ({ setRender }) => {
         setProdIdStatus("available");
         setProdIdMsg("✅ Product ID is available");
       }
-    }, 500); // debounce 0.5s
+    }, 500);
 
     return () => clearTimeout(delay);
   }, [productId]);
 
   useEffect(() => {
     const sp = parseFloat(supplierPrice);
+
     if (!isNaN(sp)) {
-      // ✅ Supplier price + 10%
-      const suggested = sp + sp * 0.1;
-      setBuyingPrice(suggested.toFixed(2));
+      const vatAmount = sp * 0.12;
+      setVAT(vatAmount.toFixed(2));
+      setBuyingPrice((sp + vatAmount).toFixed(2));
     } else {
+      setVAT("");
       setBuyingPrice("");
     }
   }, [supplierPrice]);
@@ -122,7 +124,7 @@ const MainAddProduct = ({ setRender }) => {
       a.localeCompare(b)
     );
     setSupplierList(updated);
-    setSupplierName(name); // select the new supplier
+    setSupplierName(name);
     setIsAddingSupplier(false);
     setNewSupplierName("");
   };
@@ -140,12 +142,12 @@ const MainAddProduct = ({ setRender }) => {
 
       const { data, error } = await supabase
         .from("main_stock_room_products")
-        .select("supplier_name, supplier_number"); // no .or(), we'll filter in JS
+        .select("supplier_name, supplier_number");
 
       if (error) throw error;
 
-      const namesSet = new Map(); // case-insensitive de-dupe for names
-      const freq = {}; // { nameLower: { number: count } }
+      const namesSet = new Map();
+      const freq = {};
 
       (data || []).forEach((r) => {
         const name = (r.supplier_name || "").trim();
@@ -161,13 +163,12 @@ const MainAddProduct = ({ setRender }) => {
         }
       });
 
-      // Build mapping: most frequent number per supplier name
       const mapping = {};
       for (const [nameLower, counts] of Object.entries(freq)) {
         const best = Object.entries(counts).sort(
           (a, b) => b[1] - a[1] || a[0].localeCompare(b[0])
         )[0]?.[0];
-        if (best) mapping[namesSet.get(nameLower)] = best; // keep original casing
+        if (best) mapping[namesSet.get(nameLower)] = best;
       }
 
       setSupplierPhoneByName(mapping);
@@ -183,7 +184,6 @@ const MainAddProduct = ({ setRender }) => {
     }
   };
 
-  // ====== LOAD CATEGORIES FROM SUPABASE ======
   const fetchCategories = async () => {
     try {
       setCategoryError("");
@@ -223,7 +223,7 @@ const MainAddProduct = ({ setRender }) => {
       a.localeCompare(b)
     );
     setCategoryList(updated);
-    setCategory(name); // select the new category
+    setCategory(name);
     setIsAddingCategory(false);
     setNewCategoryName("");
   };
@@ -239,7 +239,6 @@ const MainAddProduct = ({ setRender }) => {
       setBrandError("");
       setBrandLoading(true);
 
-      // Pull all product_brand values, de-dup on the client
       const { data, error } = await supabase
         .from("main_stock_room_products")
         .select("product_brand")
@@ -273,13 +272,12 @@ const MainAddProduct = ({ setRender }) => {
       setBrandError("");
       setBrandLoading(true);
 
-      // No DB insert — brands list comes from products table.
       const updated = Array.from(new Set([...brandList, name])).sort((a, b) =>
         a.localeCompare(b)
       );
 
       setBrandList(updated);
-      setProductBrand(name); // pick the new brand
+      setProductBrand(name);
       setIsAddingBrand(false);
       setNewBrandName("");
     } catch (err) {
@@ -356,8 +354,8 @@ const MainAddProduct = ({ setRender }) => {
         .substring(2)}.${fileExt}`;
       const filePath = `products/${fileName}`;
 
-      const { data, error } = await supabase.storage
-        .from("Smart-Inventory-System-(Pet Matters)") // Make sure this bucket exists in your Supabase Storage
+      const { error } = await supabase.storage
+        .from("Smart-Inventory-System-(Pet Matters)")
         .upload(filePath, file, {
           cacheControl: "3600",
           upsert: false,
@@ -365,7 +363,6 @@ const MainAddProduct = ({ setRender }) => {
 
       if (error) throw error;
 
-      // Get public URL
       const {
         data: { publicUrl },
       } = supabase.storage
@@ -396,7 +393,7 @@ const MainAddProduct = ({ setRender }) => {
 
       if (!productBrand.trim()) throw new Error("Product brand is required");
       if (!buyingPrice || buyingPrice <= 0)
-        throw new Error("Valid buying price is required");
+        throw new Error("Valid VAT price is required");
       if (!quantity || quantity <= 0)
         throw new Error("Valid quantity is required");
 
@@ -418,11 +415,12 @@ const MainAddProduct = ({ setRender }) => {
         supplier_number: supplierNumber.trim() || null,
         supplier_price: parseFloat(supplierPrice),
         product_expiry: expiryDate || null,
+        vat: parseFloat(vat) || null,
         product_img: imageUrl,
         created_at: new Date().toISOString(),
       };
 
-      const { data: insertedProducts, error: insertError } = await supabase
+      const { error: insertError } = await supabase
         .from("main_stock_room_products")
         .insert([productData])
         .select();
@@ -431,7 +429,7 @@ const MainAddProduct = ({ setRender }) => {
 
       setSuccess("Product added successfully!");
       setTimeout(() => {
-        setRender("product");
+        setRender("main-products");
       }, 2000);
     } catch (error) {
       console.error("Error adding product:", error);
@@ -440,42 +438,6 @@ const MainAddProduct = ({ setRender }) => {
       setLoading(false);
     }
   };
-
-  useEffect(() => {
-    if (!productId.trim()) {
-      setProdIdStatus("idle");
-      setProdIdMsg("");
-      return;
-    }
-
-    const delay = setTimeout(async () => {
-      setProdIdStatus("checking");
-      setProdIdMsg("Checking Product ID...");
-
-      const { data, error } = await supabase
-        .from("main_stock_room_products")
-        .select("product_ID")
-        .eq("product_ID", productId.trim())
-        .maybeSingle();
-
-      if (error) {
-        console.error("Error checking Product ID:", error);
-        setProdIdStatus("idle");
-        setProdIdMsg("");
-        return;
-      }
-
-      if (data) {
-        setProdIdStatus("exists");
-        setProdIdMsg("❌ Product ID already exists!");
-      } else {
-        setProdIdStatus("available");
-        setProdIdMsg("✅ Product ID is available");
-      }
-    }, 500); // debounce 0.5s
-
-    return () => clearTimeout(delay);
-  }, [productId]);
 
   // Reset form function
   const resetForm = () => {
@@ -496,8 +458,6 @@ const MainAddProduct = ({ setRender }) => {
     setIsAddingSupplier(false);
     setNewSupplierName("");
     setSupplierError("");
-
-    // Leave brand view as-is to avoid surprise toggling
   };
 
   return (
@@ -521,7 +481,6 @@ const MainAddProduct = ({ setRender }) => {
           {success}
         </Alert>
       )}
-      {/* Brand errors (local to brand actions) */}
       {brandError && (
         <Alert variant="warning" className="mx-4">
           {brandError}
@@ -580,7 +539,7 @@ const MainAddProduct = ({ setRender }) => {
                   </Col>
                 </Form.Group>
 
-                {/* ====== BRAND FIELD (REPLACED) ====== */}
+                {/* Brand Field */}
                 <Form.Group
                   as={Row}
                   className="mb-3 mt-4"
@@ -615,9 +574,7 @@ const MainAddProduct = ({ setRender }) => {
                           onClick={() => {
                             setIsAddingBrand(true);
                             setTimeout(() => {
-                              // optional: focus the text field once it renders
-                              const el =
-                                document.getElementById("newBrandInput");
+                              const el = document.getElementById("newBrandInput");
                               el && el.focus();
                             }, 0);
                           }}
@@ -655,8 +612,8 @@ const MainAddProduct = ({ setRender }) => {
                     )}
                   </Col>
                 </Form.Group>
-                {/* ====== END BRAND FIELD ====== */}
-                {/* ====== CATEGORY FIELD ====== */}
+
+                {/* Category Field */}
                 <Form.Group
                   as={Row}
                   className="mb-3 mt-4"
@@ -690,8 +647,7 @@ const MainAddProduct = ({ setRender }) => {
                           onClick={() => {
                             setIsAddingCategory(true);
                             setTimeout(() => {
-                              const el =
-                                document.getElementById("newCategoryInput");
+                              const el = document.getElementById("newCategoryInput");
                               el && el.focus();
                             }, 0);
                           }}
@@ -729,7 +685,6 @@ const MainAddProduct = ({ setRender }) => {
                     )}
                   </Col>
                 </Form.Group>
-                {/* ====== END CATEGORY FIELD ====== */}
 
                 <Form.Group
                   as={Row}
@@ -750,10 +705,11 @@ const MainAddProduct = ({ setRender }) => {
                     />
                   </Col>
                 </Form.Group>
+
                 <Form.Group
                   as={Row}
                   className="mb-3 mt-4"
-                  controlId="formBuyingPrice"
+                  controlId="formSupplierPrice"
                 >
                   <Form.Label column sm={3} className="text-start">
                     Supplier Price
@@ -775,37 +731,58 @@ const MainAddProduct = ({ setRender }) => {
                 <Form.Group
                   as={Row}
                   className="mb-3 mt-4"
-                  controlId="formBuyingPrice"
+                  controlId="formVAT"
                 >
                   <Form.Label column sm={3} className="text-start">
-                    Buying Price
+                    VAT Price (12%)
                   </Form.Label>
                   <Col sm={9}>
                     <Form.Control
                       type="number"
                       step="0.01"
                       min="0"
-                      placeholder="Enter buying price"
+                      placeholder="Enter VAT price"
+                      size="sm"
+                      value={vat}
+                      onChange={(e) => setVAT(e.target.value)}
+                      required
+                    />
+                    {!supplierPrice || isNaN(parseFloat(supplierPrice)) ? (
+                      <Form.Text className="text-muted">
+                        Enter Supplier Price first to get a VAT Price suggestion (12%).
+                      </Form.Text>
+                    ) : (
+                      <Form.Text className="text-muted">
+                        Suggested VAT Price (12% added):{" "}
+                        {(
+                          parseFloat(supplierPrice) +
+                          parseFloat(supplierPrice) * 0.12
+                        ).toFixed(2)}{" "}
+                        — auto-filled above, you can override.
+                      </Form.Text>
+                    )}
+                  </Col>
+                </Form.Group>
+
+                <Form.Group
+                  as={Row}
+                  className="mb-3 mt-4"
+                  controlId="formBuyingPrice"
+                >
+                  <Form.Label column sm={3} className="text-start">
+                    SRP
+                  </Form.Label>
+                  <Col sm={9}>
+                    <Form.Control
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      placeholder="Enter SRP"
                       size="sm"
                       value={buyingPrice}
                       onChange={(e) => setBuyingPrice(e.target.value)}
                       required
                     />
-                    {!supplierPrice || isNaN(parseFloat(supplierPrice)) ? (
-                      <Form.Text className="text-muted">
-                        Enter Supplier Price first to get a Buying Price
-                        suggestion (10%).
-                      </Form.Text>
-                    ) : (
-                      <Form.Text className="text-muted">
-                        Suggested Buying Price (10% added):{" "}
-                        {(
-                          parseFloat(supplierPrice) +
-                          parseFloat(supplierPrice) * 0.1
-                        ).toFixed(2)}{" "}
-                        — auto-filled above, you can override.
-                      </Form.Text>
-                    )}
                   </Col>
                 </Form.Group>
 
@@ -863,7 +840,7 @@ const MainAddProduct = ({ setRender }) => {
                   </Col>
                 </Form.Group>
 
-                {/* ====== SUPPLIER NAME FIELD ====== */}
+                {/* Supplier Name Field */}
                 <Form.Group
                   as={Row}
                   className="mb-3 mt-4"
@@ -882,7 +859,6 @@ const MainAddProduct = ({ setRender }) => {
                             setSupplierName(val);
                             const suggested = supplierPhoneByName[val];
                             if (suggested && !supplierNumber) {
-                              // only fill if empty
                               setSupplierNumber(suggested);
                             }
                           }}
@@ -905,8 +881,7 @@ const MainAddProduct = ({ setRender }) => {
                           onClick={() => {
                             setIsAddingSupplier(true);
                             setTimeout(() => {
-                              const el =
-                                document.getElementById("newSupplierInput");
+                              const el = document.getElementById("newSupplierInput");
                               el && el.focus();
                             }, 0);
                           }}
@@ -951,9 +926,8 @@ const MainAddProduct = ({ setRender }) => {
                     )}
                   </Col>
                 </Form.Group>
-                {/* ====== END SUPPLIER NAME FIELD ====== */}
 
-                {/* ====== SUPPLIER # FIELD (TEXT INPUT) ====== */}
+                {/* Supplier Number Field */}
                 <Form.Group
                   as={Row}
                   className="mb-3 mt-4"
@@ -972,7 +946,6 @@ const MainAddProduct = ({ setRender }) => {
                     />
                   </Col>
                 </Form.Group>
-                {/* ====== END SUPPLIER # FIELD ====== */}
               </div>
             </Col>
 

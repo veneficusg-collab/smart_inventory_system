@@ -19,15 +19,12 @@ import Paper from "@mui/material/Paper";
 import TablePagination from "@mui/material/TablePagination";
 import { CircularProgress, Alert } from "@mui/material";
 import { supabase } from "../supabaseClient";
-import OverallInventory from "./overall-inventory";
+import MainOverallInventory from "./MainOverall-inventory";
 import { IoMdRefresh } from "react-icons/io";
 import { LuScanBarcode } from "react-icons/lu";
-import { IoIosSearch } from "react-icons/io";
 import BarcodeModal from "./barcode-modal";
 import { IoSearch } from "react-icons/io5";
-import MainOverallInventory from "./MainOverall-inventory";
 import AdminPendingConfirmations from "./adminPendingConfirmation";
-import RetrievalLogs from "./retrievalLogs";
 import AdminRetrievalLogs from "./adminRetrievalLogs";
 
 const MainProducts = ({ setRender, setProduct, setID, staffRole }) => {
@@ -43,85 +40,82 @@ const MainProducts = ({ setRender, setProduct, setID, staffRole }) => {
   const [renderState, setRenderState] = useState(false);
   const [barcodeModalShow, setBarcodeModalShow] = useState(false);
 
-  // ✅ only search query remains
   const [searchQuery, setSearchQuery] = useState("");
 
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(25);
 
   useEffect(() => {
-    console.log("staffRole in Products:", staffRole);
+    console.log("staffRole in MainProducts:", staffRole);
   }, [staffRole]);
 
   // fetch products
-  // fetch products
-const fetchProducts = async () => {
-  try {
-    setLoading(true);
-    setError("");
+  const fetchProducts = async () => {
+    try {
+      setLoading(true);
+      setError("");
 
-    const { data, error } = await supabase
-      .from("main_stock_room_products")
-      .select("*")
-      .order("created_at", { ascending: false });
+      const { data, error } = await supabase
+        .from("main_stock_room_products")
+        .select("*")
+        .order("created_at", { ascending: false });
 
-    if (error) throw error;
+      if (error) throw error;
 
-    // ✅ Merge products with same product_ID
-    const merged = Object.values(
-      (data || []).reduce((acc, p) => {
-        if (!acc[p.product_ID]) {
-          acc[p.product_ID] = { ...p };
-        } else {
-          // 🔹 Sum quantities
-          acc[p.product_ID].product_quantity += p.product_quantity;
+      // ✅ Merge products with same product_ID
+      const merged = Object.values(
+        (data || []).reduce((acc, p) => {
+          if (!acc[p.product_ID]) {
+            acc[p.product_ID] = { ...p };
+          } else {
+            // 🔹 Sum quantities
+            acc[p.product_ID].product_quantity += p.product_quantity;
 
-          // 🔹 Nearest expiry date (earliest)
-          if (p.product_expiry) {
-            const currentExpiry = acc[p.product_ID].product_expiry
-              ? new Date(acc[p.product_ID].product_expiry)
-              : null;
-            const newExpiry = new Date(p.product_expiry);
+            // 🔹 Nearest expiry date (earliest)
+            if (p.product_expiry) {
+              const currentExpiry = acc[p.product_ID].product_expiry
+                ? new Date(acc[p.product_ID].product_expiry)
+                : null;
+              const newExpiry = new Date(p.product_expiry);
 
-            if (!currentExpiry || newExpiry < currentExpiry) {
-              acc[p.product_ID].product_expiry = p.product_expiry;
+              if (!currentExpiry || newExpiry < currentExpiry) {
+                acc[p.product_ID].product_expiry = p.product_expiry;
+              }
             }
           }
+          return acc;
+        }, {})
+      );
+
+      setProducts(merged);
+      setFilteredProducts(merged);
+
+      // ✅ Build image URL map based on merged data
+      const map = {};
+      merged.forEach((p) => {
+        const key = p.product_img;
+        if (!key) {
+          map[p.product_ID] = "";
+          return;
         }
-        return acc;
-      }, {})
-    );
+        if (typeof key === "string" && key.startsWith("http")) {
+          map[p.product_ID] = key;
+        } else {
+          const { data: pub } = supabase.storage
+            .from("Smart-Inventory-System-(Pet Matters)")
+            .getPublicUrl(`products/${key}`);
+          map[p.product_ID] = pub?.publicUrl || "";
+        }
+      });
+      setImageMap(map);
 
-    setProducts(merged);
-    setFilteredProducts(merged);
-
-    // ✅ Build image URL map based on merged data
-    const map = {};
-    merged.forEach((p) => {
-      const key = p.product_img;
-      if (!key) {
-        map[p.product_ID] = "";
-        return;
-      }
-      if (typeof key === "string" && key.startsWith("http")) {
-        map[p.product_ID] = key;
-      } else {
-        const { data: pub } = supabase.storage
-          .from("Smart-Inventory-System-(Pet Matters)")
-          .getPublicUrl(`products/${key}`);
-        map[p.product_ID] = pub?.publicUrl || "";
-      }
-    });
-    setImageMap(map);
-
-  } catch (error) {
-    console.error("Error fetching products:", error);
-    setError("Failed to load products. Please try again.");
-  } finally {
-    setLoading(false);
-  }
-};
-
+    } catch (error) {
+      console.error("Error fetching products:", error);
+      setError("Failed to load products. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
     fetchProducts();
@@ -175,13 +169,14 @@ const fetchProducts = async () => {
     setStockModal(true);
     setButtonState("Restock");
   };
+
   const handleUnstock = () => {
     setRenderState("main-unstock");
     setStockModal(true);
     setButtonState("Unstock");
   };
 
-  // 🔍 Only search filter remains
+  // 🔍 Search filter
   useEffect(() => {
     let result = [...products];
 
@@ -201,7 +196,7 @@ const fetchProducts = async () => {
   if (loading) {
     return (
       <>
-        <OverallInventory />
+        <MainOverallInventory />
         <Container
           className="bg-white mx-4 my-2 rounded p-4 d-flex justify-content-center align-items-center"
           fluid
@@ -302,8 +297,8 @@ const fetchProducts = async () => {
               onChange={(e) => setSearchQuery(e.target.value)}
               style={{
                 borderLeft: "none",
-                boxShadow: "none", // 🚫 removes blue glow
-                outline: "none", // 🚫 removes black outline
+                boxShadow: "none",
+                outline: "none",
               }}
             />
           </InputGroup>
@@ -359,6 +354,7 @@ const fetchProducts = async () => {
                 <TableCell align="left">Category</TableCell>
                 <TableCell align="left">Price</TableCell>
                 <TableCell align="left">Supplier Price</TableCell>
+                <TableCell align="left">VAT</TableCell>
                 <TableCell align="left">Quantity</TableCell>
                 <TableCell align="left">Unit</TableCell>
                 <TableCell align="left">Expiry Date</TableCell>
@@ -368,7 +364,7 @@ const fetchProducts = async () => {
             <TableBody>
               {filteredProducts.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={10} align="center" sx={{ py: 4 }}>
+                  <TableCell colSpan={11} align="center" sx={{ py: 4 }}>
                     <div className="text-muted">
                       <p>No products found</p>
                       <Button size="sm" onClick={handleAddProductButton}>
@@ -410,7 +406,6 @@ const fetchProducts = async () => {
                                 border: "1px solid #eee",
                               }}
                               onError={(e) => {
-                                // hide broken image & show placeholder box
                                 e.currentTarget.style.display = "none";
                               }}
                             />
@@ -443,6 +438,9 @@ const fetchProducts = async () => {
                         </TableCell>
                         <TableCell>
                           ₱{product.supplier_price?.toFixed(2)}
+                        </TableCell>
+                        <TableCell>
+                          ₱{product.vat?.toFixed(2)}
                         </TableCell>
                         <TableCell>{product.product_quantity}</TableCell>
                         <TableCell>{product.product_unit || "N/A"}</TableCell>

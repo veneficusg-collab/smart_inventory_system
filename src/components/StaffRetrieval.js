@@ -173,7 +173,7 @@ const StaffRetrieval = ({
         })),
         retrieved_at: timestamp,
         status: "pending", // will be verified by Pharmacy Secretary
-        secretary_processed: false,
+        // secretary_processed: false,
       };
 
       // return the inserted row so we can reference its id in the request table
