@@ -2,23 +2,26 @@ import { Container } from "react-bootstrap";
 import { Row, Form, Col, Button, InputGroup, Alert } from "react-bootstrap";
 import { useEffect, useState } from "react";
 import { supabase } from "../supabaseClient";
-import { LuPlus, LuCheck, LuX } from "react-icons/lu";
+import { LuPlus, LuCheck, LuX, LuScanBarcode } from "react-icons/lu";
+import BarcodeModal from "./barcode-modal";
 
 const StaffRestock = ({ setRender, scannedId }) => {
   // Form state
   const [productName, setProductName] = useState("");
-  const [productId, setProductId] = useState("");
+  const [productId, setProductId] = useState(scannedId || "");
+  const [manualProductId, setManualProductId] = useState(""); // NEW: for manual input
   const [quantity, setQuantity] = useState("");
   const [currentQuantity, setCurrentQuantity] = useState("");
   const [expiryDate, setExpiryDate] = useState("");
   const [inputExpiryDate, setInputExpiryDate] = useState("");
   const [expiryDates, setExpiryDates] = useState([]);
   const [productImage, setProductImage] = useState(null);
+  const [barcodeModalShow, setBarcodeModalShow] = useState(false); // NEW: barcode modal
 
   // Supplier fields (editable)
   const [supplierName, setSupplierName] = useState("");
   const [supplierPrice, setSupplierPrice] = useState("");
-  const [supplierNumber, setSupplierNumber] = useState(""); // ← NEW
+  const [supplierNumber, setSupplierNumber] = useState("");
 
   // Supplier dropdown state
   const [supplierList, setSupplierList] = useState([]);
@@ -26,7 +29,6 @@ const StaffRestock = ({ setRender, scannedId }) => {
   const [supplierError, setSupplierError] = useState("");
   const [isAddingSupplier, setIsAddingSupplier] = useState(false);
   const [newSupplierName, setNewSupplierName] = useState("");
-
   const [supplierPhoneByName, setSupplierPhoneByName] = useState({});
 
   // Loading and error states
@@ -35,9 +37,25 @@ const StaffRestock = ({ setRender, scannedId }) => {
   const [success, setSuccess] = useState("");
 
   useEffect(() => {
-    fetchProduct(scannedId);
+    if (productId) {
+      fetchProduct(productId);
+    }
     fetchSuppliers();
-  }, []);
+  }, [productId]);
+
+  // NEW: Handle manual product ID submission
+  const handleManualProductIdSubmit = () => {
+    if (manualProductId.trim()) {
+      setProductId(manualProductId.trim());
+      setManualProductId(""); // Clear the manual input field
+    }
+  };
+
+  // NEW: Handle barcode scan
+  const handleBarcodeScan = (scannedId) => {
+    setProductId(scannedId);
+    setBarcodeModalShow(false);
+  };
 
   const toDateString = (date) => new Date(date).toISOString().split("T")[0];
 
@@ -111,11 +129,11 @@ const StaffRestock = ({ setRender, scannedId }) => {
     setSupplierError("");
   };
 
-  const fetchProduct = async (scannedId) => {
+  const fetchProduct = async (productIdToFetch) => {
     const { data: products, error } = await supabase
       .from("products")
       .select("*")
-      .eq("product_ID", scannedId);
+      .eq("product_ID", productIdToFetch);
 
     if (error) {
       console.error(error);
@@ -129,7 +147,7 @@ const StaffRestock = ({ setRender, scannedId }) => {
       setProductName(p0.product_name);
       setSupplierName(p0.supplier_name || "");
       setSupplierPrice(p0.supplier_price ?? "");
-      setSupplierNumber(p0.supplier_number || ""); // populate
+      setSupplierNumber(p0.supplier_number || "");
       setExpiryDates(
         products
           .filter((d) => d.product_expiry)
@@ -191,6 +209,13 @@ const StaffRestock = ({ setRender, scannedId }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    // NEW: Check if product is loaded
+    if (!productId) {
+      setError("Please enter or scan a Product ID first.");
+      return;
+    }
+
     setLoading(true);
     setError("");
     setSuccess("");
@@ -278,7 +303,6 @@ const StaffRestock = ({ setRender, scannedId }) => {
             product_expiry: inputExpiryDate,
             staff: staffName,
             product_action: "Restock",
-          
           },
         ]);
 
@@ -314,6 +338,49 @@ const StaffRestock = ({ setRender, scannedId }) => {
         </div>
       )}
 
+      {/* NEW: Manual Product ID Input Section */}
+      {!productId && (
+        <div className="mx-4 mb-4 p-3 border rounded bg-light">
+          <h6 className="mb-3">Enter Product ID</h6>
+          <InputGroup size="sm">
+            <Form.Control
+              type="text"
+              placeholder="Enter Product ID manually"
+              value={manualProductId}
+              onChange={(e) => setManualProductId(e.target.value)}
+              onKeyPress={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  handleManualProductIdSubmit();
+                }
+              }}
+            />
+            <Button
+              variant="outline-secondary"
+              onClick={() => setBarcodeModalShow(true)}
+            >
+              <LuScanBarcode />
+            </Button>
+            <Button
+              variant="primary"
+              onClick={handleManualProductIdSubmit}
+              disabled={!manualProductId.trim()}
+            >
+              Load Product
+            </Button>
+          </InputGroup>
+          <Form.Text className="text-muted">
+            Enter Product ID manually or scan barcode to load product details.
+          </Form.Text>
+        </div>
+      )}
+
+      <BarcodeModal
+        show={barcodeModalShow}
+        setBarcodeModalShow={setBarcodeModalShow}
+        setProductId={handleBarcodeScan}
+      />
+
       <div className="flex-grow-1">
         <Form onSubmit={handleSubmit}>
           <Row>
@@ -325,217 +392,227 @@ const StaffRestock = ({ setRender, scannedId }) => {
                     Product ID
                   </Form.Label>
                   <Col sm={9}>
-                    <Form.Control value={productId} size="sm" disabled />
-                  </Col>
-                </Form.Group>
-
-                {/* Product Name */}
-                <Form.Group as={Row} className="mb-3 mt-4">
-                  <Form.Label column sm={3} className="text-start">
-                    Product Name
-                  </Form.Label>
-                  <Col sm={9}>
-                    <Form.Control value={productName} size="sm" disabled />
-                  </Col>
-                </Form.Group>
-
-                {/* Supplier Name */}
-                <Form.Group
-                  as={Row}
-                  className="mb-3 mt-4"
-                  controlId="formSupplierName"
-                >
-                  <Form.Label column sm={3} className="text-start">
-                    Supplier Name
-                  </Form.Label>
-                  <Col sm={9}>
-                    {!isAddingSupplier ? (
-                      <InputGroup size="sm">
-                        <Form.Select
-                          value={supplierName}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            setSupplierName(val);
-                            const suggested = supplierPhoneByName[val];
-                            if (suggested) setSupplierNumber(suggested); // auto-fill number
-                          }}
-                          disabled={supplierLoading}
-                        >
-                          <option value="" disabled>
-                            {supplierLoading
-                              ? "Loading suppliers..."
-                              : "Select supplier"}
-                          </option>
-                          {supplierList.map((s) => (
-                            <option key={s} value={s}>
-                              {s}
-                            </option>
-                          ))}
-                        </Form.Select>
-                        <Button
-                          variant="outline-secondary"
-                          title="Add a new supplier"
-                          onClick={() => {
-                            setIsAddingSupplier(true);
-                            setTimeout(() => {
-                              const el =
-                                document.getElementById("newSupplierInput");
-                              el && el.focus();
-                            }, 0);
-                          }}
-                        >
-                          <LuPlus />
-                        </Button>
-                      </InputGroup>
-                    ) : (
-                      <InputGroup size="sm">
-                        <Form.Control
-                          id="newSupplierInput"
-                          type="text"
-                          placeholder="Type new supplier name"
-                          value={newSupplierName}
-                          onChange={(e) => setNewSupplierName(e.target.value)}
-                          disabled={supplierLoading}
-                        />
-                        <Button
-                          variant="outline-success"
-                          title="Save supplier"
-                          onClick={handleSaveNewSupplier}
-                          disabled={supplierLoading || !newSupplierName.trim()}
-                        >
-                          <LuCheck />
-                        </Button>
-                        <Button
-                          variant="outline-secondary"
-                          title="Cancel"
-                          onClick={handleCancelAddSupplier}
-                          disabled={supplierLoading}
-                        >
-                          <LuX />
-                        </Button>
-                      </InputGroup>
-                    )}
-                    {supplierError && (
-                      <div className="mt-2">
-                        <Alert variant="warning" className="py-1 px-2 mb-0">
-                          {supplierError}
-                        </Alert>
-                      </div>
-                    )}
-                  </Col>
-                </Form.Group>
-
-                {/* Supplier Number */}
-                <Form.Group as={Row} className="mb-3 mt-4">
-                  <Form.Label column sm={3} className="text-start">
-                    Supplier Number
-                  </Form.Label>
-                  <Col sm={9}>
-                    <Form.Control
-                      type="text"
-                      placeholder="Enter supplier contact number"
-                      size="sm"
-                      value={supplierNumber}
-                      onChange={(e) => setSupplierNumber(e.target.value)}
+                    <Form.Control 
+                      value={productId} 
+                      size="sm" 
+                      disabled 
+                      placeholder={productId ? "" : "No product loaded"}
                     />
                   </Col>
                 </Form.Group>
 
-                {/* Supplier Price */}
-                <Form.Group as={Row} className="mb-3 mt-4">
-                  <Form.Label column sm={3} className="text-start">
-                    Supplier Price
-                  </Form.Label>
-                  <Col sm={9}>
-                    <Form.Control
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      placeholder="Enter supplier price"
-                      size="sm"
-                      value={supplierPrice}
-                      onChange={(e) => setSupplierPrice(e.target.value)}
-                    />
-                  </Col>
-                </Form.Group>
+                {/* Only show the rest of the form if a product is loaded */}
+                {productId && (
+                  <>
+                    {/* Product Name */}
+                    <Form.Group as={Row} className="mb-3 mt-4">
+                      <Form.Label column sm={3} className="text-start">
+                        Product Name
+                      </Form.Label>
+                      <Col sm={9}>
+                        <Form.Control value={productName} size="sm" disabled />
+                      </Col>
+                    </Form.Group>
 
-                {/* Quantity */}
-                <Form.Group as={Row} className="mb-3 mt-4">
-                  <Form.Label column sm={3} className="text-start">
-                    Quantity
-                  </Form.Label>
-                  <Col sm={9}>
-                    <Form.Control
-                      type="number"
-                      min="0"
-                      placeholder="Enter quantity"
-                      size="sm"
-                      value={quantity}
-                      onChange={(e) => setQuantity(e.target.value)}
-                      required
-                    />
-                  </Col>
-                </Form.Group>
-
-                {/* Expiry Date */}
-                <Form.Group as={Row} className="mb-3 mt-4">
-                  <Form.Label column sm={3} className="text-start">
-                    Expiry Date
-                  </Form.Label>
-                  <Col sm={9}>
-                    <Form.Control
-                      type="date"
-                      size="sm"
-                      value={inputExpiryDate}
-                      onChange={(e) =>
-                        setInputExpiryDate(toDateString(e.target.value))
-                      }
-                    />
-                  </Col>
-                </Form.Group>
-
-                {/* Expiry Dates dropdown */}
-                <div className="mt-5">
-                  <h5>Current Quantity</h5>
-                </div>
-                <Form.Group as={Row} className="mb-3 mt-4">
-                  <Form.Label column sm={3} className="text-start">
-                    Expiry Dates
-                  </Form.Label>
-                  <Col sm={9}>
-                    <Form.Select
-                      size="sm"
-                      value={expiryDate || ""}
-                      onChange={(e) => {
-                        setExpiryDate(e.target.value);
-                        const selected = expiryDates.find(
-                          (d) =>
-                            new Date(d.product_expiry)
-                              .toISOString()
-                              .split("T")[0] === e.target.value
-                        );
-                        setCurrentQuantity(
-                          selected ? selected.product_quantity : null
-                        );
-                      }}
+                    {/* Supplier Name */}
+                    <Form.Group
+                      as={Row}
+                      className="mb-3 mt-4"
+                      controlId="formSupplierName"
                     >
-                      {expiryDates && expiryDates.length > 0 ? (
-                        expiryDates.map((d, idx) => {
-                          const formatted = new Date(d.product_expiry)
-                            .toISOString()
-                            .split("T")[0];
-                          return (
-                            <option key={idx} value={formatted}>
-                              {formatted} (qty: {d.product_quantity})
-                            </option>
-                          );
-                        })
-                      ) : (
-                        <option disabled>No expiry dates</option>
-                      )}
-                    </Form.Select>
-                  </Col>
-                </Form.Group>
+                      <Form.Label column sm={3} className="text-start">
+                        Supplier Name
+                      </Form.Label>
+                      <Col sm={9}>
+                        {!isAddingSupplier ? (
+                          <InputGroup size="sm">
+                            <Form.Select
+                              value={supplierName}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setSupplierName(val);
+                                const suggested = supplierPhoneByName[val];
+                                if (suggested) setSupplierNumber(suggested); // auto-fill number
+                              }}
+                              disabled={supplierLoading}
+                            >
+                              <option value="" disabled>
+                                {supplierLoading
+                                  ? "Loading suppliers..."
+                                  : "Select supplier"}
+                              </option>
+                              {supplierList.map((s) => (
+                                <option key={s} value={s}>
+                                  {s}
+                                </option>
+                              ))}
+                            </Form.Select>
+                            <Button
+                              variant="outline-secondary"
+                              title="Add a new supplier"
+                              onClick={() => {
+                                setIsAddingSupplier(true);
+                                setTimeout(() => {
+                                  const el =
+                                    document.getElementById("newSupplierInput");
+                                  el && el.focus();
+                                }, 0);
+                              }}
+                            >
+                              <LuPlus />
+                            </Button>
+                          </InputGroup>
+                        ) : (
+                          <InputGroup size="sm">
+                            <Form.Control
+                              id="newSupplierInput"
+                              type="text"
+                              placeholder="Type new supplier name"
+                              value={newSupplierName}
+                              onChange={(e) => setNewSupplierName(e.target.value)}
+                              disabled={supplierLoading}
+                            />
+                            <Button
+                              variant="outline-success"
+                              title="Save supplier"
+                              onClick={handleSaveNewSupplier}
+                              disabled={supplierLoading || !newSupplierName.trim()}
+                            >
+                              <LuCheck />
+                            </Button>
+                            <Button
+                              variant="outline-secondary"
+                              title="Cancel"
+                              onClick={handleCancelAddSupplier}
+                              disabled={supplierLoading}
+                            >
+                              <LuX />
+                            </Button>
+                          </InputGroup>
+                        )}
+                        {supplierError && (
+                          <div className="mt-2">
+                            <Alert variant="warning" className="py-1 px-2 mb-0">
+                              {supplierError}
+                            </Alert>
+                          </div>
+                        )}
+                      </Col>
+                    </Form.Group>
+
+                    {/* Supplier Number */}
+                    <Form.Group as={Row} className="mb-3 mt-4">
+                      <Form.Label column sm={3} className="text-start">
+                        Supplier Number
+                      </Form.Label>
+                      <Col sm={9}>
+                        <Form.Control
+                          type="text"
+                          placeholder="Enter supplier contact number"
+                          size="sm"
+                          value={supplierNumber}
+                          onChange={(e) => setSupplierNumber(e.target.value)}
+                        />
+                      </Col>
+                    </Form.Group>
+
+                    {/* Supplier Price */}
+                    <Form.Group as={Row} className="mb-3 mt-4">
+                      <Form.Label column sm={3} className="text-start">
+                        Supplier Price
+                      </Form.Label>
+                      <Col sm={9}>
+                        <Form.Control
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          placeholder="Enter supplier price"
+                          size="sm"
+                          value={supplierPrice}
+                          onChange={(e) => setSupplierPrice(e.target.value)}
+                        />
+                      </Col>
+                    </Form.Group>
+
+                    {/* Quantity */}
+                    <Form.Group as={Row} className="mb-3 mt-4">
+                      <Form.Label column sm={3} className="text-start">
+                        Quantity
+                      </Form.Label>
+                      <Col sm={9}>
+                        <Form.Control
+                          type="number"
+                          min="0"
+                          placeholder="Enter quantity"
+                          size="sm"
+                          value={quantity}
+                          onChange={(e) => setQuantity(e.target.value)}
+                          required
+                        />
+                      </Col>
+                    </Form.Group>
+
+                    {/* Expiry Date */}
+                    <Form.Group as={Row} className="mb-3 mt-4">
+                      <Form.Label column sm={3} className="text-start">
+                        Expiry Date
+                      </Form.Label>
+                      <Col sm={9}>
+                        <Form.Control
+                          type="date"
+                          size="sm"
+                          value={inputExpiryDate}
+                          onChange={(e) =>
+                            setInputExpiryDate(toDateString(e.target.value))
+                          }
+                        />
+                      </Col>
+                    </Form.Group>
+
+                    {/* Expiry Dates dropdown */}
+                    {expiryDates.length > 0 && (
+                      <>
+                        <div className="mt-5">
+                          <h5>Current Quantity</h5>
+                        </div>
+                        <Form.Group as={Row} className="mb-3 mt-4">
+                          <Form.Label column sm={3} className="text-start">
+                            Expiry Dates
+                          </Form.Label>
+                          <Col sm={9}>
+                            <Form.Select
+                              size="sm"
+                              value={expiryDate || ""}
+                              onChange={(e) => {
+                                setExpiryDate(e.target.value);
+                                const selected = expiryDates.find(
+                                  (d) =>
+                                    new Date(d.product_expiry)
+                                      .toISOString()
+                                      .split("T")[0] === e.target.value
+                                );
+                                setCurrentQuantity(
+                                  selected ? selected.product_quantity : null
+                                );
+                              }}
+                            >
+                              {expiryDates.map((d, idx) => {
+                                const formatted = new Date(d.product_expiry)
+                                  .toISOString()
+                                  .split("T")[0];
+                                return (
+                                  <option key={idx} value={formatted}>
+                                    {formatted} (qty: {d.product_quantity})
+                                  </option>
+                                );
+                              })}
+                            </Form.Select>
+                          </Col>
+                        </Form.Group>
+                      </>
+                    )}
+                  </>
+                )}
               </div>
             </Col>
             <Col
@@ -561,34 +638,38 @@ const StaffRestock = ({ setRender, scannedId }) => {
                       borderRadius: "8px",
                     }}
                   />
-                ) : (
+                ) : productId ? (
                   <span className="text-muted">No Image Available</span>
+                ) : (
+                  <span className="text-muted">Load a product to see image</span>
                 )}
               </div>
             </Col>
           </Row>
 
           {/* Buttons */}
-          <div className="d-flex justify-content-end align-items-end p-3">
-            <Button
-              variant="secondary"
-              type="button"
-              size="sm"
-              className="me-2"
-              onClick={handleCancelButton}
-              disabled={loading}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="primary"
-              type="submit"
-              size="sm"
-              disabled={loading}
-            >
-              {loading ? "Restocking..." : "Restock"}
-            </Button>
-          </div>
+          {productId && (
+            <div className="d-flex justify-content-end align-items-end p-3">
+              <Button
+                variant="secondary"
+                type="button"
+                size="sm"
+                className="me-2"
+                onClick={handleCancelButton}
+                disabled={loading}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="primary"
+                type="submit"
+                size="sm"
+                disabled={loading || !quantity}
+              >
+                {loading ? "Restocking..." : "Restock"}
+              </Button>
+            </div>
+          )}
         </Form>
       </div>
     </Container>
