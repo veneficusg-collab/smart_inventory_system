@@ -12,25 +12,28 @@ import ProtectedRoute from "./auth/protected-route";
 import StaffRestock from "./components/Staff-restock";
 import MainStockRoom from "./components/MainStockRoom";
 import ResetPasswordForm from "./pages/ResetPasswordForm";
+import { NotificationProvider } from "./components/NotificationContext";
 
 function App() {
   return (
-    <Router>
-      <Routes>
-        <Route path="/" element={<Login />} />
-        <Route path="/test" element={<StaffRestock />} />
-        <Route
-          path="/dashboard"
-          element={
-            <ProtectedRoute>
-              <Dashboard />
-            </ProtectedRoute>
-          }
-        />
-        <Route path="/main-stock-room" element={<MainStockRoom />} />
-        <Route path="/reset-password" element={<ResetPasswordForm />} />
-      </Routes>
-    </Router>
+          <NotificationProvider>
+      <Router>
+        <Routes>
+          <Route path="/" element={<Login />} />
+          <Route path="/test" element={<StaffRestock />} />
+          <Route
+            path="/dashboard"
+            element={
+              <ProtectedRoute>
+                <Dashboard />
+              </ProtectedRoute>
+            }
+          />
+          <Route path="/main-stock-room" element={<MainStockRoom />} />
+          <Route path="/reset-password" element={<ResetPasswordForm />} />
+        </Routes>
+      </Router>
+  </NotificationProvider>
   );
 }
 

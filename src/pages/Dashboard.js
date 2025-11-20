@@ -19,6 +19,7 @@ import MainInventory from "../components/MainInventory";
 import MainArchive from "../components/MainArchive";
 import StaffRetrieval from "../components/StaffRetrieval";
 import PharmacySecretary from "../components/PharmacySecretary";
+import { NotificationProvider } from "../components/NotificationContext";
 
 const Dashboard = () => {
   const [render, setRender] = useState("AdminDashboard");
@@ -29,12 +30,10 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true); // ✅ Added loading state
 
   const setDefaultRender = useCallback(() => {
-  if (staffRole === "staff") setRender("StaffDashboard");
-  else if (staffRole === "secretary") setRender("PharmacySecretary");
-  else setRender("AdminDashboard");
-}, [staffRole]); // ✅ Add staffRole as a dependency since it's used inside
-
-
+    if (staffRole === "staff") setRender("StaffDashboard");
+    else if (staffRole === "secretary") setRender("PharmacySecretary");
+    else setRender("AdminDashboard");
+  }, [staffRole]); // ✅ Add staffRole as a dependency since it's used inside
 
   useEffect(() => {
     fetchCurrentUser();
@@ -54,7 +53,6 @@ const Dashboard = () => {
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
 
   const fetchCurrentUser = async () => {
     try {
@@ -254,7 +252,9 @@ const Dashboard = () => {
           <Sidebar setRender={setRender} staffRole={staffRole} />
         </Col>
         <Col lg={10} className="p-0" style={{ backgroundColor: "#f2f2f2ff" }}>
-          <Header />
+          <NotificationProvider>
+            <Header />
+          </NotificationProvider>
 
           {/* Admin Links */}
           {render === "AdminDashboard" && <AdminDashboard />}
@@ -275,11 +275,7 @@ const Dashboard = () => {
           {render === "StaffDashboard" && (
             <StaffDashboard setScannedId={setScannedId} setRender={setRender} />
           )}
-          {render === "Retrieval" && (
-            <StaffRetrieval
-              setRender={setRender}
-            />
-          )}
+          {render === "Retrieval" && <StaffRetrieval setRender={setRender} />}
           {render === "Restock" && (
             <StaffRestock scannedId={scannedId} setRender={setRender} />
           )}
@@ -289,7 +285,13 @@ const Dashboard = () => {
           {render === "POS" && <POS />}
 
           {/* Secretary Links */}
-          {render === "PharmacySecretary" && (<PharmacySecretary staffId={staffId} staffName={staffName} setRender={setRender} />)}
+          {render === "PharmacySecretary" && (
+            <PharmacySecretary
+              staffId={staffId}
+              staffName={staffName}
+              setRender={setRender}
+            />
+          )}
 
           {/* All Users */}
           {render === "Archive" && <Archive />}

@@ -1,70 +1,29 @@
+// ============================================
+// FIXED NOTIFICATIONS COMPONENT
+// ============================================
+// File: src/components/notification.jsx
+
 import { useEffect, useRef, useState, useCallback } from "react";
 import { supabase } from "../supabaseClient";
 import { ListGroup, Spinner, Nav, Badge } from "react-bootstrap";
 
-const PAGE_SIZE = 20; // how many logs per page
-
-// Notification sound - simple beep using Web Audio API
-const playNotificationSound = () => {
-  try {
-    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-    const oscillator = audioContext.createOscillator();
-    const gainNode = audioContext.createGain();
-
-    oscillator.connect(gainNode);
-    gainNode.connect(audioContext.destination);
-
-    oscillator.frequency.value = 800; // Hz
-    oscillator.type = 'sine';
-
-    gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
-    gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
-
-    oscillator.start(audioContext.currentTime);
-    oscillator.stop(audioContext.currentTime + 0.3);
-  } catch (error) {
-    console.error('Error playing notification sound:', error);
-  }
-};
-
-// Notification manager for real-time alerts
-class NotificationManager {
-  constructor() {
-    this.listeners = new Set();
-  }
-
-  subscribe(listener) {
-    this.listeners.add(listener);
-    return () => this.listeners.delete(listener);
-  }
-
-  notify(notification) {
-    this.listeners.forEach((listener) => listener(notification));
-  }
-}
-
-export const notificationManager = new NotificationManager();
-
-const BUCKET = "Smart-Inventory-System-(Pet Matters)";
+const PAGE_SIZE = 20;
 
 const Notifications = ({ onClose, onMarkAsRead, readNotificationIds }) => {
   const [logs, setLogs] = useState([]);
   const [retrievals, setRetrievals] = useState([]);
   const [alerts, setAlerts] = useState([]);
-  const [loading, setLoading] = useState(true); // first load
+  const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [offset, setOffset] = useState(0); // next offset to fetch
+  const [offset, setOffset] = useState(0);
   const [retrievalOffset, setRetrievalOffset] = useState(0);
-  const [hasMore, setHasMore] = useState(true); // whether there is more to fetch
+  const [hasMore, setHasMore] = useState(true);
   const [hasMoreRetrievals, setHasMoreRetrievals] = useState(true);
-  const [activeTab, setActiveTab] = useState("alerts"); // "alerts", "inventory" or "retrievals"
+  const [activeTab, setActiveTab] = useState("alerts");
   const [alertsLoading, setAlertsLoading] = useState(true);
   const scrollRef = useRef(null);
-  
-  // Track if this is the initial mount
-  const isInitialMount = useRef(true);
 
-  // ---- helpers ----
+  // Helper to remove duplicates
   const dedupeById = (items) => {
     const seen = new Set();
     return items.filter((x) => {
@@ -79,22 +38,18 @@ const Notifications = ({ onClose, onMarkAsRead, readNotificationIds }) => {
     try {
       setAlertsLoading(true);
 
-      // Check near expiration (3 months threshold)
       const threeMonthsFromNow = new Date();
       threeMonthsFromNow.setMonth(threeMonthsFromNow.getMonth() + 3);
 
       const { data: expirationData, error: expirationError } = await supabase
         .from("products")
-        .select(
-          "product_ID, product_name, product_quantity, product_expiry, product_img"
-        )
+        .select("product_ID, product_name, product_quantity, product_expiry, product_img")
         .lte("product_expiry", threeMonthsFromNow.toISOString())
         .not("product_expiry", "is", null)
         .gt("product_quantity", 0);
 
       if (expirationError) throw expirationError;
 
-      // Check low stocks
       const { data: lowStockData, error: lowStockError } = await supabase
         .from("products")
         .select("product_ID, product_name, product_quantity, product_img")
@@ -103,7 +58,7 @@ const Notifications = ({ onClose, onMarkAsRead, readNotificationIds }) => {
 
       if (lowStockError) throw lowStockError;
 
-      // Format alerts for display
+      // FIXED: Use 'expiry_' prefix instead of 'exp_'
       const expirationAlerts = (expirationData || []).map((item) => {
         const daysLeft = Math.ceil(
           (new Date(item.product_expiry) - new Date()) / (1000 * 60 * 60 * 24)
@@ -111,7 +66,7 @@ const Notifications = ({ onClose, onMarkAsRead, readNotificationIds }) => {
         const severity = getExpirationSeverity(item.product_expiry);
 
         return {
-          id: `exp_${item.product_ID}`,
+          id: `expiry_${item.product_ID}`, // CHANGED FROM exp_ to expiry_
           type: "near_expiration",
           title: "Expiring Soon",
           product_name: item.product_name,
@@ -124,6 +79,7 @@ const Notifications = ({ onClose, onMarkAsRead, readNotificationIds }) => {
         };
       });
 
+      // FIXED: Use 'lowstock_' prefix instead of 'stock_'
       const stockAlerts = (lowStockData || []).map((item) => {
         const severity =
           item.product_quantity === 0
@@ -133,7 +89,7 @@ const Notifications = ({ onClose, onMarkAsRead, readNotificationIds }) => {
             : "medium";
 
         return {
-          id: `stock_${item.product_ID}`,
+          id: `lowstock_${item.product_ID}`, // CHANGED FROM stock_ to lowstock_
           type: "low_stock",
           title: "Low Stock",
           product_name: item.product_name,
@@ -150,26 +106,21 @@ const Notifications = ({ onClose, onMarkAsRead, readNotificationIds }) => {
         (a, b) => new Date(b.timestamp) - new Date(a.timestamp)
       );
 
-      setAlerts(allAlerts);
-
-      // Notify parent of new unread alerts and play sound
-      if (!isInitialMount.current && allAlerts.length > 0) {
-        const newAlertIds = allAlerts
-          .filter(alert => !readNotificationIds.has(alert.id))
-          .map(alert => alert.id);
-        
-        if (newAlertIds.length > 0 && onMarkAsRead) {
-          onMarkAsRead(newAlertIds);
-          playNotificationSound();
-        }
+      // Verify no duplicates
+      const alertIds = allAlerts.map(a => a.id);
+      const uniqueIds = [...new Set(alertIds)];
+      if (alertIds.length !== uniqueIds.length) {
+        console.warn('⚠️ Duplicate alert IDs found in notification.js');
       }
+
+      setAlerts(allAlerts);
     } catch (error) {
       console.error("Error fetching product alerts:", error);
       setAlerts([]);
     } finally {
       setAlertsLoading(false);
     }
-  }, [readNotificationIds, onMarkAsRead]);
+  }, []);
 
   const fetchInventoryPage = useCallback(async (startOffset) => {
     const { data, error } = await supabase
@@ -180,14 +131,12 @@ const Notifications = ({ onClose, onMarkAsRead, readNotificationIds }) => {
 
     if (error) throw error;
 
-    // update list
     if (startOffset === 0) {
       setLogs(data);
     } else {
       setLogs((prev) => dedupeById([...prev, ...(data || [])]));
     }
 
-    // set next offset + hasMore
     const got = data?.length ?? 0;
     setOffset(startOffset + got);
     setHasMore(got === PAGE_SIZE);
@@ -202,14 +151,12 @@ const Notifications = ({ onClose, onMarkAsRead, readNotificationIds }) => {
 
     if (error) throw error;
 
-    // update list
     if (startOffset === 0) {
       setRetrievals(data);
     } else {
       setRetrievals((prev) => dedupeById([...prev, ...(data || [])]));
     }
 
-    // set next offset + hasMore
     const got = data?.length ?? 0;
     setRetrievalOffset(startOffset + got);
     setHasMoreRetrievals(got === PAGE_SIZE);
@@ -239,7 +186,7 @@ const Notifications = ({ onClose, onMarkAsRead, readNotificationIds }) => {
     }
   };
 
-  // initial load
+  // Initial load - fetch all data once
   useEffect(() => {
     (async () => {
       setLoading(true);
@@ -251,110 +198,32 @@ const Notifications = ({ onClose, onMarkAsRead, readNotificationIds }) => {
         ]);
       } finally {
         setLoading(false);
-        isInitialMount.current = false;
       }
     })();
   }, [fetchInventoryPage, fetchRetrievalsPage, fetchProductAlerts]);
 
-  // realtime inserts for inventory logs
+  // Refresh data when tab becomes visible (optional)
   useEffect(() => {
-    const channel = supabase
-      .channel("logs-changes")
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "logs" },
-        (payload) => {
-          setLogs((prev) => {
-            const newLogs = dedupeById([payload.new, ...prev]);
-            return newLogs;
-          });
-          setOffset((prev) => prev + 1);
-          
-          // Play sound and notify parent for new notification
-          if (!isInitialMount.current && !readNotificationIds.has(payload.new.id)) {
-            playNotificationSound();
-            if (onMarkAsRead) {
-              onMarkAsRead([payload.new.id]);
-            }
-          }
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [readNotificationIds, onMarkAsRead]);
-
-  // realtime inserts for retrievals
-  useEffect(() => {
-    const channel = supabase
-      .channel("retrievals-changes")
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "main_retrievals" },
-        (payload) => {
-          setRetrievals((prev) => {
-            const newRetrievals = dedupeById([payload.new, ...prev]);
-            return newRetrievals;
-          });
-          setRetrievalOffset((prev) => prev + 1);
-          
-          // Play sound and notify parent for new notification
-          if (!isInitialMount.current && !readNotificationIds.has(payload.new.id)) {
-            playNotificationSound();
-            if (onMarkAsRead) {
-              onMarkAsRead([payload.new.id]);
-            }
-          }
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [readNotificationIds, onMarkAsRead]);
-
-  // realtime monitoring for product changes
-  useEffect(() => {
-    const channel = supabase
-      .channel("products-changes")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "products" },
-        () => {
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        // Refresh current tab data when user returns
+        if (activeTab === "alerts") {
           fetchProductAlerts();
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [fetchProductAlerts]);
-
-  // Listen for real-time alert notifications
-  useEffect(() => {
-    const unsubscribe = notificationManager.subscribe((notification) => {
-      setAlerts((prev) => {
-        const filtered = prev.filter((alert) => alert.id !== notification.id);
-        return [notification, ...filtered];
-      });
-
-      // Play sound and notify parent
-      if (!isInitialMount.current && !readNotificationIds.has(notification.id)) {
-        playNotificationSound();
-        if (onMarkAsRead) {
-          onMarkAsRead([notification.id]);
+        } else if (activeTab === "inventory") {
+          fetchInventoryPage(0);
+        } else if (activeTab === "retrievals") {
+          fetchRetrievalsPage(0);
         }
       }
-    });
+    };
 
-    return unsubscribe;
-  }, [readNotificationIds, onMarkAsRead]);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [activeTab, fetchProductAlerts, fetchInventoryPage, fetchRetrievalsPage]);
 
-  // load more when scrolling near bottom
+  // Load more when scrolling near bottom
   const onScroll = async (e) => {
     const el = e.currentTarget;
     const nearBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 24;
@@ -375,11 +244,10 @@ const Notifications = ({ onClose, onMarkAsRead, readNotificationIds }) => {
           setLoadingMore(false);
         }
       }
-      // Alerts don't have pagination - they show all current alerts
     }
   };
 
-  // Helper functions for alerts
+  // Helper functions
   const getExpirationSeverity = (expiryDate) => {
     const daysLeft = Math.ceil(
       (new Date(expiryDate) - new Date()) / (1000 * 60 * 60 * 24)
@@ -423,7 +291,7 @@ const Notifications = ({ onClose, onMarkAsRead, readNotificationIds }) => {
     }
   };
 
-  // Render inventory log item
+  // Render functions
   const renderInventoryLog = (log) => (
     <ListGroup.Item
       key={log.id}
@@ -461,7 +329,6 @@ const Notifications = ({ onClose, onMarkAsRead, readNotificationIds }) => {
     </ListGroup.Item>
   );
 
-  // Render retrieval log item
   const renderRetrievalLog = (retrieval) => (
     <ListGroup.Item
       key={retrieval.id}
@@ -518,7 +385,6 @@ const Notifications = ({ onClose, onMarkAsRead, readNotificationIds }) => {
     </ListGroup.Item>
   );
 
-  // Render alert item
   const renderAlert = (alert) => (
     <ListGroup.Item
       key={alert.id}
@@ -726,7 +592,6 @@ const Notifications = ({ onClose, onMarkAsRead, readNotificationIds }) => {
           )}
         </ListGroup>
 
-        {/* loader at bottom when fetching next page */}
         {loadingMore && (
           <div className="d-flex justify-content-center py-2">
             <Spinner animation="border" size="sm" />
@@ -751,7 +616,7 @@ const Notifications = ({ onClose, onMarkAsRead, readNotificationIds }) => {
           <div className="text-center text-muted py-2" style={{ fontSize: 12 }}>
             Showing all current alerts
           </div>
-        )}
+          )}
       </div>
     </div>
   );
