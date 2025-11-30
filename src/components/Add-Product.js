@@ -436,7 +436,7 @@ const AddProduct = ({ setRender }) => {
 
       setSuccess("Product added successfully!");
       setTimeout(() => {
-        setRender("product");
+        setRender("products");
       }, 2000);
     } catch (error) {
       console.error("Error adding product:", error);
