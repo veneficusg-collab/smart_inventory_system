@@ -908,7 +908,7 @@ const AddProduct = ({ setRender }) => {
                             setSupplierName(val);
                             const suggested = supplierPhoneByName[val];
                             if (suggested && !supplierNumber) {
-                              // only fill if empty
+                              // Only fill if empty
                               setSupplierNumber(suggested);
                             }
                           }}
@@ -995,6 +995,7 @@ const AddProduct = ({ setRender }) => {
                       size="sm"
                       value={supplierNumber}
                       onChange={(e) => setSupplierNumber(e.target.value)}
+                      disabled={supplierName && !isAddingSupplier} // Disable if supplier name is selected (not adding new)
                     />
                   </Col>
                 </Form.Group>

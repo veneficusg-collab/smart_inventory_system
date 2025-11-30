@@ -7,7 +7,7 @@ const ProtectedRoute = ({ children }) => {
   const [loading, setLoading] = useState(true);
   const [session, setSession] = useState(null);
   const [qrUser, setQrUser] = useState(null);
-
+  
   useEffect(() => {
     // ✅ Check Supabase Auth session
     supabase.auth.getSession().then(({ data }) => {
