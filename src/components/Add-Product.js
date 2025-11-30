@@ -906,10 +906,15 @@ const AddProduct = ({ setRender }) => {
                           onChange={(e) => {
                             const val = e.target.value;
                             setSupplierName(val);
+
+                            // When supplier name changes, update supplier number based on the selected name
                             const suggested = supplierPhoneByName[val];
-                            if (suggested && !supplierNumber) {
-                              // Only fill if empty
-                              setSupplierNumber(suggested);
+
+                            // Clear supplier number if changing to a different supplier
+                            if (suggested && supplierNumber !== suggested) {
+                              setSupplierNumber(suggested); // Update to the new supplier number
+                            } else {
+                              setSupplierNumber(""); // Clear supplier number if no match or user selecting new one
                             }
                           }}
                           disabled={supplierLoading}
