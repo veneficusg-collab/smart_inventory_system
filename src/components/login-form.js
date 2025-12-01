@@ -60,39 +60,59 @@ const LoginForm = () => {
     }
   };
 
-  // ✅ FIXED: Handle QR code (either scanned or manual input)
+  // ✅ FIXED: Handle QR code (either scanned or manual input - supports JSON, UUID, or barcode)
   const handleQrResult = async (qrCodeValue) => {
     try {
       if (!qrCodeValue) return;
 
       console.log("QR Code Value:", qrCodeValue);
 
-      // Parse QR code if it's a JSON string
       let staffData;
+
+      // Try to parse as JSON first
       try {
         staffData =
           typeof qrCodeValue === "string"
             ? JSON.parse(qrCodeValue)
             : qrCodeValue;
+        
+        console.log("Parsed as JSON:", staffData);
       } catch (parseError) {
-        // If parsing fails, treat it as a staff ID and fetch from database
-        console.log("QR code is not JSON, treating as staff ID");
-        const { data, error } = await supabase
+        // Not JSON, so it's either a staff_barcode or UUID
+        console.log("QR code is not JSON, treating as staff barcode or UUID");
+        
+        // Try to fetch by staff_barcode first (most common case)
+        let { data, error } = await supabase
           .from("staff")
-          .select("id, staff_name, staff_position, staff_img")
-          .eq("id", qrCodeValue)
+          .select("id, staff_name, staff_position, staff_img, staff_barcode")
+          .eq("staff_barcode", qrCodeValue.trim())
           .single();
 
+        // If not found by barcode, try by UUID
         if (error || !data) {
-          alert("Invalid QR code. Staff not found.");
+          console.log("Not found by barcode, trying UUID");
+          const result = await supabase
+            .from("staff")
+            .select("id, staff_name, staff_position, staff_img, staff_barcode")
+            .eq("id", qrCodeValue.trim())
+            .single();
+          
+          data = result.data;
+          error = result.error;
+        }
+
+        if (error || !data) {
+          alert("Invalid code. Staff not found.");
+          console.error("Staff lookup error:", error);
           return;
         }
+        
         staffData = data;
       }
 
       // Validate staff data structure
       if (!staffData.id || !staffData.staff_position) {
-        alert("Invalid QR code format");
+        alert("Invalid QR code format - missing required fields");
         return;
       }
 
@@ -125,7 +145,7 @@ const LoginForm = () => {
   const handleManualQrSubmit = async (e) => {
     e.preventDefault();
     if (!manualQrCode.trim()) {
-      alert("Please enter a QR code");
+      alert("Please enter a staff barcode or ID");
       return;
     }
     await handleQrResult(manualQrCode);
@@ -274,20 +294,20 @@ const LoginForm = () => {
           {/* Manual QR Code Input */}
           <Form onSubmit={handleManualQrSubmit}>
             <Form.Group className="mb-3" controlId="manualQrCode">
-              <Form.Label>Enter QR Code Manually</Form.Label>
+              <Form.Label>Enter Staff Barcode Manually</Form.Label>
               <Form.Control
                 type="text"
-                placeholder="Enter your QR code or staff ID"
+                placeholder="Enter your staff barcode"
                 value={manualQrCode}
                 onChange={(e) => setManualQrCode(e.target.value)}
                 required
               />
               <Form.Text className="text-muted">
-                Enter the QR code value or staff ID from your staff credentials
+                Enter your staff barcode from your ID card
               </Form.Text>
             </Form.Group>
             <Button variant="primary" type="submit" className="w-100">
-              Submit QR Code
+              Submit Barcode
             </Button>
           </Form>
         </Modal.Body>

@@ -115,7 +115,7 @@ const Sidebar = ({ setRender, staffRole }) => {
               >
                 <div className="d-flex align-items-center my-3">
                   <MdManageAccounts />
-                  <span className="mx-3">Manage Staff</span>
+                  <span className="mx-3">Manage Personnel</span>
                 </div>
               </Link>
 

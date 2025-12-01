@@ -240,7 +240,7 @@ const StaffInfo = ({ staffId, setRender, embedded = false }) => {
         {/* Form (narrow + centered) */}
         <Form style={{ width: "100%", maxWidth: 420 }}>
           <Form.Group className="mb-3">
-            <Form.Label>Staff name</Form.Label>
+            <Form.Label>Personnel Name</Form.Label>
             <Form.Control type="text" value={staffName} disabled size="sm" />
           </Form.Group>
 
@@ -416,6 +416,7 @@ const StaffInfo = ({ staffId, setRender, embedded = false }) => {
                 size="sm"
               >
                 <option value="admin">Admin</option>
+                <option value="secretary">Secretary</option>
                 <option value="staff">Staff</option>
               </Form.Select>
             </Form.Group>

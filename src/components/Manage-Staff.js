@@ -106,7 +106,7 @@ const ManageStaff = ({ setStaffId, setRender }) => {
           Staff and Admins
         </span>
         <Button size="sm" className="m-3" onClick={() => setModalShow(true)}>
-          Add New Staff
+          Add New Personnel
         </Button>
       </div>
 
@@ -123,7 +123,7 @@ const ManageStaff = ({ setStaffId, setRender }) => {
         <Table stickyHeader style={{ width: "100%" }}>
           <TableHead>
             <TableRow>
-              <TableCell align="left">Staff Name</TableCell>
+              <TableCell align="left">Personnel Name</TableCell>
               <TableCell align="left">Position</TableCell>
               <TableCell align="left">Contact #</TableCell>
               <TableCell align="left">Email</TableCell>
