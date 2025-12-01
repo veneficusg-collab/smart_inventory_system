@@ -115,6 +115,8 @@ const ProductInfo = ({ setRender, product }) => {
             product_price: details.product_price,
             product_quantity: row.product_quantity,
             product_expiry: row.product_expiry,
+            supplier_name: row.supplier_name, // Update supplier_name
+            supplier_number: row.supplier_number, // Update supplier_number
           })
           .eq("id", row.id);
 
@@ -395,7 +397,6 @@ const ProductInfo = ({ setRender, product }) => {
                 <TableCell>Supplier #</TableCell>
                 <TableCell>Supplier Price</TableCell>
                 <TableCell>Vat</TableCell>
-
               </TableRow>
             </TableHead>
             <TableBody>
@@ -443,6 +444,7 @@ const ProductInfo = ({ setRender, product }) => {
                     )}
                   </TableCell>
 
+                  {/* Editable Supplier Name */}
                   <TableCell>
                     {isEditing ? (
                       <Form.Control
@@ -462,7 +464,9 @@ const ProductInfo = ({ setRender, product }) => {
                       v.supplier_name || "—"
                     )}
                   </TableCell>
-                   <TableCell>
+
+                  {/* Editable Supplier Number */}
+                  <TableCell>
                     {isEditing ? (
                       <Form.Control
                         type="text"
@@ -471,7 +475,7 @@ const ProductInfo = ({ setRender, product }) => {
                         onChange={(e) =>
                           handleVariantChange(
                             idx,
-                            "supplier_name",
+                            "supplier_number",
                             e.target.value
                           )
                         }
@@ -501,6 +505,7 @@ const ProductInfo = ({ setRender, product }) => {
                       `₱${Number(v.supplier_price ?? 0).toFixed(2)}`
                     )}
                   </TableCell>
+
                   <TableCell>
                     {isEditing ? (
                       <Form.Control

@@ -15,19 +15,25 @@ const Header = () => {
   const [staffId, setStaffId] = useState(null);
   const [showStaffModal, setShowStaffModal] = useState(false);
   const [error, setError] = useState(null);
+  const [notificationData, setNotificationData] = useState({
+    logs: [],
+    retrievals: [],
+    alerts: [],
+  });
 
-  // Use notification context - it already handles real-time updates!
   const { readNotificationIds, markAsRead, unreadCount } = useNotifications();
 
-  // Fetch staff info
+  // ✅ FIXED: Fetch staff info with QR login event listener
   useEffect(() => {
     const fetchStaff = async () => {
       try {
-        const { data: { user }, error: userError } = await supabase.auth.getUser();
-        
-        if (userError) throw userError;
+        const {
+          data: { user },
+          error: userError,
+        } = await supabase.auth.getUser();
 
         if (user) {
+          // Regular email/password login
           setStaffId(user.id);
           const { data: staff, error: staffError } = await supabase
             .from("staff")
@@ -49,14 +55,36 @@ const Header = () => {
             }
           }
         } else {
+          // QR code login - check localStorage
           const storedUser = localStorage.getItem("user");
           if (storedUser) {
             try {
               const parsed = JSON.parse(storedUser);
               setStaffId(parsed.id);
               setStaffName(parsed.staff_name || "User");
+              
+              // Fetch full staff info from database
+              const { data: staff, error: staffError } = await supabase
+                .from("staff")
+                .select("staff_name, staff_img")
+                .eq("id", parsed.id)
+                .single();
+
+              if (staffError) throw staffError;
+
+              if (staff) {
+                setStaffName(staff.staff_name);
+
+                if (staff.staff_img) {
+                  const { data: publicUrlData } = supabase.storage
+                    .from("Smart-Inventory-System-(Pet Matters)")
+                    .getPublicUrl(staff.staff_img);
+
+                  setStaffImg(publicUrlData.publicUrl);
+                }
+              }
             } catch (parseError) {
-              console.error('Error parsing stored user:', parseError);
+              console.error("Error parsing stored user:", parseError);
             }
           }
         }
@@ -67,10 +95,73 @@ const Header = () => {
     };
 
     fetchStaff();
+
+    // ✅ Listen for QR login events
+    const handleQrLogin = () => {
+      console.log("QR login event detected, refreshing staff info");
+      fetchStaff();
+    };
+
+    window.addEventListener('qr-login', handleQrLogin);
+
+    // Cleanup
+    return () => {
+      window.removeEventListener('qr-login', handleQrLogin);
+    };
   }, []);
 
+  // Function to fetch notifications
+  const fetchNotifications = async () => {
+    try {
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser();
+
+      if (userError || !user) {
+        console.log("No active user session found.");
+        return;
+      }
+
+      const { data: logs, error: logsError } = await supabase
+        .from("logs")
+        .select("id, product_name, product_action, staff, created_at")
+        .order("created_at", { ascending: false })
+        .limit(100);
+
+      if (logsError) throw logsError;
+
+      const { data: retrievals, error: retrievalsError } = await supabase
+        .from("main_retrievals")
+        .select("id, staff_name, items, retrieved_at, status")
+        .order("retrieved_at", { ascending: false })
+        .limit(100);
+
+      if (retrievalsError) throw retrievalsError;
+
+      const { data: expirationData, error: expirationError } = await supabase
+        .from("products")
+        .select(
+          "product_ID, product_name, product_quantity, product_expiry, product_img"
+        )
+        .lte("product_expiry", new Date().toISOString())
+        .gt("product_quantity", 0);
+
+      if (expirationError) throw expirationError;
+
+      setNotificationData({
+        logs: logs || [],
+        retrievals: retrievals || [],
+        alerts: expirationData || [],
+      });
+    } catch (error) {
+      console.error("Error fetching notifications:", error);
+      setError("Error loading notifications. Please try again later.");
+    }
+  };
+
   const toggleNotifications = () => {
-    setShowNotifications(prev => !prev);
+    setShowNotifications((prev) => !prev);
   };
 
   const handleCloseNotifications = () => {
@@ -79,10 +170,14 @@ const Header = () => {
 
   if (error) {
     return (
-      <Container fluid className="bg-white d-flex align-items-center justify-content-between w-100" style={{ height: "70px" }}>
+      <Container
+        fluid
+        className="bg-white d-flex align-items-center justify-content-between w-100"
+        style={{ height: "70px" }}
+      >
         <div className="alert alert-warning m-0 w-100">
-          <strong>Warning:</strong> There was an error loading notifications. 
-          <button 
+          <strong>Warning:</strong> {error}
+          <button
             className="btn btn-sm btn-outline-secondary ms-2"
             onClick={() => setError(null)}
           >
@@ -93,10 +188,12 @@ const Header = () => {
     );
   }
 
-  // Calculate display count
-  const displayCount = unreadCount > 99 ? '99+' : unreadCount;
+  const displayCount = unreadCount > 99 ? "99+" : unreadCount;
 
-  console.log('🎨 Header rendering with unread count from context:', unreadCount);
+  console.log(
+    "🎨 Header rendering with unread count from context:",
+    unreadCount
+  );
 
   return (
     <ErrorBoundary>
@@ -117,15 +214,15 @@ const Header = () => {
             onClick={toggleNotifications}
           >
             <IoMdNotificationsOutline size={28} />
-            
+
             {unreadCount > 0 && (
               <span
                 className="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger"
-                style={{ 
-                  fontSize: "10px", 
+                style={{
+                  fontSize: "10px",
                   padding: "3px 6px",
                   transform: "translate(-30%, -30%)",
-                  minWidth: "20px"
+                  minWidth: "20px",
                 }}
               >
                 {displayCount}
@@ -134,7 +231,7 @@ const Header = () => {
           </div>
 
           {showNotifications && (
-            <Notifications 
+            <Notifications
               onClose={handleCloseNotifications}
               onMarkAsRead={markAsRead}
               readNotificationIds={readNotificationIds}
@@ -157,7 +254,7 @@ const Header = () => {
                   objectFit: "cover",
                 }}
                 onError={(e) => {
-                  e.target.style.display = 'none';
+                  e.target.style.display = "none";
                 }}
               />
             ) : (
@@ -172,7 +269,10 @@ const Header = () => {
                 <User size={24} />
               </div>
             )}
-            <span className="fw-bold" style={{ fontSize: "0.9rem", color: "#333" }}>
+            <span
+              className="fw-bold"
+              style={{ fontSize: "0.9rem", color: "#333" }}
+            >
               {staffName || "Loading..."}
             </span>
           </div>

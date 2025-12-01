@@ -13,7 +13,7 @@ const LoginForm = () => {
   const [showModal, setShowModal] = useState(false);
   const [forgotPasswordEmail, setForgotPasswordEmail] = useState("");
   const [showForgotPasswordModal, setShowForgotPasswordModal] = useState(false);
-  const [manualQrCode, setManualQrCode] = useState(""); // ✅ Manual QR code input state
+  const [manualQrCode, setManualQrCode] = useState("");
   const navigate = useNavigate();
 
   // email/password login
@@ -24,15 +24,16 @@ const LoginForm = () => {
       email,
       password,
     });
-    
+
     if (error) {
       console.log(error);
       alert("Login failed: " + error.message);
       return;
     }
 
-    // ✅ Check if user has allowed role (admin, super_admin, or secretary)
-    const { data: { user } } = await supabase.auth.getUser();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
     if (user) {
       const { data: staff, error: staffError } = await supabase
         .from("staff")
@@ -43,60 +44,84 @@ const LoginForm = () => {
       if (staffError) {
         console.log(staffError);
         alert("Error fetching staff information");
-        await supabase.auth.signOut(); // Sign out if we can't verify role
+        await supabase.auth.signOut();
         return;
       }
 
-      // ✅ Check if staff role is allowed
       if (staff.staff_position === "staff") {
-        alert("Access denied. Only administrators and secretaries can log in through this portal.");
-        await supabase.auth.signOut(); // Sign out unauthorized user
+        alert(
+          "Access denied. Only administrators and secretaries can log in through this portal."
+        );
+        await supabase.auth.signOut();
         return;
       }
 
-      // ✅ Allowed roles: admin, super_admin, secretary
       navigate("/dashboard");
     }
   };
 
-  // handle QR scan result
-  const handleQrResult = async (result) => {
+  // ✅ FIXED: Handle QR code (either scanned or manual input)
+  const handleQrResult = async (qrCodeValue) => {
     try {
-      if (!result) return;
+      if (!qrCodeValue) return;
 
-      // works for both string and object outputs
-      const qrValue = result;
+      console.log("QR Code Value:", qrCodeValue);
 
-      console.log("Scanned QR:", qrValue);
+      // Parse QR code if it's a JSON string
+      let staffData;
+      try {
+        staffData =
+          typeof qrCodeValue === "string"
+            ? JSON.parse(qrCodeValue)
+            : qrCodeValue;
+      } catch (parseError) {
+        // If parsing fails, treat it as a staff ID and fetch from database
+        console.log("QR code is not JSON, treating as staff ID");
+        const { data, error } = await supabase
+          .from("staff")
+          .select("id, staff_name, staff_position, staff_img")
+          .eq("id", qrCodeValue)
+          .single();
 
-      // Query Supabase staff table
-      const { data, error } = await supabase
-        .from("staff")
-        .select("*")
-        .eq("staff_barcode", qrValue)
-        .single();
+        if (error || !data) {
+          alert("Invalid QR code. Staff not found.");
+          return;
+        }
+        staffData = data;
+      }
 
-      if (error || !data) {
-        alert(" Invalid QR code");
+      // Validate staff data structure
+      if (!staffData.id || !staffData.staff_position) {
+        alert("Invalid QR code format");
         return;
       }
 
-      // ✅ Check if staff role is allowed
-      if (data.staff_position === "staff") {
-        alert("Access denied. Only administrators and secretaries can log in through this portal.");
+      // Check staff role
+      if (staffData.staff_position === "staff") {
+        alert(
+          "Access denied. Only administrators and secretaries can log in through this portal."
+        );
         return;
       }
 
-      // Success → simulate login (only for admin, super_admin, secretary)
-      alert(` Welcome ${data.staff_name} (${data.staff_position})!`);
-      localStorage.setItem("user", JSON.stringify(data));
-      window.location.href = "/dashboard";
+      // Store staff data in localStorage
+      localStorage.setItem("user", JSON.stringify(staffData));
+
+      // Dispatch custom event to notify other components
+      window.dispatchEvent(new Event("qr-login"));
+
+      alert(`Welcome ${staffData.staff_name} (${staffData.staff_position})!`);
+
+      // Close modal and redirect
+      setShowModal(false);
+      navigate("/dashboard");
     } catch (err) {
-      console.error("QR login failed:", err.message);
+      console.error("QR login failed:", err);
+      alert("QR login failed: " + err.message);
     }
   };
 
-  // ✅ Handle manual QR code submission
+  // Handle manual QR code submission
   const handleManualQrSubmit = async (e) => {
     e.preventDefault();
     if (!manualQrCode.trim()) {
@@ -104,15 +129,18 @@ const LoginForm = () => {
       return;
     }
     await handleQrResult(manualQrCode);
-    setManualQrCode(""); // Clear input after submission
+    setManualQrCode("");
   };
 
   const handleForgotPassword = async (e) => {
     e.preventDefault();
 
-    let { error } = await supabase.auth.resetPasswordForEmail(forgotPasswordEmail, {
-      redirectTo: `${window.location.origin}/reset-password`,
-    });
+    let { error } = await supabase.auth.resetPasswordForEmail(
+      forgotPasswordEmail,
+      {
+        redirectTo: `${window.location.origin}/reset-password`,
+      }
+    );
     if (error) {
       console.log(error);
       alert("Forgot password failed: " + error.message);
@@ -148,9 +176,6 @@ const LoginForm = () => {
             <div className="text-center mb-4">
               <h2>Log in to your account</h2>
               <p>Welcome back! Please enter your details.</p>
-              {/* <small className="text-muted">
-                Only administrators and secretaries can log in here
-              </small> */}
             </div>
 
             {/* Email/password form */}
@@ -211,7 +236,7 @@ const LoginForm = () => {
               Login with QR Code
             </Button>
 
-            {/* Main Stock Room button — go to dedicated page */}
+            {/* Main Stock Room button */}
             <Button
               variant="secondary"
               className="w-100 mt-2"
@@ -238,7 +263,7 @@ const LoginForm = () => {
           <div className="mb-4">
             <QrScannerZXing onResult={handleQrResult} />
           </div>
-          
+
           {/* Divider */}
           <div className="d-flex align-items-center my-4">
             <div className="flex-grow-1 border-top"></div>
@@ -252,13 +277,13 @@ const LoginForm = () => {
               <Form.Label>Enter QR Code Manually</Form.Label>
               <Form.Control
                 type="text"
-                placeholder="Enter your QR code"
+                placeholder="Enter your QR code or staff ID"
                 value={manualQrCode}
                 onChange={(e) => setManualQrCode(e.target.value)}
                 required
               />
               <Form.Text className="text-muted">
-                Enter the QR code value from your staff ID
+                Enter the QR code value or staff ID from your staff credentials
               </Form.Text>
             </Form.Group>
             <Button variant="primary" type="submit" className="w-100">
