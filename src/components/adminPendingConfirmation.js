@@ -90,6 +90,7 @@ const AdminPendingConfirmations = () => {
     setShowModal(true);
   };
 
+  // ✅ DEDUCT from Main Stock Room
   const _deductProductsForItems = async (items) => {
     for (const item of items || []) {
       try {
@@ -108,7 +109,7 @@ const AdminPendingConfirmations = () => {
         }
         const prod = (pByBarcode && pByBarcode.length && pByBarcode[0]) || null;
         if (!prod) {
-          console.warn(`Product not found for item ${item.product_id}`);
+          console.warn(`Product not found in Main Stock Room for ${item.product_id}`);
           continue;
         }
 
@@ -122,6 +123,8 @@ const AdminPendingConfirmations = () => {
 
         if (updProdErr) {
           console.error("Failed updating product qty for", prod.id, updProdErr);
+        } else {
+          console.log(`✅ Deducted ${deductQty} from Main Stock Room: ${item.product_name}`);
         }
       } catch (innerErr) {
         console.error("Error deducting product qty for item", item, innerErr);
@@ -129,12 +132,14 @@ const AdminPendingConfirmations = () => {
     }
   };
 
+  // ✅ ADD to Pharmacy (products table)
   const _AddProductsForItems = async (items) => {
     for (const item of items || []) {
       try {
         const addQty = Number(item.qty ?? item.quantity ?? 0);
         if (!addQty) continue;
 
+        // Check if product exists in pharmacy
         const { data: pByBarcode, error: pByBarcodeErr } = await supabase
           .from("products")
           .select("*")
@@ -145,27 +150,33 @@ const AdminPendingConfirmations = () => {
           console.error("product lookup error", pByBarcodeErr);
           continue;
         }
-        const prod = (pByBarcode && pByBarcode.length && pByBarcode[0]) || null;
-        if (!prod) {
-          console.warn(`Product not found for item ${item.product_id}`);
-          alert(
-            "Product not found in Pharmacy, Creating Product to Pharmacy: " +
-              item.product_id
-          );
 
-          let { data: main_stock_room_products, error: mainError } =
+        const prod = (pByBarcode && pByBarcode.length && pByBarcode[0]) || null;
+
+        if (!prod) {
+          // Product doesn't exist in pharmacy, create it
+          console.warn(`Product not found in Pharmacy, Creating: ${item.product_id}`);
+
+          const { data: main_stock_room_products, error: mainError } =
             await supabase
               .from("main_stock_room_products")
               .select("*")
-              .eq("product_ID", item.product_id);
+              .eq("product_ID", item.product_id)
+              .limit(1);
+
           if (mainError) {
-            console.error("product lookup error", mainError);
+            console.error("product lookup error in main stock room", mainError);
+            continue;
+          }
+
+          if (!main_stock_room_products || main_stock_room_products.length === 0) {
+            console.error(`Product ${item.product_id} not found in main stock room either!`);
             continue;
           }
 
           const product = main_stock_room_products[0];
 
-          const { data, error } = await supabase
+          const { error: insertError } = await supabase
             .from("products")
             .insert([
               {
@@ -181,33 +192,38 @@ const AdminPendingConfirmations = () => {
                 supplier_number: product.supplier_number,
                 product_brand: product.product_brand,
                 supplier_price: product.supplier_price,
-                id: product.id,
+                vat: product.vat,
               },
-            ])
-            .select();
+            ]);
 
-          if (error) {
-            console.error("Failed creating product in Pharmacy", error);
+          if (insertError) {
+            console.error("Failed creating product in Pharmacy", insertError);
+          } else {
+            console.log(`✅ Created product in Pharmacy: ${product.product_name} with qty ${addQty}`);
+          }
+        } else {
+          // Product exists, update quantity
+          const currentQty = Number(prod.product_quantity ?? 0);
+          const newQty = currentQty + addQty;
+
+          const { error: updProdErr } = await supabase
+            .from("products")
+            .update({ product_quantity: newQty })
+            .eq("id", prod.id);
+
+          if (updProdErr) {
+            console.error("Failed updating product qty for", prod.id, updProdErr);
+          } else {
+            console.log(`✅ Added ${addQty} to Pharmacy: ${item.product_name} (new qty: ${newQty})`);
           }
         }
-
-        const currentQty = Number(prod.product_quantity ?? 0);
-        const newQty = Math.max(0, currentQty + addQty);
-
-        const { error: updProdErr } = await supabase
-          .from("products")
-          .update({ product_quantity: newQty })
-          .eq("id", prod.id);
-
-        if (updProdErr) {
-          console.error("Failed updating product qty for", prod.id, updProdErr);
-        }
       } catch (innerErr) {
-        console.error("Error deducting product qty for item", item, innerErr);
+        console.error("Error adding product qty for item", item, innerErr);
       }
     }
   };
 
+  // ✅ FIXED: Single confirmation now includes both deduct AND add
   const confirmGroup = async (retrievalId) => {
     setProcessingId(retrievalId);
     setError("");
@@ -222,14 +238,20 @@ const AdminPendingConfirmations = () => {
 
       if (fetchWaitErr) throw fetchWaitErr;
 
+      // ✅ Step 1: Deduct from Main Stock Room
       await _deductProductsForItems(waitingRows);
 
+      // ✅ Step 2: Add to Pharmacy
+      await _AddProductsForItems(waitingRows);
+
+      // ✅ Step 3: Update pharmacy_waiting table
       const { error: updWaitErr } = await supabase
         .from("pharmacy_waiting")
         .update({ admin_confirmed: true })
         .eq("retrieval_id", retrievalId);
       if (updWaitErr) throw updWaitErr;
 
+      // ✅ Step 4: Update main_retrievals status
       const { error: updMainErr } = await supabase
         .from("main_retrievals")
         .update({ status: "admin_confirmed" })
@@ -237,6 +259,7 @@ const AdminPendingConfirmations = () => {
       if (updMainErr)
         console.warn("main_retrievals update warning:", updMainErr);
 
+      // ✅ Step 5: Send notification
       const notif = {
         target_role: "secretary",
         title: `Retrieval ${retrievalId} confirmed by admin`,
@@ -253,7 +276,7 @@ const AdminPendingConfirmations = () => {
         setShowModal(false);
         setSelected(null);
       }
-      setSuccess("Retrieval confirmed.");
+      setSuccess(`Retrieval ${retrievalId} confirmed successfully!`);
     } catch (e) {
       console.error("confirmGroup", e);
       setError("Failed to confirm retrieval. See console.");
@@ -279,7 +302,10 @@ const AdminPendingConfirmations = () => {
             .eq("admin_confirmed", false);
           if (fetchWaitErr) throw fetchWaitErr;
 
+          // Deduct from Main Stock Room
           await _deductProductsForItems(waitingRows);
+
+          // Add to Pharmacy
           await _AddProductsForItems(waitingRows);
 
           const { error: updWaitErr } = await supabase
@@ -337,14 +363,7 @@ const AdminPendingConfirmations = () => {
     setError("");
     try {
       const now = new Date().toISOString();
-      const { error: fetchWaitErr } = await supabase
-        .from("pharmacy_waiting")
-        .select("*")
-        .eq("retrieval_id", retrievalId)
-        .eq("admin_confirmed", false);
-
-      if (fetchWaitErr) throw fetchWaitErr;
-
+      
       const { error: updWaitErr } = await supabase
         .from("pharmacy_waiting")
         .update({
@@ -381,6 +400,7 @@ const AdminPendingConfirmations = () => {
         setShowModal(false);
         setSelected(null);
       }
+      setSuccess(`Retrieval ${retrievalId} declined.`);
     } catch (e) {
       console.error("declineGroup", e);
       setError("Failed to decline retrieval. See console.");
