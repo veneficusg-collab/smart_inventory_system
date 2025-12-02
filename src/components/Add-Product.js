@@ -71,6 +71,28 @@ const AddProduct = ({ setRender }) => {
       return;
     }
 
+    const validateExpiryDate = (expiryDateStr) => {
+      if (!expiryDateStr) {
+        return { valid: true }; // Allow empty expiry dates
+      }
+
+      const today = new Date();
+      today.setHours(0, 0, 0, 0); // Reset time to start of day
+
+      const expiryDate = new Date(expiryDateStr);
+      expiryDate.setHours(0, 0, 0, 0); // Reset time of expiry date for comparison
+
+      if (expiryDate < today) {
+        return {
+          valid: false,
+          message:
+            "Cannot add products with past expiry dates. The expiry date must be today or in the future.",
+        };
+      }
+
+      return { valid: true };
+    };
+
     const delay = setTimeout(async () => {
       setProdIdStatus("checking");
       setProdIdMsg("Checking Product ID...");
@@ -390,14 +412,19 @@ const AddProduct = ({ setRender }) => {
     setSuccess("");
 
     try {
-      // Validation
-      if (!productName.trim()) throw new Error("Product name is required");
-      if (!productId.trim()) throw new Error("Product ID is required");
-
-      if (prodIdStatus === "exists") {
-        throw new Error("Product ID already exists, please choose another.");
+      // Validate expiry date before proceeding
+      const validation = validateExpiryDate(expiryDate);
+      if (!validation.valid) {
+        setError(validation.message);
+        setLoading(false);
+        return;
       }
 
+      // Validation for other form fields
+      if (!productName.trim()) throw new Error("Product name is required");
+      if (!productId.trim()) throw new Error("Product ID is required");
+      if (prodIdStatus === "exists")
+        throw new Error("Product ID already exists, please choose another.");
       if (!productBrand.trim()) throw new Error("Product brand is required");
       if (!buyingPrice || buyingPrice <= 0)
         throw new Error("Valid VAT price is required");
@@ -885,6 +912,7 @@ const AddProduct = ({ setRender }) => {
                       size="sm"
                       value={expiryDate}
                       onChange={(e) => setExpiryDate(e.target.value)}
+                      min={new Date().toISOString().split("T")[0]} // Prevent past dates in date picker
                     />
                   </Col>
                 </Form.Group>

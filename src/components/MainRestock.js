@@ -14,7 +14,6 @@ import { supabase } from "../supabaseClient";
 const BUCKET = "Smart-Inventory-System-(Pet Matters)";
 
 const MainRestock = ({ setRender, Id, scannedId }) => {
-  // ---- Form state ----
   const [productName, setProductName] = useState("");
   const [productId, setProductId] = useState(Id || scannedId || "");
   const [quantity, setQuantity] = useState("");
@@ -24,12 +23,10 @@ const MainRestock = ({ setRender, Id, scannedId }) => {
   const [expiryDates, setExpiryDates] = useState([]);
   const [productImage, setProductImage] = useState(null);
 
-  // Supplier (editable)
   const [supplierName, setSupplierName] = useState("");
   const [supplierPrice, setSupplierPrice] = useState("");
   const [supplierNumber, setSupplierNumber] = useState("");
 
-  // Supplier dropdown controls
   const [supplierList, setSupplierList] = useState([]);
   const [supplierLoading, setSupplierLoading] = useState(false);
   const [supplierError, setSupplierError] = useState("");
@@ -37,12 +34,17 @@ const MainRestock = ({ setRender, Id, scannedId }) => {
   const [newSupplierName, setNewSupplierName] = useState("");
   const [supplierPhoneByName, setSupplierPhoneByName] = useState({});
 
-  // UI
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
   const toDateString = (date) => new Date(date).toISOString().split("T")[0];
+
+  // ✅ Get today's date for validation
+  const getTodayDateString = () => {
+    const today = new Date();
+    return today.toISOString().split("T")[0];
+  };
 
   useEffect(() => {
     if (productId) fetchProduct(productId);
@@ -50,7 +52,6 @@ const MainRestock = ({ setRender, Id, scannedId }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [productId]);
 
-  // ✅ FIXED: Fetch suppliers from main_stock_room_products
   const fetchSuppliers = async () => {
     try {
       setSupplierError("");
@@ -115,7 +116,6 @@ const MainRestock = ({ setRender, Id, scannedId }) => {
     setSupplierError("");
   };
 
-  // ✅ FIXED: Load product from main_stock_room_products
   const fetchProduct = async (id) => {
     const { data: products, error } = await supabase
       .from("main_stock_room_products")
@@ -162,7 +162,6 @@ const MainRestock = ({ setRender, Id, scannedId }) => {
     }
   };
 
-  // -------- Staff name resolver --------
   const getCurrentStaffName = async () => {
     try {
       const {
@@ -191,7 +190,28 @@ const MainRestock = ({ setRender, Id, scannedId }) => {
   const handleCancelButton = () =>
     setRender(productId === scannedId ? "StaffDashboard" : "products");
 
-  // ✅ FIXED: Submit to main_stock_room_products
+  // ✅ ADDED: Expiry date validation
+  const validateExpiryDate = (expiryDateStr) => {
+    if (!expiryDateStr) {
+      return { valid: true }; // Allow empty expiry dates
+    }
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0); // Reset time to start of day
+
+    const expiryDate = new Date(expiryDateStr);
+    expiryDate.setHours(0, 0, 0, 0);
+
+    if (expiryDate < today) {
+      return {
+        valid: false,
+        message: "Cannot restock products with past expiry dates. The expiry date must be today or in the future.",
+      };
+    }
+
+    return { valid: true };
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -199,9 +219,16 @@ const MainRestock = ({ setRender, Id, scannedId }) => {
     setSuccess("");
 
     try {
+      // ✅ Validate expiry date before proceeding
+      const validation = validateExpiryDate(inputExpiryDate);
+      if (!validation.valid) {
+        setError(validation.message);
+        setLoading(false);
+        return;
+      }
+
       const staffName = await getCurrentStaffName();
 
-      // Look for an exact matching batch in main_stock_room_products
       const { data: batches, error: fetchError } = await supabase
         .from("main_stock_room_products")
         .select("*")
@@ -211,7 +238,6 @@ const MainRestock = ({ setRender, Id, scannedId }) => {
       if (fetchError) throw fetchError;
 
       if (batches && batches.length > 0) {
-        // ✅ Update existing batch in main_stock_room_products
         const product = batches[0];
         const newQuantity =
           parseInt(product.product_quantity, 10) + parseInt(quantity, 10);
@@ -229,12 +255,11 @@ const MainRestock = ({ setRender, Id, scannedId }) => {
 
         if (updateError) throw updateError;
 
-        // Log the restock action
         const { error: logError } = await supabase.from("logs").insert([
           {
             product_id: product.product_ID,
             product_name: product.product_name,
-            product_quantity: parseInt(quantity, 10), // delta only
+            product_quantity: parseInt(quantity, 10),
             product_category: product.product_category,
             product_unit: product.product_unit,
             product_expiry: inputExpiryDate || null,
@@ -246,7 +271,6 @@ const MainRestock = ({ setRender, Id, scannedId }) => {
 
         setSuccess("Quantity updated successfully in Main Stock Room!");
       } else {
-        // ✅ Insert new expiry batch in main_stock_room_products
         const { data: base, error: baseError } = await supabase
           .from("main_stock_room_products")
           .select("*")
@@ -293,12 +317,10 @@ const MainRestock = ({ setRender, Id, scannedId }) => {
         setSuccess("New expiry batch added successfully to Main Stock Room!");
       }
 
-      // Reset fields
       setQuantity("");
       setInputExpiryDate("");
       setExpiryDate("");
 
-      // Refresh product data
       await fetchProduct(productId);
 
       setTimeout(() => {
@@ -312,7 +334,6 @@ const MainRestock = ({ setRender, Id, scannedId }) => {
     }
   };
 
-  // -------- UI --------
   return (
     <Container
       fluid
@@ -341,7 +362,6 @@ const MainRestock = ({ setRender, Id, scannedId }) => {
           <Row>
             <Col md={6}>
               <div className="ms-5">
-                {/* Product ID */}
                 <Form.Group as={Row} className="mb-3 mt-4">
                   <Form.Label column sm={3} className="text-start">
                     Product ID
@@ -351,7 +371,6 @@ const MainRestock = ({ setRender, Id, scannedId }) => {
                   </Col>
                 </Form.Group>
 
-                {/* Product Name */}
                 <Form.Group as={Row} className="mb-3 mt-4">
                   <Form.Label column sm={3} className="text-start">
                     Product Name
@@ -361,7 +380,6 @@ const MainRestock = ({ setRender, Id, scannedId }) => {
                   </Col>
                 </Form.Group>
 
-                {/* Supplier Name (dropdown + add new) */}
                 <Form.Group as={Row} className="mb-3 mt-4">
                   <Form.Label column sm={3} className="text-start">
                     Supplier Name
@@ -396,9 +414,7 @@ const MainRestock = ({ setRender, Id, scannedId }) => {
                           onClick={() => {
                             setIsAddingSupplier(true);
                             setTimeout(() => {
-                              const el =
-                                document.getElementById("newSupplierInput");
-                              el && el.focus();
+                              document.getElementById("newSupplierInput")?.focus();
                             }, 0);
                           }}
                         >
@@ -443,7 +459,6 @@ const MainRestock = ({ setRender, Id, scannedId }) => {
                   </Col>
                 </Form.Group>
 
-                {/* Supplier Number */}
                 <Form.Group as={Row} className="mb-3 mt-4">
                   <Form.Label column sm={3} className="text-start">
                     Supplier Number
@@ -459,7 +474,6 @@ const MainRestock = ({ setRender, Id, scannedId }) => {
                   </Col>
                 </Form.Group>
 
-                {/* Supplier Price */}
                 <Form.Group as={Row} className="mb-3 mt-4">
                   <Form.Label column sm={3} className="text-start">
                     Supplier Price
@@ -477,7 +491,6 @@ const MainRestock = ({ setRender, Id, scannedId }) => {
                   </Col>
                 </Form.Group>
 
-                {/* Quantity */}
                 <Form.Group as={Row} className="mb-3 mt-4">
                   <Form.Label column sm={3} className="text-start">
                     Quantity
@@ -495,7 +508,7 @@ const MainRestock = ({ setRender, Id, scannedId }) => {
                   </Col>
                 </Form.Group>
 
-                {/* Expiry Date (typed) */}
+                {/* ✅ Expiry Date with min attribute */}
                 <Form.Group as={Row} className="mb-3 mt-4">
                   <Form.Label column sm={3} className="text-start">
                     Expiry Date
@@ -504,15 +517,18 @@ const MainRestock = ({ setRender, Id, scannedId }) => {
                     <Form.Control
                       type="date"
                       size="sm"
+                      min={getTodayDateString()}
                       value={inputExpiryDate}
                       onChange={(e) =>
                         setInputExpiryDate(toDateString(e.target.value))
                       }
                     />
+                    <Form.Text className="text-muted">
+                      Expiry date must be today or in the future
+                    </Form.Text>
                   </Col>
                 </Form.Group>
 
-                {/* Existing expiry list + current qty */}
                 <div className="mt-5">
                   <h5>Current Quantity in Main Stock Room</h5>
                 </div>
@@ -557,7 +573,6 @@ const MainRestock = ({ setRender, Id, scannedId }) => {
               </div>
             </Col>
 
-            {/* Image */}
             <Col
               md={6}
               className="d-flex justify-content-center align-items-start mt-4"
@@ -588,7 +603,6 @@ const MainRestock = ({ setRender, Id, scannedId }) => {
             </Col>
           </Row>
 
-          {/* Buttons */}
           <div className="d-flex justify-content-end align-items-end p-3">
             <Button
               variant="secondary"

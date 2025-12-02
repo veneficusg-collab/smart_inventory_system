@@ -14,7 +14,6 @@ import { supabase } from "../supabaseClient";
 const BUCKET = "Smart-Inventory-System-(Pet Matters)";
 
 const Restock = ({ setRender, Id, scannedId }) => {
-  // ---- Form state (mirrors StaffRestock) ----
   const [productName, setProductName] = useState("");
   const [productId, setProductId] = useState(Id || scannedId || "");
   const [quantity, setQuantity] = useState("");
@@ -44,13 +43,18 @@ const Restock = ({ setRender, Id, scannedId }) => {
 
   const toDateString = (date) => new Date(date).toISOString().split("T")[0];
 
+  // ✅ Get today's date for validation
+  const getTodayDateString = () => {
+    const today = new Date();
+    return today.toISOString().split("T")[0];
+  };
+
   useEffect(() => {
     if (productId) fetchProduct(productId);
     fetchSuppliers();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [productId]);
 
-  // -------- Suppliers (same logic as StaffRestock) --------
   const fetchSuppliers = async () => {
     try {
       setSupplierError("");
@@ -115,7 +119,6 @@ const Restock = ({ setRender, Id, scannedId }) => {
     setSupplierError("");
   };
 
-  // -------- Product loading (same display fields) --------
   const fetchProduct = async (id) => {
     const { data: products, error } = await supabase
       .from("products")
@@ -162,7 +165,6 @@ const Restock = ({ setRender, Id, scannedId }) => {
     }
   };
 
-  // -------- Staff name (same resolver pattern) --------
   const getCurrentStaffName = async () => {
     try {
       const {
@@ -191,7 +193,28 @@ const Restock = ({ setRender, Id, scannedId }) => {
   const handleCancelButton = () =>
     setRender(productId === scannedId ? "StaffDashboard" : "products");
 
-  // -------- Submit (same logic & log payload as StaffRestock) --------
+  // ✅ ADDED: Expiry date validation
+  const validateExpiryDate = (expiryDateStr) => {
+    if (!expiryDateStr) {
+      return { valid: true }; // Allow empty expiry dates
+    }
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0); // Reset time to start of day
+
+    const expiryDate = new Date(expiryDateStr);
+    expiryDate.setHours(0, 0, 0, 0);
+
+    if (expiryDate < today) {
+      return {
+        valid: false,
+        message: "Cannot restock products with past expiry dates. The expiry date must be today or in the future.",
+      };
+    }
+
+    return { valid: true };
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -199,9 +222,16 @@ const Restock = ({ setRender, Id, scannedId }) => {
     setSuccess("");
 
     try {
+      // ✅ Validate expiry date before proceeding
+      const validation = validateExpiryDate(inputExpiryDate);
+      if (!validation.valid) {
+        setError(validation.message);
+        setLoading(false);
+        return;
+      }
+
       const staffName = await getCurrentStaffName();
 
-      // Look for an exact matching batch for this product + typed expiry
       const { data: batches, error: fetchError } = await supabase
         .from("products")
         .select("*")
@@ -229,12 +259,11 @@ const Restock = ({ setRender, Id, scannedId }) => {
 
         if (updateError) throw updateError;
 
-        // Archive-style logs (no supplier_* fields)
         const { error: logError } = await supabase.from("logs").insert([
           {
             product_id: product.product_ID,
             product_name: product.product_name,
-            product_quantity: parseInt(quantity, 10), // delta only
+            product_quantity: parseInt(quantity, 10),
             product_category: product.product_category,
             product_unit: product.product_unit,
             product_expiry: inputExpiryDate || null,
@@ -269,6 +298,7 @@ const Restock = ({ setRender, Id, scannedId }) => {
             supplier_name: supplierName,
             supplier_number: supplierNumber,
             product_img: base.product_img,
+            vat: base.vat,
           },
         ]);
         if (insertError) throw insertError;
@@ -290,7 +320,6 @@ const Restock = ({ setRender, Id, scannedId }) => {
         setSuccess("New expiry batch added successfully!");
       }
 
-      // Reset a few fields
       setQuantity("");
       setInputExpiryDate("");
       setExpiryDate("");
@@ -306,7 +335,6 @@ const Restock = ({ setRender, Id, scannedId }) => {
     }
   };
 
-  // -------- UI (mirrors StaffRestock layout/controls) --------
   return (
     <Container
       fluid
@@ -353,7 +381,7 @@ const Restock = ({ setRender, Id, scannedId }) => {
                   </Col>
                 </Form.Group>
 
-                {/* Supplier Name (dropdown + add new) */}
+                {/* Supplier Name */}
                 <Form.Group as={Row} className="mb-3 mt-4">
                   <Form.Label column sm={3} className="text-start">
                     Supplier Name
@@ -388,9 +416,7 @@ const Restock = ({ setRender, Id, scannedId }) => {
                           onClick={() => {
                             setIsAddingSupplier(true);
                             setTimeout(() => {
-                              const el =
-                                document.getElementById("newSupplierInput");
-                              el && el.focus();
+                              document.getElementById("newSupplierInput")?.focus();
                             }, 0);
                           }}
                         >
@@ -487,7 +513,7 @@ const Restock = ({ setRender, Id, scannedId }) => {
                   </Col>
                 </Form.Group>
 
-                {/* Expiry Date (typed) */}
+                {/* ✅ Expiry Date with min attribute */}
                 <Form.Group as={Row} className="mb-3 mt-4">
                   <Form.Label column sm={3} className="text-start">
                     Expiry Date
@@ -496,15 +522,19 @@ const Restock = ({ setRender, Id, scannedId }) => {
                     <Form.Control
                       type="date"
                       size="sm"
+                      min={getTodayDateString()}
                       value={inputExpiryDate}
                       onChange={(e) =>
                         setInputExpiryDate(toDateString(e.target.value))
                       }
                     />
+                    <Form.Text className="text-muted">
+                      Expiry date must be today or in the future
+                    </Form.Text>
                   </Col>
                 </Form.Group>
 
-                {/* Existing expiry list + current qty */}
+                {/* Existing expiry list */}
                 <div className="mt-5">
                   <h5>Current Quantity</h5>
                 </div>
