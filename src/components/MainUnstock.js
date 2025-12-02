@@ -94,7 +94,7 @@ const MainUnstock = ({ setRender, Id }) => {
 
       // ✅ Update product quantity
       const { data, error } = await supabase
-        .from("products")
+        .from("main_stock_room_products")
         .update({ product_quantity: newQuantity })
         .eq("product_ID", productId)
         .eq("product_expiry", expiryDate)
