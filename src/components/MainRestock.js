@@ -14,7 +14,7 @@ import { supabase } from "../supabaseClient";
 const BUCKET = "Smart-Inventory-System-(Pet Matters)";
 
 const MainRestock = ({ setRender, Id, scannedId }) => {
-  // ---- Form state (mirrors StaffRestock) ----
+  // ---- Form state ----
   const [productName, setProductName] = useState("");
   const [productId, setProductId] = useState(Id || scannedId || "");
   const [quantity, setQuantity] = useState("");
@@ -50,13 +50,13 @@ const MainRestock = ({ setRender, Id, scannedId }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [productId]);
 
-  // -------- Suppliers (same logic as StaffRestock) --------
+  // ✅ FIXED: Fetch suppliers from main_stock_room_products
   const fetchSuppliers = async () => {
     try {
       setSupplierError("");
       setSupplierLoading(true);
       const { data, error } = await supabase
-        .from("products")
+        .from("main_stock_room_products")
         .select("supplier_name, supplier_number");
       if (error) throw error;
 
@@ -115,10 +115,10 @@ const MainRestock = ({ setRender, Id, scannedId }) => {
     setSupplierError("");
   };
 
-  // -------- Product loading (same display fields) --------
+  // ✅ FIXED: Load product from main_stock_room_products
   const fetchProduct = async (id) => {
     const { data: products, error } = await supabase
-      .from("products")
+      .from("main_stock_room_products")
       .select("*")
       .eq("product_ID", id);
 
@@ -128,7 +128,7 @@ const MainRestock = ({ setRender, Id, scannedId }) => {
       return;
     }
     if (!products?.length) {
-      setError("Product not found.");
+      setError("Product not found in Main Stock Room.");
       return;
     }
 
@@ -162,7 +162,7 @@ const MainRestock = ({ setRender, Id, scannedId }) => {
     }
   };
 
-  // -------- Staff name (same resolver pattern) --------
+  // -------- Staff name resolver --------
   const getCurrentStaffName = async () => {
     try {
       const {
@@ -191,7 +191,7 @@ const MainRestock = ({ setRender, Id, scannedId }) => {
   const handleCancelButton = () =>
     setRender(productId === scannedId ? "StaffDashboard" : "products");
 
-  // -------- Submit (same logic & log payload as StaffRestock) --------
+  // ✅ FIXED: Submit to main_stock_room_products
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -201,9 +201,9 @@ const MainRestock = ({ setRender, Id, scannedId }) => {
     try {
       const staffName = await getCurrentStaffName();
 
-      // Look for an exact matching batch for this product + typed expiry
+      // Look for an exact matching batch in main_stock_room_products
       const { data: batches, error: fetchError } = await supabase
-        .from("products")
+        .from("main_stock_room_products")
         .select("*")
         .eq("product_ID", productId)
         .eq("product_expiry", inputExpiryDate || null);
@@ -211,13 +211,13 @@ const MainRestock = ({ setRender, Id, scannedId }) => {
       if (fetchError) throw fetchError;
 
       if (batches && batches.length > 0) {
-        // Update existing batch
+        // ✅ Update existing batch in main_stock_room_products
         const product = batches[0];
         const newQuantity =
           parseInt(product.product_quantity, 10) + parseInt(quantity, 10);
 
         const { error: updateError } = await supabase
-          .from("products")
+          .from("main_stock_room_products")
           .update({
             product_quantity: newQuantity,
             supplier_name: supplierName,
@@ -229,7 +229,7 @@ const MainRestock = ({ setRender, Id, scannedId }) => {
 
         if (updateError) throw updateError;
 
-        // Archive-style logs (no supplier_* fields)
+        // Log the restock action
         const { error: logError } = await supabase.from("logs").insert([
           {
             product_id: product.product_ID,
@@ -239,38 +239,41 @@ const MainRestock = ({ setRender, Id, scannedId }) => {
             product_unit: product.product_unit,
             product_expiry: inputExpiryDate || null,
             staff: staffName,
-            product_action: "Restock",
+            product_action: "Restock - Main Stock Room",
           },
         ]);
         if (logError) throw logError;
 
-        setSuccess("Quantity updated successfully!");
+        setSuccess("Quantity updated successfully in Main Stock Room!");
       } else {
-        // Insert new expiry batch
+        // ✅ Insert new expiry batch in main_stock_room_products
         const { data: base, error: baseError } = await supabase
-          .from("products")
+          .from("main_stock_room_products")
           .select("*")
           .eq("product_ID", productId)
           .limit(1)
           .single();
         if (baseError) throw baseError;
 
-        const { error: insertError } = await supabase.from("products").insert([
-          {
-            product_ID: base.product_ID,
-            product_name: base.product_name,
-            product_quantity: parseInt(quantity, 10),
-            product_expiry: inputExpiryDate || null,
-            product_brand: base.product_brand,
-            product_price: base.product_price,
-            product_category: base.product_category,
-            product_unit: base.product_unit,
-            supplier_price: parseFloat(supplierPrice) || 0,
-            supplier_name: supplierName,
-            supplier_number: supplierNumber,
-            product_img: base.product_img,
-          },
-        ]);
+        const { error: insertError } = await supabase
+          .from("main_stock_room_products")
+          .insert([
+            {
+              product_ID: base.product_ID,
+              product_name: base.product_name,
+              product_quantity: parseInt(quantity, 10),
+              product_expiry: inputExpiryDate || null,
+              product_brand: base.product_brand,
+              product_price: base.product_price,
+              product_category: base.product_category,
+              product_unit: base.product_unit,
+              supplier_price: parseFloat(supplierPrice) || 0,
+              supplier_name: supplierName,
+              supplier_number: supplierNumber,
+              product_img: base.product_img,
+              vat: base.vat,
+            },
+          ]);
         if (insertError) throw insertError;
 
         const { error: logErr } = await supabase.from("logs").insert([
@@ -282,18 +285,21 @@ const MainRestock = ({ setRender, Id, scannedId }) => {
             product_unit: base.product_unit,
             product_expiry: inputExpiryDate || null,
             staff: staffName,
-            product_action: "Restock",
+            product_action: "Restock - Main Stock Room (New Batch)",
           },
         ]);
         if (logErr) throw logErr;
 
-        setSuccess("New expiry batch added successfully!");
+        setSuccess("New expiry batch added successfully to Main Stock Room!");
       }
 
-      // Reset a few fields
+      // Reset fields
       setQuantity("");
       setInputExpiryDate("");
       setExpiryDate("");
+
+      // Refresh product data
+      await fetchProduct(productId);
 
       setTimeout(() => {
         setRender(productId === scannedId ? "StaffDashboard" : "products");
@@ -306,7 +312,7 @@ const MainRestock = ({ setRender, Id, scannedId }) => {
     }
   };
 
-  // -------- UI (mirrors StaffRestock layout/controls) --------
+  // -------- UI --------
   return (
     <Container
       fluid
@@ -314,7 +320,9 @@ const MainRestock = ({ setRender, Id, scannedId }) => {
       style={{ width: "135vh", minHeight: "80vh" }}
     >
       <div className="d-flex flex-column align-items-center mb-4">
-        <span className="mx-0 mt-5 mb-2 d-inline-block h4">Restock</span>
+        <span className="mx-0 mt-5 mb-2 d-inline-block h4">
+          Restock - Main Stock Room
+        </span>
       </div>
 
       {error && (
@@ -506,7 +514,7 @@ const MainRestock = ({ setRender, Id, scannedId }) => {
 
                 {/* Existing expiry list + current qty */}
                 <div className="mt-5">
-                  <h5>Current Quantity</h5>
+                  <h5>Current Quantity in Main Stock Room</h5>
                 </div>
                 <Form.Group as={Row} className="mb-3 mt-4">
                   <Form.Label column sm={3} className="text-start">
