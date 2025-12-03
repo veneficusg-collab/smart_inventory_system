@@ -74,6 +74,14 @@ const NearExpiration = () => {
     setSelectedMonths(months);
   };
 
+  const getExpiryLabel = (daysLeft) => {
+    if (daysLeft <= 30) return "Expires within 1 month";
+    if (daysLeft <= 60) return "Expires within 2 months";
+    if (daysLeft <= 90) return "Expires within 3 months";
+    if (daysLeft <= 180) return "Expires within 6 months";
+    return "Expires later";
+  };
+
   return (
     <Container
       className="bg-white mx-3 my-4 rounded p-0"
@@ -139,6 +147,11 @@ const NearExpiration = () => {
                     <small className="text-muted">
                       Expiry: {expiryDate.toLocaleDateString()}
                     </small>
+                    <div>
+                      <small className="text-muted">
+                        {getExpiryLabel(daysLeft)}
+                      </small>
+                    </div>
                   </div>
                 </div>
               </div>

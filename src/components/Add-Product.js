@@ -48,6 +48,13 @@ const AddProduct = ({ setRender }) => {
   const [isAddingCategory, setIsAddingCategory] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState("");
 
+  // ====== UNIT DROPDOWN STATE ======
+  const [unitList, setUnitList] = useState([]);
+  const [unitLoading, setUnitLoading] = useState(false);
+  const [unitError, setUnitError] = useState("");
+  const [isAddingUnit, setIsAddingUnit] = useState(false);
+  const [newUnitName, setNewUnitName] = useState("");
+
   // ====== SUPPLIER DROPDOWN STATE ======
   const [supplierList, setSupplierList] = useState([]);
   const [supplierLoading, setSupplierLoading] = useState(false);
@@ -62,6 +69,7 @@ const AddProduct = ({ setRender }) => {
     fetchBrands();
     fetchCategories();
     fetchSuppliers();
+    fetchUnits();
   }, []);
 
   useEffect(() => {
@@ -70,28 +78,6 @@ const AddProduct = ({ setRender }) => {
       setProdIdMsg("");
       return;
     }
-
-    const validateExpiryDate = (expiryDateStr) => {
-      if (!expiryDateStr) {
-        return { valid: true }; // Allow empty expiry dates
-      }
-
-      const today = new Date();
-      today.setHours(0, 0, 0, 0); // Reset time to start of day
-
-      const expiryDate = new Date(expiryDateStr);
-      expiryDate.setHours(0, 0, 0, 0); // Reset time of expiry date for comparison
-
-      if (expiryDate < today) {
-        return {
-          valid: false,
-          message:
-            "Cannot add products with past expiry dates. The expiry date must be today or in the future.",
-        };
-      }
-
-      return { valid: true };
-    };
 
     const delay = setTimeout(async () => {
       setProdIdStatus("checking");
@@ -134,6 +120,76 @@ const AddProduct = ({ setRender }) => {
       setBuyingPrice("");
     }
   }, [supplierPrice]);
+
+  const fetchUnits = async () => {
+    try {
+      setUnitError("");
+      setUnitLoading(true);
+
+      const { data, error } = await supabase
+        .from("products")
+        .select("product_unit")
+        .not("product_unit", "is", null);
+
+      if (error) throw error;
+
+      const names = Array.from(
+        new Set(
+          (data || []).map((r) => (r.product_unit || "").trim()).filter(Boolean)
+        )
+      ).sort((a, b) => a.localeCompare(b));
+
+      setUnitList(names);
+    } catch (err) {
+      setUnitError(err.message || "Failed to load units");
+    } finally {
+      setUnitLoading(false);
+    }
+  };
+
+  const handleSaveNewUnit = () => {
+    const name = newUnitName.trim();
+    if (!name) {
+      setUnitError("Unit name cannot be empty.");
+      return;
+    }
+
+    const updated = Array.from(new Set([...unitList, name])).sort((a, b) =>
+      a.localeCompare(b)
+    );
+    setUnitList(updated);
+    setUnit(name); // select the new unit
+    setIsAddingUnit(false);
+    setNewUnitName("");
+  };
+
+  const handleCancelAddUnit = () => {
+    setIsAddingUnit(false);
+    setNewUnitName("");
+    setUnitError("");
+  };
+
+  const validateExpiryDate = (expiryDateStr) => {
+    if (!expiryDateStr) {
+      return { valid: true }; // Allow empty expiry dates
+    }
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0); // Reset time to start of day
+
+    const expiryDate = new Date(expiryDateStr);
+    expiryDate.setHours(0, 0, 0, 0); // Reset time of expiry date for comparison
+
+    if (expiryDate < today) {
+      return {
+        valid: false,
+        message:
+          "Cannot add products with past expiry dates. The expiry date must be today or in the future.",
+      };
+    }
+
+    return { valid: true };
+  };
 
   const handleSaveNewSupplier = () => {
     const name = newSupplierName.trim();
@@ -888,13 +944,72 @@ const AddProduct = ({ setRender }) => {
                     Unit
                   </Form.Label>
                   <Col sm={9}>
-                    <Form.Control
-                      type="text"
-                      placeholder="Enter product unit (e.g., kg, pcs, liters)"
-                      size="sm"
-                      value={unit}
-                      onChange={(e) => setUnit(e.target.value)}
-                    />
+                    {!isAddingUnit ? (
+                      <InputGroup size="sm">
+                        <Form.Select
+                          value={unit}
+                          onChange={(e) => setUnit(e.target.value)}
+                          disabled={unitLoading}
+                        >
+                          <option value="" disabled>
+                            {unitLoading ? "Loading units..." : "Select unit"}
+                          </option>
+                          {unitList.map((u) => (
+                            <option key={u} value={u}>
+                              {u}
+                            </option>
+                          ))}
+                        </Form.Select>
+                        <Button
+                          variant="outline-secondary"
+                          title="Add a new unit"
+                          onClick={() => {
+                            setIsAddingUnit(true);
+                            setTimeout(() => {
+                              const el =
+                                document.getElementById("newUnitInput");
+                              el && el.focus();
+                            }, 0);
+                          }}
+                        >
+                          <LuPlus />
+                        </Button>
+                      </InputGroup>
+                    ) : (
+                      <InputGroup size="sm">
+                        <Form.Control
+                          id="newUnitInput"
+                          type="text"
+                          placeholder="Type new unit name"
+                          value={newUnitName}
+                          onChange={(e) => setNewUnitName(e.target.value)}
+                          disabled={unitLoading}
+                        />
+                        <Button
+                          variant="outline-success"
+                          title="Save unit"
+                          onClick={handleSaveNewUnit}
+                          disabled={unitLoading || !newUnitName.trim()}
+                        >
+                          <LuCheck />
+                        </Button>
+                        <Button
+                          variant="outline-secondary"
+                          title="Cancel"
+                          onClick={handleCancelAddUnit}
+                          disabled={unitLoading}
+                        >
+                          <LuX />
+                        </Button>
+                      </InputGroup>
+                    )}
+                    {unitError && (
+                      <div className="mt-2">
+                        <Alert variant="warning" className="py-1 px-2 mb-0">
+                          {unitError}
+                        </Alert>
+                      </div>
+                    )}
                   </Col>
                 </Form.Group>
 
