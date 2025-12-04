@@ -90,7 +90,6 @@ const AdminPendingConfirmations = () => {
     setShowModal(true);
   };
 
-  // ✅ DEDUCT from Main Stock Room
   const _deductProductsForItems = async (items) => {
     for (const item of items || []) {
       try {
@@ -101,30 +100,45 @@ const AdminPendingConfirmations = () => {
           .from("main_stock_room_products")
           .select("*")
           .eq("product_ID", item.product_id)
-          .limit(1);
+          .order("product_expiry", { ascending: true }); // Ensure we get the oldest stock first
 
         if (pByBarcodeErr) {
           console.error("product lookup error", pByBarcodeErr);
           continue;
         }
-        const prod = (pByBarcode && pByBarcode.length && pByBarcode[0]) || null;
-        if (!prod) {
-          console.warn(`Product not found in Main Stock Room for ${item.product_id}`);
-          continue;
+
+        let remainingQty = deductQty;
+        for (const prod of pByBarcode || []) {
+          if (remainingQty <= 0) break;
+
+          const currentQty = Number(prod.product_quantity ?? 0);
+          const deductFromThisQty = Math.min(currentQty, remainingQty); // Deduct the lesser of the current stock or remaining quantity
+          const newQty = Math.max(0, currentQty - deductFromThisQty);
+
+          const { error: updProdErr } = await supabase
+            .from("main_stock_room_products")
+            .update({ product_quantity: newQty })
+            .eq("id", prod.id);
+
+          if (updProdErr) {
+            console.error(
+              "Failed updating product qty for",
+              prod.id,
+              updProdErr
+            );
+          } else {
+            console.log(
+              `✅ Deducted ${deductFromThisQty} from Main Stock Room: ${item.product_name}`
+            );
+          }
+
+          remainingQty -= deductFromThisQty; // Reduce remaining quantity to deduct
         }
 
-        const currentQty = Number(prod.product_quantity ?? 0);
-        const newQty = Math.max(0, currentQty - deductQty);
-
-        const { error: updProdErr } = await supabase
-          .from("main_stock_room_products")
-          .update({ product_quantity: newQty })
-          .eq("id", prod.id);
-
-        if (updProdErr) {
-          console.error("Failed updating product qty for", prod.id, updProdErr);
-        } else {
-          console.log(`✅ Deducted ${deductQty} from Main Stock Room: ${item.product_name}`);
+        if (remainingQty > 0) {
+          console.warn(
+            `Not enough stock to deduct for ${item.product_name}. Remaining: ${remainingQty}`
+          );
         }
       } catch (innerErr) {
         console.error("Error deducting product qty for item", item, innerErr);
@@ -132,7 +146,6 @@ const AdminPendingConfirmations = () => {
     }
   };
 
-  // ✅ ADD to Pharmacy (products table)
   const _AddProductsForItems = async (items) => {
     for (const item of items || []) {
       try {
@@ -155,7 +168,9 @@ const AdminPendingConfirmations = () => {
 
         if (!prod) {
           // Product doesn't exist in pharmacy, create it
-          console.warn(`Product not found in Pharmacy, Creating: ${item.product_id}`);
+          console.warn(
+            `Product not found in Pharmacy, Creating: ${item.product_id}`
+          );
 
           const { data: main_stock_room_products, error: mainError } =
             await supabase
@@ -169,8 +184,13 @@ const AdminPendingConfirmations = () => {
             continue;
           }
 
-          if (!main_stock_room_products || main_stock_room_products.length === 0) {
-            console.error(`Product ${item.product_id} not found in main stock room either!`);
+          if (
+            !main_stock_room_products ||
+            main_stock_room_products.length === 0
+          ) {
+            console.error(
+              `Product ${item.product_id} not found in main stock room either!`
+            );
             continue;
           }
 
@@ -199,7 +219,9 @@ const AdminPendingConfirmations = () => {
           if (insertError) {
             console.error("Failed creating product in Pharmacy", insertError);
           } else {
-            console.log(`✅ Created product in Pharmacy: ${product.product_name} with qty ${addQty}`);
+            console.log(
+              `✅ Created product in Pharmacy: ${product.product_name} with qty ${addQty}`
+            );
           }
         } else {
           // Product exists, update quantity
@@ -212,9 +234,15 @@ const AdminPendingConfirmations = () => {
             .eq("id", prod.id);
 
           if (updProdErr) {
-            console.error("Failed updating product qty for", prod.id, updProdErr);
+            console.error(
+              "Failed updating product qty for",
+              prod.id,
+              updProdErr
+            );
           } else {
-            console.log(`✅ Added ${addQty} to Pharmacy: ${item.product_name} (new qty: ${newQty})`);
+            console.log(
+              `✅ Added ${addQty} to Pharmacy: ${item.product_name} (new qty: ${newQty})`
+            );
           }
         }
       } catch (innerErr) {
@@ -363,7 +391,7 @@ const AdminPendingConfirmations = () => {
     setError("");
     try {
       const now = new Date().toISOString();
-      
+
       const { error: updWaitErr } = await supabase
         .from("pharmacy_waiting")
         .update({
