@@ -24,14 +24,18 @@ const StaffRetrieval = ({
   const [staffQR, setStaffQR] = useState(initialStaffId || "");
   const [staffName, setStaffName] = useState(initialStaffName || "");
   const [barcode, setBarcode] = useState("");
-  const [items, setItems] = useState([]); // { product_id, product_name, qty, unit, stock }
+  const [items, setItems] = useState([]);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [loading, setLoading] = useState(false);
   const [barcodeModalShow, setBarcodeModalShow] = useState(false);
-
-  // staff QR scanner modal state
   const [staffScannerShow, setStaffScannerShow] = useState(false);
+  
+  // ✅ Search functionality
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState([]);
+  const [showSearchResults, setShowSearchResults] = useState(false);
+  const [searchLoading, setSearchLoading] = useState(false);
 
   const lookupStaff = async (id) => {
     try {
@@ -47,7 +51,6 @@ const StaffRetrieval = ({
     }
   };
 
-  // called by the QR modal when a staff QR is scanned
   const handleStaffScanned = async (scannedId) => {
     if (!scannedId) return;
 
@@ -81,13 +84,92 @@ const StaffRetrieval = ({
     await lookupStaff(staffQR);
   };
 
+  // ✅ Search products by name or barcode
+  const handleSearch = async (query) => {
+    setSearchQuery(query);
+    
+    if (!query.trim()) {
+      setSearchResults([]);
+      setShowSearchResults(false);
+      return;
+    }
+
+    setSearchLoading(true);
+    try {
+      // Search by product_ID (barcode) OR product_name
+      const { data: products, error } = await supabase
+        .from("main_stock_room_products")
+        .select("id, product_ID, product_name, product_unit, product_quantity")
+        .or(`product_ID.ilike.%${query}%,product_name.ilike.%${query}%`)
+        .limit(10);
+
+      if (error) throw error;
+
+      // Group by product_ID and sum quantities
+      const grouped = {};
+      (products || []).forEach((p) => {
+        const id = p.product_ID;
+        if (!grouped[id]) {
+          grouped[id] = {
+            ...p,
+            product_quantity: 0,
+          };
+        }
+        grouped[id].product_quantity += Number(p.product_quantity) || 0;
+      });
+
+      setSearchResults(Object.values(grouped));
+      setShowSearchResults(true);
+    } catch (e) {
+      console.error("Search error:", e);
+      setError("Failed to search products.");
+    } finally {
+      setSearchLoading(false);
+    }
+  };
+
+  // ✅ Add product from search results
+  const addProductFromSearch = (product) => {
+    // Check if already in items
+    const existing = items.find((it) => it.product_id === product.product_ID);
+    if (existing) {
+      setItems(
+        items.map((it) =>
+          it.product_id === product.product_ID
+            ? { ...it, qty: it.qty + 1 }
+            : it
+        )
+      );
+    } else {
+      setItems([
+        ...items,
+        {
+          uuid: product.id,
+          product_id: product.product_ID,
+          product_name: product.product_name,
+          unit: product.product_unit,
+          qty: 1,
+          stock: product.product_quantity,
+        },
+      ]);
+    }
+    
+    // Clear search
+    setSearchQuery("");
+    setSearchResults([]);
+    setShowSearchResults(false);
+    setBarcode("");
+  };
+
+  // ✅ FIXED: Handle products with multiple expiry dates
   const handleAddBarcode = async (e) => {
     e && e.preventDefault();
     setError("");
     setSuccess("");
     const code = (barcode || "").trim();
     if (!code) return setError("Enter a barcode first.");
-    // prevent duplicates: add one more to existing if exists
+    
+    // Prevent duplicates
     const existing = items.find((it) => it.product_id === code);
     if (existing) {
       setItems(
@@ -100,13 +182,29 @@ const StaffRetrieval = ({
     }
 
     try {
-      const { data: product, error } = await supabase
+      // ✅ Fetch ALL batches with this product_ID (multiple expiry dates)
+      const { data: products, error } = await supabase
         .from("main_stock_room_products")
         .select("id, product_ID, product_name, product_unit, product_quantity")
-        .eq("product_ID", code)
-        .single();
+        .eq("product_ID", code);
 
-      if (error) return setError("Product not found for barcode: " + code);
+      if (error) {
+        console.error("Product lookup error:", error);
+        return setError("Error fetching product: " + error.message);
+      }
+
+      if (!products || products.length === 0) {
+        return setError("Product not found for barcode: " + code);
+      }
+
+      // ✅ Sum all quantities across all expiry dates
+      const totalStock = products.reduce(
+        (sum, p) => sum + (Number(p.product_quantity) || 0),
+        0
+      );
+
+      // Use the first product's details (they all have same ID, name, unit)
+      const product = products[0];
 
       setItems([
         ...items,
@@ -116,7 +214,7 @@ const StaffRetrieval = ({
           product_name: product.product_name,
           unit: product.product_unit,
           qty: 1,
-          stock: product.product_quantity ?? 0,
+          stock: totalStock, // ✅ Total stock across all batches
         },
       ]);
       setBarcode("");
@@ -145,7 +243,6 @@ const StaffRetrieval = ({
       return setError("Staff identification required. Scan QR first.");
     if (items.length === 0) return setError("No items added.");
 
-    // validate quantities (check only; do NOT change stock here — secretary/admin will confirm)
     for (const it of items) {
       if (!it.qty || it.qty <= 0)
         return setError(
@@ -153,7 +250,7 @@ const StaffRetrieval = ({
         );
       if (it.stock < it.qty)
         return setError(
-          `Insufficient stock for ${it.product_name || it.product_id}`
+          `Insufficient stock for ${it.product_name || it.product_id}. Available: ${it.stock}`
         );
     }
 
@@ -161,7 +258,6 @@ const StaffRetrieval = ({
     try {
       const timestamp = new Date().toLocaleString();
 
-      // Insert a main_retrievals record (transaction request) without modifying stock.
       const retrievalRow = {
         staff_id: staffQR || null,
         staff_name: staffName || null,
@@ -172,11 +268,9 @@ const StaffRetrieval = ({
           unit: i.unit,
         })),
         retrieved_at: timestamp,
-        status: "pending", // will be verified by Pharmacy Secretary
-        // secretary_processed: false,
+        status: "pending",
       };
 
-      // return the inserted row so we can reference its id in the request table
       const { data: insertedRetrieval, error: retrievalErr } = await supabase
         .from("main_retrievals")
         .insert([retrievalRow])
@@ -184,8 +278,6 @@ const StaffRetrieval = ({
         .single();
       if (retrievalErr) throw retrievalErr;
 
-      // Create an explicit request record for the Pharmacy Secretary to verify
-      // (table: request). The secretary UI will read from this table and update status.
       const requestRow = {
         retrieval_id: insertedRetrieval.id,
         staff_id: retrievalRow.staff_id,
@@ -213,7 +305,6 @@ const StaffRetrieval = ({
     }
   };
 
-  // ---------- Render (responsive) ----------
   return (
     <>
       <Container fluid className="py-4" style={{ background: "transparent" }}>
@@ -299,13 +390,85 @@ const StaffRetrieval = ({
                     {success && <Alert variant="success">{success}</Alert>}
 
                     <Form onSubmit={handleAddBarcode} className="mb-3">
-                      <Form.Label>Scan / Enter Product Barcode</Form.Label>
+                      <Form.Label>Scan Barcode or Search Product</Form.Label>
+                      
+                      {/* ✅ Search by name */}
+                      <div className="mb-3">
+                        <Form.Control
+                          type="text"
+                          placeholder="Search by product name..."
+                          value={searchQuery}
+                          onChange={(e) => handleSearch(e.target.value)}
+                          style={{ marginBottom: 8 }}
+                        />
+                        
+                        {/* Search Results Dropdown */}
+                        {showSearchResults && searchResults.length > 0 && (
+                          <div
+                            style={{
+                              position: "absolute",
+                              zIndex: 1000,
+                              backgroundColor: "white",
+                              border: "1px solid #ddd",
+                              borderRadius: 4,
+                              maxHeight: 300,
+                              overflowY: "auto",
+                              width: "calc(100% - 30px)",
+                              boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
+                            }}
+                          >
+                            {searchResults.map((product) => (
+                              <div
+                                key={product.product_ID}
+                                onClick={() => addProductFromSearch(product)}
+                                style={{
+                                  padding: "10px 15px",
+                                  cursor: "pointer",
+                                  borderBottom: "1px solid #f0f0f0",
+                                }}
+                                onMouseEnter={(e) =>
+                                  (e.currentTarget.style.backgroundColor = "#f5f5f5")
+                                }
+                                onMouseLeave={(e) =>
+                                  (e.currentTarget.style.backgroundColor = "white")
+                                }
+                              >
+                                <div style={{ fontWeight: 500 }}>
+                                  {product.product_name}
+                                </div>
+                                <small style={{ color: "#666" }}>
+                                  Barcode: {product.product_ID} | Stock: {product.product_quantity}
+                                </small>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        
+                        {showSearchResults && searchResults.length === 0 && searchQuery && !searchLoading && (
+                          <div
+                            style={{
+                              position: "absolute",
+                              zIndex: 1000,
+                              backgroundColor: "white",
+                              border: "1px solid #ddd",
+                              borderRadius: 4,
+                              padding: "10px 15px",
+                              width: "calc(100% - 30px)",
+                              boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
+                            }}
+                          >
+                            <small style={{ color: "#666" }}>No products found</small>
+                          </div>
+                        )}
+                      </div>
+                      
+                      {/* ✅ Scan barcode */}
+                      <Form.Label>Or Scan Barcode</Form.Label>
                       <InputGroup className="mb-2" style={{ gap: 8, flexWrap: "wrap" }}>
                         <FormControl
-                          placeholder="Scan barcode or type product code and press Add"
+                          placeholder="Scan or enter barcode and press Add"
                           value={barcode}
                           onChange={(e) => setBarcode(e.target.value)}
-                          autoFocus
                           style={{ flex: 1, minWidth: 0 }}
                         />
                         <div className="d-flex" style={{ gap: 8 }}>
@@ -329,7 +492,7 @@ const StaffRetrieval = ({
                               <th>Product</th>
                               <th>Unit</th>
                               <th style={{ width: 120 }}>Qty</th>
-                              <th>Stock</th>
+                              <th>Total Stock</th>
                               <th></th>
                             </tr>
                           </thead>
