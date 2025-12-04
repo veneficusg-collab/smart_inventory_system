@@ -256,7 +256,10 @@ const MainProducts = ({ setRender, setProduct, setID, staffRole }) => {
         setBarcodeModalShow={setBarcodeModalShow}
         setProductId={setProductId}
       />
-      <AdminPendingConfirmations />
+      
+      {/* Hide AdminPendingConfirmations for secretary role */}
+      {staffRole !== "secretary" && <AdminPendingConfirmations />}
+      
       <AdminRetrievalLogs />
 
       <MainOverallInventory />
