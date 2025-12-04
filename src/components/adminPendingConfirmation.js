@@ -147,109 +147,105 @@ const AdminPendingConfirmations = () => {
   };
 
   const _AddProductsForItems = async (items) => {
-    for (const item of items || []) {
-      try {
-        const addQty = Number(item.qty ?? item.quantity ?? 0);
-        if (!addQty) continue;
+  for (const item of items || []) {
+    try {
+      const addQty = Number(item.qty ?? item.quantity ?? 0);
+      if (!addQty) continue;
 
-        // Check if product exists in pharmacy
-        const { data: pByBarcode, error: pByBarcodeErr } = await supabase
-          .from("products")
-          .select("*")
-          .eq("product_ID", item.product_id)
-          .limit(1);
+      // Check if product exists in pharmacy with the same expiry date
+      const { data: pByBarcode, error: pByBarcodeErr } = await supabase
+        .from("products")
+        .select("*")
+        .eq("product_ID", item.product_id)
+        .eq("product_expiry", item.product_expiry) // Match expiry date
+        .limit(1);
 
-        if (pByBarcodeErr) {
-          console.error("product lookup error", pByBarcodeErr);
+      if (pByBarcodeErr) {
+        console.error("product lookup error", pByBarcodeErr);
+        continue;
+      }
+
+      const prod = (pByBarcode && pByBarcode.length && pByBarcode[0]) || null;
+
+      if (!prod) {
+        // Product doesn't exist in pharmacy with the same expiry date, create it
+        console.warn(`Product not found in Pharmacy with expiry ${item.product_expiry}, Creating: ${item.product_id}`);
+
+        const { data: main_stock_room_products, error: mainError } =
+          await supabase
+            .from("main_stock_room_products")
+            .select("*")
+            .eq("product_ID", item.product_id)
+            .limit(1);
+
+        if (mainError) {
+          console.error("product lookup error in main stock room", mainError);
           continue;
         }
 
-        const prod = (pByBarcode && pByBarcode.length && pByBarcode[0]) || null;
-
-        if (!prod) {
-          // Product doesn't exist in pharmacy, create it
-          console.warn(
-            `Product not found in Pharmacy, Creating: ${item.product_id}`
+        if (
+          !main_stock_room_products ||
+          main_stock_room_products.length === 0
+        ) {
+          console.error(
+            `Product ${item.product_id} not found in main stock room either!`
           );
-
-          const { data: main_stock_room_products, error: mainError } =
-            await supabase
-              .from("main_stock_room_products")
-              .select("*")
-              .eq("product_ID", item.product_id)
-              .limit(1);
-
-          if (mainError) {
-            console.error("product lookup error in main stock room", mainError);
-            continue;
-          }
-
-          if (
-            !main_stock_room_products ||
-            main_stock_room_products.length === 0
-          ) {
-            console.error(
-              `Product ${item.product_id} not found in main stock room either!`
-            );
-            continue;
-          }
-
-          const product = main_stock_room_products[0];
-
-          const { error: insertError } = await supabase
-            .from("products")
-            .insert([
-              {
-                product_ID: product.product_ID,
-                product_name: product.product_name,
-                product_quantity: addQty,
-                product_price: product.product_price,
-                product_unit: product.product_unit,
-                product_category: product.product_category,
-                product_expiry: product.product_expiry,
-                product_img: product.product_img,
-                supplier_name: product.supplier_name,
-                supplier_number: product.supplier_number,
-                product_brand: product.product_brand,
-                supplier_price: product.supplier_price,
-                vat: product.vat,
-              },
-            ]);
-
-          if (insertError) {
-            console.error("Failed creating product in Pharmacy", insertError);
-          } else {
-            console.log(
-              `✅ Created product in Pharmacy: ${product.product_name} with qty ${addQty}`
-            );
-          }
-        } else {
-          // Product exists, update quantity
-          const currentQty = Number(prod.product_quantity ?? 0);
-          const newQty = currentQty + addQty;
-
-          const { error: updProdErr } = await supabase
-            .from("products")
-            .update({ product_quantity: newQty })
-            .eq("id", prod.id);
-
-          if (updProdErr) {
-            console.error(
-              "Failed updating product qty for",
-              prod.id,
-              updProdErr
-            );
-          } else {
-            console.log(
-              `✅ Added ${addQty} to Pharmacy: ${item.product_name} (new qty: ${newQty})`
-            );
-          }
+          continue;
         }
-      } catch (innerErr) {
-        console.error("Error adding product qty for item", item, innerErr);
+
+        const product = main_stock_room_products[0];
+
+        const { error: insertError } = await supabase
+          .from("products")
+          .insert([
+            {
+              product_ID: product.product_ID,
+              product_name: product.product_name,
+              product_quantity: addQty,
+              product_price: product.product_price,
+              product_unit: product.product_unit,
+              product_category: product.product_category,
+              product_expiry: item.product_expiry, // Insert the correct expiry date
+              product_img: product.product_img,
+              supplier_name: product.supplier_name,
+              supplier_number: product.supplier_number,
+              product_brand: product.product_brand,
+              supplier_price: product.supplier_price,
+              vat: product.vat,
+            },
+          ]);
+
+        if (insertError) {
+          console.error("Failed creating product in Pharmacy", insertError);
+        } else {
+          console.log(
+            `✅ Created product in Pharmacy: ${product.product_name} with qty ${addQty} and expiry ${item.product_expiry}`
+          );
+        }
+      } else {
+        // Product exists, update quantity for the same expiry date
+        const currentQty = Number(prod.product_quantity ?? 0);
+        const newQty = currentQty + addQty;
+
+        const { error: updProdErr } = await supabase
+          .from("products")
+          .update({ product_quantity: newQty })
+          .eq("id", prod.id);
+
+        if (updProdErr) {
+          console.error("Failed updating product qty for", prod.id, updProdErr);
+        } else {
+          console.log(
+            `✅ Added ${addQty} to Pharmacy for ${item.product_name} (new qty: ${newQty}) with expiry ${item.product_expiry}`
+          );
+        }
       }
+    } catch (innerErr) {
+      console.error("Error adding product qty for item", item, innerErr);
     }
-  };
+  }
+};
+
 
   // ✅ FIXED: Single confirmation now includes both deduct AND add
   const confirmGroup = async (retrievalId) => {

@@ -96,45 +96,77 @@ const ProductInfo = ({ setRender, product }) => {
   };
 
   const handleDeleteVariant = async (idx, variantId) => {
-    try {
-      // First, remove the variant from the editedVariants state
-      const updatedVariants = editedVariants.filter((_, i) => i !== idx);
-      setEditedVariants(updatedVariants);
+  try {
+    // First, get the variant to be deleted
+    const variantToDelete = variants[idx];
 
-      // Then, delete the variant from the database
-      const { error: deleteError } = await supabase
-        .from("main_stock_room_products")
-        .delete()
-        .eq("id", variantId);
+    // Archive this variant before deletion
+    const archiveRecord = {
+      product_name: variantToDelete.product_name ?? null,
+      product_code: variantToDelete.product_ID ?? null,
+      product_category: variantToDelete.product_category ?? null,
+      product_price: variantToDelete.product_price ?? null,
+      product_quantity: variantToDelete.product_quantity ?? null,
+      product_unit: variantToDelete.product_unit ?? null,
+      product_expiry: variantToDelete.product_expiry ?? null,
+      product_img: variantToDelete.product_img ?? null,
+      supplier_name: variantToDelete.supplier_name ?? null,
+      product_brand: variantToDelete.product_brand ?? null,
+      supplier_price: variantToDelete.supplier_price ?? null,
+      vat: variantToDelete.vat ?? null,
+      supplier_number: variantToDelete.supplier_number ?? null,
+    };
 
-      if (deleteError) {
-        console.error("Error deleting variant:", deleteError);
-        alert("Failed to delete the variant.");
-        return;
-      }
+    // Insert into the archive table
+    const { error: insertError } = await supabase
+      .from("archive") // Change to your archive table name
+      .insert([archiveRecord]);
 
-      // Log the deletion action in the logs table
-      const logRow = {
-        product_id: variantId, // Product ID of the deleted variant
-        product_name: updatedVariants[idx]?.product_name || "Unknown Product", // Product name
-        product_quantity: updatedVariants[idx]?.product_quantity || 0, // Product quantity
-        product_action: "Delete", // Action performed
-        staff: staffName || "System", // Staff name who performed the action
-      };
-
-      const { error: logError } = await supabase.from("logs").insert([logRow]);
-      if (logError) {
-        console.error("Error logging deletion:", logError);
-        // Continue even if logging fails
-      }
-
-      // Optionally: Inform the user
-      alert("Variant deleted successfully.");
-    } catch (error) {
-      console.error("Error during deletion:", error);
-      alert("An error occurred during deletion.");
+    if (insertError) {
+      console.error("Failed to archive record:", insertError);
+      alert("Failed to archive the entry. Deletion cancelled.");
+      return;
     }
-  };
+
+    // Log the deletion action in the logs table
+    const logRow = {
+      product_id: variantId, // Product ID of the deleted variant
+      product_name: variantToDelete.product_name || "Unknown Product", // Product name
+      product_quantity: variantToDelete.product_quantity || 0, // Product quantity
+      product_action: "Delete", // Action performed
+      staff: staffName || "System", // Staff name who performed the action
+    };
+
+    const { error: logError } = await supabase.from("logs").insert([logRow]);
+    if (logError) {
+      console.error("Error logging deletion:", logError);
+      // Continue even if logging fails
+    }
+
+    // Then, remove the variant from the editedVariants state
+    const updatedVariants = editedVariants.filter((_, i) => i !== idx);
+    setEditedVariants(updatedVariants);
+
+    // Finally, delete the variant row from the products table
+    const { error: deleteError } = await supabase
+      .from("products") // Change to your relevant table
+      .delete()
+      .eq("id", variantId);
+
+    if (deleteError) {
+      console.error("Error deleting variant:", deleteError);
+      alert("Failed to delete the variant.");
+      return;
+    }
+
+    // Optionally: Inform the user
+    alert("Variant archived and deleted successfully.");
+  } catch (error) {
+    console.error("Error during deletion:", error);
+    alert("An error occurred during deletion.");
+  }
+};
+
 
   const handleDetailsChange = (field, value) => {
     setDetails((prev) => ({ ...prev, [field]: value }));

@@ -89,7 +89,7 @@ const NearExpiration = () => {
     >
       {/* Header with filter buttons */}
       <div className="d-flex justify-content-between align-items-center mx-2 mb-3">
-        <span className="mx-1 mt-3 d-inline-block">Near Expiration</span>
+        <span className="mx-1 mt-3 d-inline-block">Near Expiration within</span>
         <ButtonGroup size="sm" className="mt-2">
           <Button
             variant={selectedMonths === 3 ? "primary" : "outline-primary"}

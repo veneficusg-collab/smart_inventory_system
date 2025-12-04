@@ -105,7 +105,7 @@ const AvoidPurchase = () => {
     >
       {/* Header */}
       <div className="d-flex justify-content-between align-items-center mx-2 mb-3">
-        <span className="mx-1 mt-3 d-inline-block">Unnecessary Purchase</span>
+        <span className="mx-1 mt-3 d-inline-block">Less Purchase (last 7 Days)</span>
       </div>
 
       {loading ? (
