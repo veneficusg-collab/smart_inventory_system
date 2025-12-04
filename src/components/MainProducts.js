@@ -108,7 +108,6 @@ const MainProducts = ({ setRender, setProduct, setID, staffRole }) => {
         }
       });
       setImageMap(map);
-
     } catch (error) {
       console.error("Error fetching products:", error);
       setError("Failed to load products. Please try again.");
@@ -257,6 +256,8 @@ const MainProducts = ({ setRender, setProduct, setID, staffRole }) => {
         setBarcodeModalShow={setBarcodeModalShow}
         setProductId={setProductId}
       />
+      <AdminPendingConfirmations />
+      <AdminRetrievalLogs />
 
       <MainOverallInventory />
       <Container
@@ -439,9 +440,7 @@ const MainProducts = ({ setRender, setProduct, setID, staffRole }) => {
                         <TableCell>
                           ₱{product.supplier_price?.toFixed(2)}
                         </TableCell>
-                        <TableCell>
-                          ₱{product.vat?.toFixed(2)}
-                        </TableCell>
+                        <TableCell>₱{product.vat?.toFixed(2)}</TableCell>
                         <TableCell>{product.product_quantity}</TableCell>
                         <TableCell>{product.product_unit || "N/A"}</TableCell>
                         <TableCell>
@@ -480,8 +479,6 @@ const MainProducts = ({ setRender, setProduct, setID, staffRole }) => {
           />
         )}
       </Container>
-      <AdminPendingConfirmations />
-      <AdminRetrievalLogs />
     </>
   );
 };

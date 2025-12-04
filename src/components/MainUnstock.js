@@ -113,7 +113,7 @@ const MainUnstock = ({ setRender, Id }) => {
           product_category: updatedProduct.product_category,
           product_unit: updatedProduct.product_unit,
           product_expiry: updatedProduct.product_expiry,
-          product_action: "Unstock", // 👈 key difference
+          product_action: "Main Stock Room Unstock", // 👈 key difference
           staff: staffName,
         },
       ]);

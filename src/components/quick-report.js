@@ -286,6 +286,31 @@ const QuickReport = ({ refreshTrigger }) => {
     }
   };
 
+  const getCurrentStaffName = async () => {
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (user?.id) {
+        const { data: staff, error } = await supabase
+          .from("staff")
+          .select("staff_name")
+          .eq("id", user.id)
+          .limit(1)
+          .single();
+        if (!error && staff) return staff.staff_name || "Unknown";
+      }
+    } catch (_) {}
+    try {
+      const stored = localStorage.getItem("user");
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        return parsed?.staff_name || parsed?.staff_barcode || "Unknown";
+      }
+    } catch (_) {}
+    return "Unknown";
+  };
+
   const restoreStockForTransaction = async (transactionId) => {
     const { data: txItems, error: itemsError } = await supabase
       .from("transaction_items")
@@ -373,26 +398,8 @@ const QuickReport = ({ refreshTrigger }) => {
 
       // 3) Write logs for the void items (non-blocking if it fails)
       try {
-        // Who is staff?
-        const {
-          data: { user },
-        } = await supabase.auth.getUser();
-        let staffName = null;
-
-        if (user) {
-          const { data: staff, error: staffError } = await supabase
-            .from("staff")
-            .select("staff_name")
-            .eq("id", user.id)
-            .single();
-          if (staffError) throw staffError;
-          staffName = staff.staff_name;
-        } else {
-          const storedUser = localStorage.getItem("user");
-          if (storedUser) {
-            staffName = JSON.parse(storedUser).staff_name;
-          }
-        }
+        const staffName = await getCurrentStaffName();
+      
 
         const codes = [...new Set(restored.map((r) => r.product_code))];
 

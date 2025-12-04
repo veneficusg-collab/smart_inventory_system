@@ -1,9 +1,9 @@
 import { Col, Container, Row } from "react-bootstrap";
-import { Form, Button, Alert, InputGroup } from "react-bootstrap"; // merged imports
+import { Form, Button, Alert, InputGroup } from "react-bootstrap";
 import { useEffect, useState } from "react";
 import { supabase } from "../supabaseClient";
 import BarcodeModal from "./barcode-modal";
-import { LuScanBarcode, LuPlus, LuCheck, LuX } from "react-icons/lu"; // ← NEW icons
+import { LuScanBarcode, LuPlus, LuCheck, LuX } from "react-icons/lu";
 
 const AddProduct = ({ setRender }) => {
   const [dragActive, setDragActive] = useState(false);
@@ -14,48 +14,48 @@ const AddProduct = ({ setRender }) => {
   // Form state
   const [productName, setProductName] = useState("");
   const [productBrand, setProductBrand] = useState("");
-  const [productId, setProductId] = useState(""); // ← fix
-  const [category, setCategory] = useState(""); // ← fix
+  const [productId, setProductId] = useState("");
+  const [category, setCategory] = useState("");
   const [buyingPrice, setBuyingPrice] = useState("");
   const [vat, setVAT] = useState("");
   const [supplierPrice, setSupplierPrice] = useState("");
   const [quantity, setQuantity] = useState("");
-  const [unit, setUnit] = useState(""); // ← fix
-  const [supplierName, setSupplierName] = useState(""); // ← fix
-  const [supplierNumber, setSupplierNumber] = useState(""); // ← fix
-  const [expiryDate, setExpiryDate] = useState(""); // safer than null
+  const [unit, setUnit] = useState("");
+  const [supplierName, setSupplierName] = useState("");
+  const [supplierNumber, setSupplierNumber] = useState("");
+  const [expiryDate, setExpiryDate] = useState("");
 
   // Loading and error states
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
-  // ✅ Product ID check state
-  const [prodIdStatus, setProdIdStatus] = useState("idle"); // 'idle' | 'checking' | 'exists' | 'available'
+  // Product ID check state
+  const [prodIdStatus, setProdIdStatus] = useState("idle");
   const [prodIdMsg, setProdIdMsg] = useState("");
 
-  // ====== BRAND DROPDOWN STATE (NEW) ======
-  const [brandList, setBrandList] = useState([]); // available brands
+  // Brand dropdown state
+  const [brandList, setBrandList] = useState([]);
   const [brandLoading, setBrandLoading] = useState(false);
   const [brandError, setBrandError] = useState("");
   const [isAddingBrand, setIsAddingBrand] = useState(false);
   const [newBrandName, setNewBrandName] = useState("");
 
-  // ====== CATEGORY DROPDOWN STATE ======
+  // Category dropdown state
   const [categoryList, setCategoryList] = useState([]);
   const [categoryLoading, setCategoryLoading] = useState(false);
   const [categoryError, setCategoryError] = useState("");
   const [isAddingCategory, setIsAddingCategory] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState("");
 
-  // ====== UNIT DROPDOWN STATE ======
+  // Unit dropdown state
   const [unitList, setUnitList] = useState([]);
   const [unitLoading, setUnitLoading] = useState(false);
   const [unitError, setUnitError] = useState("");
   const [isAddingUnit, setIsAddingUnit] = useState(false);
   const [newUnitName, setNewUnitName] = useState("");
 
-  // ====== SUPPLIER DROPDOWN STATE ======
+  // Supplier dropdown state
   const [supplierList, setSupplierList] = useState([]);
   const [supplierLoading, setSupplierLoading] = useState(false);
   const [supplierError, setSupplierError] = useState("");
@@ -103,7 +103,7 @@ const AddProduct = ({ setRender }) => {
         setProdIdStatus("available");
         setProdIdMsg("✅ Product ID is available");
       }
-    }, 500); // debounce 0.5s
+    }, 500);
 
     return () => clearTimeout(delay);
   }, [productId]);
@@ -120,6 +120,31 @@ const AddProduct = ({ setRender }) => {
       setBuyingPrice("");
     }
   }, [supplierPrice]);
+
+  const getCurrentStaffName = async () => {
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (user?.id) {
+        const { data: staff, error } = await supabase
+          .from("staff")
+          .select("staff_name")
+          .eq("id", user.id)
+          .limit(1)
+          .single();
+        if (!error && staff) return staff.staff_name || "Unknown";
+      }
+    } catch (_) {}
+    try {
+      const stored = localStorage.getItem("user");
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        return parsed?.staff_name || parsed?.staff_barcode || "Unknown";
+      }
+    } catch (_) {}
+    return "Unknown";
+  };
 
   const fetchUnits = async () => {
     try {
@@ -158,7 +183,7 @@ const AddProduct = ({ setRender }) => {
       a.localeCompare(b)
     );
     setUnitList(updated);
-    setUnit(name); // select the new unit
+    setUnit(name);
     setIsAddingUnit(false);
     setNewUnitName("");
   };
@@ -171,14 +196,14 @@ const AddProduct = ({ setRender }) => {
 
   const validateExpiryDate = (expiryDateStr) => {
     if (!expiryDateStr) {
-      return { valid: true }; // Allow empty expiry dates
+      return { valid: true };
     }
 
     const today = new Date();
-    today.setHours(0, 0, 0, 0); // Reset time to start of day
+    today.setHours(0, 0, 0, 0);
 
     const expiryDate = new Date(expiryDateStr);
-    expiryDate.setHours(0, 0, 0, 0); // Reset time of expiry date for comparison
+    expiryDate.setHours(0, 0, 0, 0);
 
     if (expiryDate < today) {
       return {
@@ -202,7 +227,7 @@ const AddProduct = ({ setRender }) => {
       a.localeCompare(b)
     );
     setSupplierList(updated);
-    setSupplierName(name); // select the new supplier
+    setSupplierName(name);
     setIsAddingSupplier(false);
     setNewSupplierName("");
   };
@@ -213,19 +238,20 @@ const AddProduct = ({ setRender }) => {
     setSupplierError("");
   };
 
+  // UPDATED: Fetch suppliers with phone number mapping like MainAddProduct
   const fetchSuppliers = async () => {
     try {
       setSupplierError("");
       setSupplierLoading(true);
 
       const { data, error } = await supabase
-        .from("products")
-        .select("supplier_name, supplier_number"); // no .or(), we'll filter in JS
+        .from("main_stock_room_products")  // Using the same table as MainAddProduct
+        .select("supplier_name, supplier_number");
 
       if (error) throw error;
 
-      const namesSet = new Map(); // case-insensitive de-dupe for names
-      const freq = {}; // { nameLower: { number: count } }
+      const namesSet = new Map();
+      const freq = {};
 
       (data || []).forEach((r) => {
         const name = (r.supplier_name || "").trim();
@@ -241,13 +267,12 @@ const AddProduct = ({ setRender }) => {
         }
       });
 
-      // Build mapping: most frequent number per supplier name
       const mapping = {};
       for (const [nameLower, counts] of Object.entries(freq)) {
         const best = Object.entries(counts).sort(
           (a, b) => b[1] - a[1] || a[0].localeCompare(b[0])
         )[0]?.[0];
-        if (best) mapping[namesSet.get(nameLower)] = best; // keep original casing
+        if (best) mapping[namesSet.get(nameLower)] = best;
       }
 
       setSupplierPhoneByName(mapping);
@@ -263,7 +288,6 @@ const AddProduct = ({ setRender }) => {
     }
   };
 
-  // ====== LOAD CATEGORIES FROM SUPABASE ======
   const fetchCategories = async () => {
     try {
       setCategoryError("");
@@ -296,8 +320,6 @@ const AddProduct = ({ setRender }) => {
     const name = newCategoryName.trim();
     if (!name) {
       setCategoryError("Category name cannot be empty.");
-      console.warn(categoryError);
-
       return;
     }
 
@@ -305,7 +327,7 @@ const AddProduct = ({ setRender }) => {
       a.localeCompare(b)
     );
     setCategoryList(updated);
-    setCategory(name); // select the new category
+    setCategory(name);
     setIsAddingCategory(false);
     setNewCategoryName("");
   };
@@ -321,7 +343,6 @@ const AddProduct = ({ setRender }) => {
       setBrandError("");
       setBrandLoading(true);
 
-      // Pull all product_brand values, de-dup on the client
       const { data, error } = await supabase
         .from("products")
         .select("product_brand")
@@ -355,13 +376,12 @@ const AddProduct = ({ setRender }) => {
       setBrandError("");
       setBrandLoading(true);
 
-      // No DB insert — brands list comes from products table.
       const updated = Array.from(new Set([...brandList, name])).sort((a, b) =>
         a.localeCompare(b)
       );
 
       setBrandList(updated);
-      setProductBrand(name); // pick the new brand
+      setProductBrand(name);
       setIsAddingBrand(false);
       setNewBrandName("");
     } catch (err) {
@@ -439,7 +459,7 @@ const AddProduct = ({ setRender }) => {
       const filePath = `products/${fileName}`;
 
       const { error } = await supabase.storage
-        .from("Smart-Inventory-System-(Pet Matters)") // Make sure this bucket exists in your Supabase Storage
+        .from("Smart-Inventory-System-(Pet Matters)")
         .upload(filePath, file, {
           cacheControl: "3600",
           upsert: false,
@@ -447,7 +467,6 @@ const AddProduct = ({ setRender }) => {
 
       if (error) throw error;
 
-      // Get public URL
       const {
         data: { publicUrl },
       } = supabase.storage
@@ -468,7 +487,6 @@ const AddProduct = ({ setRender }) => {
     setSuccess("");
 
     try {
-      // Validate expiry date before proceeding
       const validation = validateExpiryDate(expiryDate);
       if (!validation.valid) {
         setError(validation.message);
@@ -476,7 +494,6 @@ const AddProduct = ({ setRender }) => {
         return;
       }
 
-      // Validation for other form fields
       if (!productName.trim()) throw new Error("Product name is required");
       if (!productId.trim()) throw new Error("Product ID is required");
       if (prodIdStatus === "exists")
@@ -492,7 +509,8 @@ const AddProduct = ({ setRender }) => {
         imageUrl = await uploadImage(selectedImage);
       }
 
-      // Prepare product data
+      const staffName = await getCurrentStaffName();
+
       const productData = {
         product_name: productName.trim(),
         product_brand: productBrand.trim(),
@@ -517,6 +535,20 @@ const AddProduct = ({ setRender }) => {
 
       if (insertError) throw insertError;
 
+      const { error: logError } = await supabase.from("logs").insert([
+        {
+          product_id: productData.product_ID,
+          product_name: productData.product_name,
+          product_quantity: parseInt(productData.product_quantity, 10),
+          product_category: productData.product_category,
+          product_unit: productData.product_unit,
+          product_expiry: productData.product_expiry,
+          staff: staffName,
+          product_action: "Add Product",
+        },
+      ]);
+      if (logError) throw logError;
+
       setSuccess("Product added successfully!");
       setTimeout(() => {
         setRender("products");
@@ -528,42 +560,6 @@ const AddProduct = ({ setRender }) => {
       setLoading(false);
     }
   };
-
-  useEffect(() => {
-    if (!productId.trim()) {
-      setProdIdStatus("idle");
-      setProdIdMsg("");
-      return;
-    }
-
-    const delay = setTimeout(async () => {
-      setProdIdStatus("checking");
-      setProdIdMsg("Checking Product ID...");
-
-      const { data, error } = await supabase
-        .from("products")
-        .select("product_ID")
-        .eq("product_ID", productId.trim())
-        .maybeSingle();
-
-      if (error) {
-        console.error("Error checking Product ID:", error);
-        setProdIdStatus("idle");
-        setProdIdMsg("");
-        return;
-      }
-
-      if (data) {
-        setProdIdStatus("exists");
-        setProdIdMsg("❌ Product ID already exists!");
-      } else {
-        setProdIdStatus("available");
-        setProdIdMsg("✅ Product ID is available");
-      }
-    }, 500); // debounce 0.5s
-
-    return () => clearTimeout(delay);
-  }, [productId]);
 
   // Reset form function
   const resetForm = () => {
@@ -584,8 +580,6 @@ const AddProduct = ({ setRender }) => {
     setIsAddingSupplier(false);
     setNewSupplierName("");
     setSupplierError("");
-
-    // Leave brand view as-is to avoid surprise toggling
   };
 
   return (
@@ -598,7 +592,6 @@ const AddProduct = ({ setRender }) => {
         <span className="mx-0 mt-5 mb-2 d-inline-block h4">Add Product</span>
       </div>
 
-      {/* Success/Error Messages */}
       {error && (
         <Alert variant="danger" className="mx-4">
           {error}
@@ -609,7 +602,6 @@ const AddProduct = ({ setRender }) => {
           {success}
         </Alert>
       )}
-      {/* Brand errors (local to brand actions) */}
       {brandError && (
         <Alert variant="warning" className="mx-4">
           {brandError}
@@ -624,7 +616,6 @@ const AddProduct = ({ setRender }) => {
         />
       )}
 
-      {/* Form content - takes available space */}
       <div className="flex-grow-1">
         <Form onSubmit={handleAddProductButton}>
           <Row>
@@ -668,7 +659,6 @@ const AddProduct = ({ setRender }) => {
                   </Col>
                 </Form.Group>
 
-                {/* ====== BRAND FIELD (REPLACED) ====== */}
                 <Form.Group
                   as={Row}
                   className="mb-3 mt-4"
@@ -703,9 +693,7 @@ const AddProduct = ({ setRender }) => {
                           onClick={() => {
                             setIsAddingBrand(true);
                             setTimeout(() => {
-                              // optional: focus the text field once it renders
-                              const el =
-                                document.getElementById("newBrandInput");
+                              const el = document.getElementById("newBrandInput");
                               el && el.focus();
                             }, 0);
                           }}
@@ -743,8 +731,7 @@ const AddProduct = ({ setRender }) => {
                     )}
                   </Col>
                 </Form.Group>
-                {/* ====== END BRAND FIELD ====== */}
-                {/* ====== CATEGORY FIELD ====== */}
+
                 <Form.Group
                   as={Row}
                   className="mb-3 mt-4"
@@ -778,8 +765,7 @@ const AddProduct = ({ setRender }) => {
                           onClick={() => {
                             setIsAddingCategory(true);
                             setTimeout(() => {
-                              const el =
-                                document.getElementById("newCategoryInput");
+                              const el = document.getElementById("newCategoryInput");
                               el && el.focus();
                             }, 0);
                           }}
@@ -817,7 +803,6 @@ const AddProduct = ({ setRender }) => {
                     )}
                   </Col>
                 </Form.Group>
-                {/* ====== END CATEGORY FIELD ====== */}
 
                 <Form.Group
                   as={Row}
@@ -838,10 +823,11 @@ const AddProduct = ({ setRender }) => {
                     />
                   </Col>
                 </Form.Group>
+
                 <Form.Group
                   as={Row}
                   className="mb-3 mt-4"
-                  controlId="formBuyingPrice"
+                  controlId="formSupplierPrice"
                 >
                   <Form.Label column sm={3} className="text-start">
                     Supplier Price
@@ -863,7 +849,7 @@ const AddProduct = ({ setRender }) => {
                 <Form.Group
                   as={Row}
                   className="mb-3 mt-4"
-                  controlId="formBuyingPrice"
+                  controlId="formVAT"
                 >
                   <Form.Label column sm={3} className="text-start">
                     VAT Price (12%)
@@ -881,8 +867,7 @@ const AddProduct = ({ setRender }) => {
                     />
                     {!supplierPrice || isNaN(parseFloat(supplierPrice)) ? (
                       <Form.Text className="text-muted">
-                        Enter Supplier Price first to get a VAT Price suggestion
-                        (12%).
+                        Enter Supplier Price first to get a VAT Price suggestion (12%).
                       </Form.Text>
                     ) : (
                       <Form.Text className="text-muted">
@@ -896,6 +881,7 @@ const AddProduct = ({ setRender }) => {
                     )}
                   </Col>
                 </Form.Group>
+
                 <Form.Group
                   as={Row}
                   className="mb-3 mt-4"
@@ -909,7 +895,7 @@ const AddProduct = ({ setRender }) => {
                       type="number"
                       step="0.01"
                       min="0"
-                      placeholder="Enter supplier price"
+                      placeholder="Enter SRP"
                       size="sm"
                       value={buyingPrice}
                       onChange={(e) => setBuyingPrice(e.target.value)}
@@ -966,8 +952,7 @@ const AddProduct = ({ setRender }) => {
                           onClick={() => {
                             setIsAddingUnit(true);
                             setTimeout(() => {
-                              const el =
-                                document.getElementById("newUnitInput");
+                              const el = document.getElementById("newUnitInput");
                               el && el.focus();
                             }, 0);
                           }}
@@ -1027,12 +1012,12 @@ const AddProduct = ({ setRender }) => {
                       size="sm"
                       value={expiryDate}
                       onChange={(e) => setExpiryDate(e.target.value)}
-                      min={new Date().toISOString().split("T")[0]} // Prevent past dates in date picker
+                      min={new Date().toISOString().split("T")[0]}
                     />
                   </Col>
                 </Form.Group>
 
-                {/* ====== SUPPLIER NAME FIELD ====== */}
+                {/* UPDATED: Supplier Name Field with auto-fill behavior */}
                 <Form.Group
                   as={Row}
                   className="mb-3 mt-4"
@@ -1049,15 +1034,10 @@ const AddProduct = ({ setRender }) => {
                           onChange={(e) => {
                             const val = e.target.value;
                             setSupplierName(val);
-
-                            // When supplier name changes, update supplier number based on the selected name
+                            // Auto-fill supplier number when a supplier is selected
                             const suggested = supplierPhoneByName[val];
-
-                            // Clear supplier number if changing to a different supplier
-                            if (suggested && supplierNumber !== suggested) {
-                              setSupplierNumber(suggested); // Update to the new supplier number
-                            } else {
-                              setSupplierNumber(""); // Clear supplier number if no match or user selecting new one
+                            if (suggested && !supplierNumber) {
+                              setSupplierNumber(suggested);
                             }
                           }}
                           disabled={supplierLoading}
@@ -1079,8 +1059,7 @@ const AddProduct = ({ setRender }) => {
                           onClick={() => {
                             setIsAddingSupplier(true);
                             setTimeout(() => {
-                              const el =
-                                document.getElementById("newSupplierInput");
+                              const el = document.getElementById("newSupplierInput");
                               el && el.focus();
                             }, 0);
                           }}
@@ -1125,9 +1104,8 @@ const AddProduct = ({ setRender }) => {
                     )}
                   </Col>
                 </Form.Group>
-                {/* ====== END SUPPLIER NAME FIELD ====== */}
 
-                {/* ====== SUPPLIER # FIELD (TEXT INPUT) ====== */}
+                {/* Supplier Number Field */}
                 <Form.Group
                   as={Row}
                   className="mb-3 mt-4"
@@ -1143,11 +1121,9 @@ const AddProduct = ({ setRender }) => {
                       size="sm"
                       value={supplierNumber}
                       onChange={(e) => setSupplierNumber(e.target.value)}
-                      disabled={supplierName && !isAddingSupplier} // Disable if supplier name is selected (not adding new)
                     />
                   </Col>
                 </Form.Group>
-                {/* ====== END SUPPLIER # FIELD ====== */}
               </div>
             </Col>
 
@@ -1243,7 +1219,6 @@ const AddProduct = ({ setRender }) => {
             </Col>
           </Row>
 
-          {/* Buttons fixed at bottom-right */}
           <div className="d-flex justify-content-end align-items-end p-3">
             <Button
               variant="outline-secondary"

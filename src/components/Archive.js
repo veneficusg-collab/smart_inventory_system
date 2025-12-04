@@ -4,7 +4,8 @@ import {
   Image,
   InputGroup,
   Form,
-  Modal, // ⬅️ added
+  Modal,
+  Nav,
 } from "react-bootstrap";
 import { useEffect, useState, useMemo } from "react";
 import { supabase } from "../supabaseClient";
@@ -23,8 +24,12 @@ import { IoSearch } from "react-icons/io5";
 const BUCKET = "Smart-Inventory-System-(Pet Matters)";
 
 const Archive = () => {
-  const [rows, setRows] = useState([]);
-  const [imageMap, setImageMap] = useState({});
+  // State for both archives
+  const [activeTab, setActiveTab] = useState("pharmacy");
+  const [pharmacyRows, setPharmacyRows] = useState([]);
+  const [mainRows, setMainRows] = useState([]);
+  const [pharmacyImageMap, setPharmacyImageMap] = useState({});
+  const [mainImageMap, setMainImageMap] = useState({});
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState(null);
   const [error, setError] = useState("");
@@ -37,65 +42,93 @@ const Archive = () => {
   // Restore modal state
   const [showRestore, setShowRestore] = useState(false);
   const [restoreRow, setRestoreRow] = useState(null);
+  const [restoreTab, setRestoreTab] = useState(""); // 'pharmacy' or 'main'
   const [restoreQty, setRestoreQty] = useState("");
   const [restoreExpiry, setRestoreExpiry] = useState("");
   const [restoreSaving, setRestoreSaving] = useState(false);
   const [restoreErr, setRestoreErr] = useState("");
 
-  const fetchArchive = async () => {
+  // Fetch both archives
+  const fetchArchives = async () => {
     try {
       setLoading(true);
       setError("");
-      const { data, error } = await supabase
+
+      // Fetch pharmacy archive
+      const { data: pharmacyData, error: pharmacyError } = await supabase
         .from("archive")
         .select("*")
         .order("created_at", { ascending: false });
 
-      if (error) throw error;
+      if (pharmacyError) throw pharmacyError;
 
-      setRows(data || []);
+      // Fetch main archive
+      const { data: mainData, error: mainError } = await supabase
+        .from("main_stock_room_archive")
+        .select("*")
+        .order("created_at", { ascending: false });
 
-      // build image url cache
-      const map = {};
-      (data || []).forEach((r) => {
+      if (mainError) throw mainError;
+
+      setPharmacyRows(pharmacyData || []);
+      setMainRows(mainData || []);
+
+      // Build image url caches
+      const pharmacyMap = {};
+      (pharmacyData || []).forEach((r) => {
         const key = r.product_img;
         if (!key) {
-          map[r.product_code] = "";
+          pharmacyMap[r.product_code] = "";
           return;
         }
         if (typeof key === "string" && key.startsWith("http")) {
-          map[r.product_code] = key;
+          pharmacyMap[r.product_code] = key;
         } else {
           const { data: pub } = supabase.storage
             .from(BUCKET)
             .getPublicUrl(`products/${key}`);
-          map[r.product_code] = pub?.publicUrl || "";
+          pharmacyMap[r.product_code] = pub?.publicUrl || "";
         }
       });
-      setImageMap(map);
+
+      const mainMap = {};
+      (mainData || []).forEach((r) => {
+        const key = r.product_img;
+        if (!key) {
+          mainMap[r.product_code] = "";
+          return;
+        }
+        if (typeof key === "string" && key.startsWith("http")) {
+          mainMap[r.product_code] = key;
+        } else {
+          const { data: pub } = supabase.storage
+            .from(BUCKET)
+            .getPublicUrl(`products/${key}`);
+          mainMap[r.product_code] = pub?.publicUrl || "";
+        }
+      });
+
+      setPharmacyImageMap(pharmacyMap);
+      setMainImageMap(mainMap);
     } catch (e) {
       console.error(e);
-      setError("Failed to load archive.");
+      setError("Failed to load archives.");
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchArchive();
+    fetchArchives();
   }, []);
 
   const getCurrentStaffName = async () => {
     try {
-      // 1️⃣ Try Supabase-authenticated session first
       const {
         data: { user },
       } = await supabase.auth.getUser();
 
-      console.log("🔎 Checking user and staff:");
-      console.log(await supabase.auth.getUser());
-
-      if (user.id) {
+      if (user?.id) {
         const { data, error } = await supabase
           .from("staff")
           .select("staff_name, staff_barcode")
@@ -110,26 +143,27 @@ const Archive = () => {
       console.warn("Supabase staff lookup failed:", err);
     }
 
-    // 2️⃣ Fallback: QR / localStorage login
     try {
       const raw = localStorage.getItem("user");
       if (raw) {
         const parsed = JSON.parse(raw);
-        // prefer explicit staff_name; fallback to barcode if name missing
         return parsed.staff_name || parsed.staff_barcode || "Unknown";
       }
     } catch (err) {
       console.warn("Local storage parse failed:", err);
     }
 
-    // 3️⃣ Ultimate fallback
     return "Unknown";
   };
 
+  // Get current rows based on active tab
+  const currentRows = activeTab === "pharmacy" ? pharmacyRows : mainRows;
+  const currentImageMap = activeTab === "pharmacy" ? pharmacyImageMap : mainImageMap;
+
   const filtered = useMemo(() => {
-    if (!search) return rows;
+    if (!search) return currentRows;
     const q = search.toLowerCase();
-    return rows.filter((r) =>
+    return currentRows.filter((r) =>
       [
         r.product_name,
         r.product_code,
@@ -141,16 +175,16 @@ const Archive = () => {
         .toLowerCase()
         .includes(q)
     );
-  }, [rows, search]);
+  }, [currentRows, search]);
 
-  const refresh = () => fetchArchive();
+  const refresh = () => fetchArchives();
 
   // ------- Restore flow -------
-  const openRestoreModal = (row) => {
+  const openRestoreModal = (row, tabType) => {
     setRestoreRow(row);
+    setRestoreTab(tabType);
     setRestoreErr("");
     setRestoreQty(String(row.product_quantity ?? 0));
-    // If there's an existing expiry date, normalize to YYYY-MM-DD for date input
     const d = row.product_expiry ? new Date(row.product_expiry) : null;
     const asYMD =
       d && !isNaN(d)
@@ -167,13 +201,14 @@ const Archive = () => {
     if (restoreSaving) return;
     setShowRestore(false);
     setRestoreRow(null);
+    setRestoreTab("");
     setRestoreQty("");
     setRestoreExpiry("");
     setRestoreErr("");
   };
 
   const submitRestore = async () => {
-    if (!restoreRow) return;
+    if (!restoreRow || !restoreTab) return;
     setRestoreErr("");
 
     const qtyNum = parseInt(restoreQty, 10);
@@ -190,9 +225,14 @@ const Archive = () => {
     setRestoreSaving(true);
     setBusyId(restoreRow.id);
     try {
-      // ✅ 1) Log BEFORE restoring
       const staffName = await getCurrentStaffName();
 
+      // Determine log action and target table based on tab
+      const logAction = restoreTab === "pharmacy" ? "Restore" : "Main Stock Room Restore";
+      const targetTable = restoreTab === "pharmacy" ? "products" : "main_stock_room_products";
+      const sourceTable = restoreTab === "pharmacy" ? "archive" : "main_stock_room_archive";
+
+      // 1) Log BEFORE restoring
       const logRow = {
         product_id: restoreRow.product_code,
         product_name: restoreRow.product_name ?? restoreRow.product_code,
@@ -200,14 +240,14 @@ const Archive = () => {
         product_unit: restoreRow.product_unit ?? null,
         product_quantity: restoreRow.product_quantity ?? 0,
         product_expiry: restoreRow.product_expiry ?? null,
-        product_action: "Restore",
+        product_action: logAction,
         staff: staffName,
       };
 
       const { error: logError } = await supabase.from("logs").insert([logRow]);
       if (logError) console.error("Log insert (Restore) failed:", logError);
 
-      // 2) Insert back into products
+      // 2) Insert back into appropriate products table
       const productRecord = {
         product_name: restoreRow.product_name ?? null,
         product_ID: restoreRow.product_code ?? null,
@@ -222,35 +262,47 @@ const Archive = () => {
         product_brand: restoreRow.product_brand ?? null,
       };
 
+      // Add main stock room specific fields
+      if (restoreTab === "main") {
+        productRecord.supplier_number = restoreRow.supplier_number ?? null;
+        productRecord.vat = restoreRow.vat ?? null;
+      }
+
       const { error: insertError } = await supabase
-        .from("products")
+        .from(targetTable)
         .insert([productRecord]);
 
       if (insertError) {
         console.error("Restore insert failed:", insertError);
-        setRestoreErr(insertError.message || "Failed to restore to products.");
+        setRestoreErr(insertError.message || `Failed to restore to ${targetTable}.`);
         setRestoreSaving(false);
         setBusyId(null);
         return;
       }
 
-      // 3) Remove from archive
+      // 3) Remove from appropriate archive
       const { error: deleteError } = await supabase
-        .from("archive")
+        .from(sourceTable)
         .delete()
         .eq("id", restoreRow.id);
 
       if (deleteError) {
         console.error("Archive delete after restore failed:", deleteError);
         setRestoreErr(
-          "Product restored, but removing from archive failed. You may delete it manually."
+          `Product restored, but removing from ${sourceTable} failed. You may delete it manually.`
         );
         setRestoreSaving(false);
         setBusyId(null);
         return;
       }
 
-      setRows((prev) => prev.filter((r) => r.id !== restoreRow.id));
+      // Update appropriate state
+      if (restoreTab === "pharmacy") {
+        setPharmacyRows((prev) => prev.filter((r) => r.id !== restoreRow.id));
+      } else {
+        setMainRows((prev) => prev.filter((r) => r.id !== restoreRow.id));
+      }
+
       closeRestoreModal();
       alert("Product restored successfully.");
     } catch (e) {
@@ -262,7 +314,7 @@ const Archive = () => {
     }
   };
 
-  const handleDelete = async (row) => {
+  const handleDelete = async (row, tabType) => {
     if (
       !window.confirm(
         `Permanently delete "${row.product_name}" from archive? This cannot be undone.`
@@ -272,9 +324,9 @@ const Archive = () => {
 
     setBusyId(row.id);
     try {
-      // ✅ 1) Log BEFORE delete
       const staffName = await getCurrentStaffName();
 
+      // 1) Log BEFORE delete
       const logRow = {
         product_id: row.product_code,
         product_name: row.product_name ?? row.product_code,
@@ -289,9 +341,10 @@ const Archive = () => {
       const { error: logError } = await supabase.from("logs").insert([logRow]);
       if (logError) console.error("Log insert (Delete) failed:", logError);
 
-      // 2) Then delete from archive
+      // 2) Then delete from appropriate archive
+      const tableName = tabType === "pharmacy" ? "archive" : "main_stock_room_archive";
       const { error: delError } = await supabase
-        .from("archive")
+        .from(tableName)
         .delete()
         .eq("id", row.id);
 
@@ -301,7 +354,13 @@ const Archive = () => {
         return;
       }
 
-      setRows((prev) => prev.filter((r) => r.id !== row.id));
+      // Update appropriate state
+      if (tabType === "pharmacy") {
+        setPharmacyRows((prev) => prev.filter((r) => r.id !== row.id));
+      } else {
+        setMainRows((prev) => prev.filter((r) => r.id !== row.id));
+      }
+
       alert("Archived record deleted.");
     } catch (e) {
       console.error(e);
@@ -321,7 +380,7 @@ const Archive = () => {
       >
         <div className="d-flex flex-column align-items-center">
           <CircularProgress />
-          <p className="mt-2">Loading archive…</p>
+          <p className="mt-2">Loading archives…</p>
         </div>
       </Container>
     );
@@ -333,17 +392,63 @@ const Archive = () => {
       fluid
       style={{ width: "140vh" }}
     >
-      {/* Header */}
-      <div className="d-flex flex-wrap justify-content-between align-items-center mx-2">
+      {/* Header with Refresh Button */}
+      <div className="d-flex justify-content-between align-items-center mx-2">
         <span className="mx-1 mt-3 d-inline-block">
-          Archive ({filtered.length} items)
+          Archive
           <Button className="mx-1 mb-1" size="lg" variant="" onClick={refresh}>
             <IoMdRefresh />
           </Button>
         </span>
+      </div>
+
+      {/* Navigation Tabs */}
+      <Nav variant="tabs" className="mx-3 mb-0">
+        <Nav.Item style={{ flex: "1" }}>
+          <Nav.Link
+            active={activeTab === "pharmacy"}
+            onClick={() => {
+              setActiveTab("pharmacy");
+              setPage(0); // Reset pagination when switching tabs
+            }}
+            className="cursor-pointer text-center"
+            style={{
+              fontSize: "0.85rem",
+              padding: "10px 8px",
+              whiteSpace: "nowrap",
+            }}
+          >
+            Pharmacy Archive ({pharmacyRows.length})
+          </Nav.Link>
+        </Nav.Item>
+
+        <Nav.Item style={{ flex: "1" }}>
+          <Nav.Link
+            active={activeTab === "main"}
+            onClick={() => {
+              setActiveTab("main");
+              setPage(0); // Reset pagination when switching tabs
+            }}
+            className="cursor-pointer text-center"
+            style={{
+              fontSize: "0.85rem",
+              padding: "10px 8px",
+              whiteSpace: "nowrap",
+            }}
+          >
+            Main Stock Room Archive ({mainRows.length})
+          </Nav.Link>
+        </Nav.Item>
+      </Nav>
+
+      {/* Search Bar */}
+      <div className="d-flex flex-wrap justify-content-between align-items-center mx-3 mt-2">
+        <div className="text-muted" style={{ fontSize: "0.9rem" }}>
+          {activeTab === "pharmacy" ? "Pharmacy Archive" : "Main Stock Room Archive"} • {filtered.length} items
+        </div>
 
         {/* Search */}
-        <InputGroup style={{ maxWidth: "600px", marginTop: "15px" }}>
+        <InputGroup style={{ maxWidth: "400px", marginTop: "8px" }}>
           <InputGroup.Text
             style={{ background: "none", borderRight: "none", paddingRight: 0 }}
           >
@@ -352,9 +457,12 @@ const Archive = () => {
           <Form.Control
             size="sm"
             type="text"
-            placeholder="Search..."
+            placeholder="Search products..."
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              setPage(0); // Reset to first page when searching
+            }}
             style={{ borderLeft: "none", boxShadow: "none", outline: "none" }}
           />
         </InputGroup>
@@ -369,7 +477,7 @@ const Archive = () => {
       {/* Table */}
       <TableContainer
         component={Paper}
-        className="my-3"
+        className="my-3 mx-3"
         sx={{ maxHeight: 500 }}
       >
         <Table stickyHeader>
@@ -380,7 +488,7 @@ const Archive = () => {
               <TableCell align="left">Code</TableCell>
               <TableCell align="left">Category</TableCell>
               <TableCell align="left">Supplier Price</TableCell>
-              <TableCell align="left">Buying/Selling Price</TableCell>
+              <TableCell align="left">Selling Price</TableCell>
               <TableCell align="left">Qty</TableCell>
               <TableCell align="left">Unit</TableCell>
               <TableCell align="left">Expiry</TableCell>
@@ -392,18 +500,20 @@ const Archive = () => {
             {filtered.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={11} align="center" sx={{ py: 4 }}>
-                  <div className="text-muted">No archived products.</div>
+                  <div className="text-muted">
+                    No archived products in {activeTab === "pharmacy" ? "pharmacy" : "main stock room"} archive.
+                  </div>
                 </TableCell>
               </TableRow>
             ) : (
               filtered
                 .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
                 .map((row) => (
-                  <TableRow key={row.id}>
+                  <TableRow key={`${activeTab}-${row.id}`}>
                     <TableCell sx={{ width: 64 }}>
-                      {imageMap[row.product_code] ? (
+                      {currentImageMap[row.product_code] ? (
                         <Image
-                          src={imageMap[row.product_code]}
+                          src={currentImageMap[row.product_code]}
                           rounded
                           style={{
                             width: 48,
@@ -463,7 +573,7 @@ const Archive = () => {
                           size="sm"
                           variant="outline-success"
                           disabled={busyId === row.id}
-                          onClick={() => openRestoreModal(row)}
+                          onClick={() => openRestoreModal(row, activeTab)}
                         >
                           Restore
                         </Button>
@@ -471,7 +581,7 @@ const Archive = () => {
                           size="sm"
                           variant="outline-danger"
                           disabled={busyId === row.id}
-                          onClick={() => handleDelete(row)}
+                          onClick={() => handleDelete(row, activeTab)}
                         >
                           {busyId === row.id ? "Deleting..." : "Delete"}
                         </Button>
@@ -496,6 +606,7 @@ const Archive = () => {
             setRowsPerPage(parseInt(e.target.value, 10));
             setPage(0);
           }}
+          className="mx-3"
         />
       )}
 
@@ -504,6 +615,7 @@ const Archive = () => {
         <Modal.Header closeButton>
           <Modal.Title>
             Restore {restoreRow ? `"${restoreRow.product_name}"` : "Product"}
+            {restoreTab === "pharmacy" ? " (Pharmacy)" : " (Main Stock Room)"}
           </Modal.Title>
         </Modal.Header>
         <Modal.Body>

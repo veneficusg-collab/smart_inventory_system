@@ -187,7 +187,7 @@ const MainProductInfo = ({ setRender, product }) => {
       product_id: variantId, // Product ID of the deleted variant
       product_name: variantToDelete.product_name || "Unknown Product", // Product name
       product_quantity: variantToDelete.product_quantity || 0, // Product quantity
-      product_action: "Delete", // Action performed
+      product_action: "Main Stock Room Archive", // Action performed
       staff: staffName || "System", // Staff name who performed the action
     };
 

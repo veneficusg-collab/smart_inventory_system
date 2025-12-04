@@ -113,6 +113,31 @@ const MainAddProduct = ({ setRender }) => {
     }
   }, [supplierPrice]);
 
+  const getCurrentStaffName = async () => {
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (user?.id) {
+        const { data: staff, error } = await supabase
+          .from("staff")
+          .select("staff_name")
+          .eq("id", user.id)
+          .limit(1)
+          .single();
+        if (!error && staff) return staff.staff_name || "Unknown";
+      }
+    } catch (_) {}
+    try {
+      const stored = localStorage.getItem("user");
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        return parsed?.staff_name || parsed?.staff_barcode || "Unknown";
+      }
+    } catch (_) {}
+    return "Unknown";
+  };
+
   const handleSaveNewSupplier = () => {
     const name = newSupplierName.trim();
     if (!name) {
@@ -402,6 +427,8 @@ const MainAddProduct = ({ setRender }) => {
         imageUrl = await uploadImage(selectedImage);
       }
 
+      const staffName = await getCurrentStaffName();
+
       // Prepare product data
       const productData = {
         product_name: productName.trim(),
@@ -426,6 +453,21 @@ const MainAddProduct = ({ setRender }) => {
         .select();
 
       if (insertError) throw insertError;
+
+      const { error: logError } = await supabase.from("logs").insert([
+                {
+                  product_id: productData.product_ID,
+                  product_name: productData.product_name,
+                  product_quantity: parseInt(productData.product_quantity, 10),
+                  product_category: productData.product_category,
+                  product_unit: productData.product_unit,
+                  product_expiry: productData.product_expiry,
+                  staff: staffName,
+                  product_action: "Main Stock Room Add Product",
+                },
+              ]);
+              if (logError) throw logError;
+      
 
       setSuccess("Product added successfully!");
       setTimeout(() => {

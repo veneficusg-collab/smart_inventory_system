@@ -15,22 +15,42 @@ import { FaCalendarTimes } from "react-icons/fa";
 import { FaTruckLoading } from "react-icons/fa";
 import { MdOutlineInventory2 } from "react-icons/md";
 import { IoTrashBinOutline } from "react-icons/io5";
+import { MdLocalPharmacy } from "react-icons/md";
 
-const Sidebar = ({ setRender, staffRole }) => {
+const Sidebar = ({ setRender, staffRole, currentPage }) => {  // Added currentPage prop
   const handleLogout = async () => {
     try {
-      // 1️⃣ Supabase logout (if user logged in normally)
       const { error } = await supabase.auth.signOut();
       if (error) throw error;
 
-      // 2️⃣ QR-only user session cleanup
       localStorage.removeItem("user");
-
-      // 3️⃣ Redirect to login page
       window.location.href = "/";
     } catch (err) {
       console.error("Logout error:", err.message);
     }
+  };
+
+  // Function to check if a link is active
+  const isActive = (pageName) => {
+    return currentPage === pageName;
+  };
+
+  // Active link styles
+  const activeStyles = {
+    backgroundColor: "#e3f2fd",
+    borderLeft: "4px solid #1976d2",
+    color: "#1976d2",
+    fontWeight: "600",
+    borderRadius: "4px",
+    padding: "8px 12px",
+    marginLeft: "-12px",
+  };
+
+  // Inactive link styles
+  const inactiveStyles = {
+    padding: "8px 12px",
+    marginLeft: "-12px",
+    borderRadius: "4px",
   };
 
   return (
@@ -46,13 +66,11 @@ const Sidebar = ({ setRender, staffRole }) => {
         top: 0,
         left: 0,
         bottom: 0,
-        width: "16.6667%",
+        width: "16.9997%",
         borderRight: "1px solid #ccc",
         backgroundColor: "white",
         zIndex: 1000,
-        // ✅ Scrollable on small devices
         overflowY: "auto",
-        // ✅ Responsive width for smaller screens
         "@media (maxWidth: 768px)": {
           width: "250px",
         },
@@ -76,8 +94,9 @@ const Sidebar = ({ setRender, staffRole }) => {
                 color="inherit"
                 component="button"
                 onClick={() => setRender("AdminDashboard")}
+                sx={isActive("AdminDashboard") ? activeStyles : inactiveStyles}
               >
-                <div className="d-flex align-items-center my-3">
+                <div className="d-flex align-items-center my-1">
                   <CiHome />
                   <span className="mx-3">Dashboard</span>
                 </div>
@@ -88,10 +107,11 @@ const Sidebar = ({ setRender, staffRole }) => {
                 color="inherit"
                 component="button"
                 onClick={() => setRender("Inventory")}
+                sx={isActive("Inventory") ? activeStyles : inactiveStyles}
               >
-                <div className="d-flex align-items-center my-3">
-                  <MdInventory2 />
-                  <span className="mx-3">Inventory</span>
+                <div className="d-flex align-items-center my-1">
+                  <MdLocalPharmacy />
+                  <span className="mx-3">Pharmacy Inventory</span>
                 </div>
               </Link>
 
@@ -99,11 +119,12 @@ const Sidebar = ({ setRender, staffRole }) => {
                 underline="hover"
                 color="inherit"
                 component="button"
-                onClick={() => setRender("Reports")}
+                onClick={() => setRender("MainInventory")}
+                sx={isActive("MainInventory") ? activeStyles : inactiveStyles}
               >
-                <div className="d-flex align-items-center my-3">
-                  <IoIosStats />
-                  <span className="mx-3">Reports</span>
+                <div className="d-flex align-items-center my-1">
+                  <FaTruckLoading style={{ width: "16px" }} />
+                  <span className="mx-3">Main Inventory</span>
                 </div>
               </Link>
 
@@ -112,8 +133,9 @@ const Sidebar = ({ setRender, staffRole }) => {
                 color="inherit"
                 component="button"
                 onClick={() => setRender("ManageStaff")}
+                sx={isActive("ManageStaff") ? activeStyles : inactiveStyles}
               >
-                <div className="d-flex align-items-center my-3">
+                <div className="d-flex align-items-center my-1">
                   <MdManageAccounts />
                   <span className="mx-3">Manage Personnel</span>
                 </div>
@@ -124,8 +146,9 @@ const Sidebar = ({ setRender, staffRole }) => {
                 color="inherit"
                 component="button"
                 onClick={() => setRender("Logs")}
+                sx={isActive("Logs") ? activeStyles : inactiveStyles}
               >
-                <div className="d-flex align-items-center my-3">
+                <div className="d-flex align-items-center my-1">
                   <ClipboardClock style={{ width: "16px" }} />
                   <span className="mx-3">Logs</span>
                 </div>
@@ -136,8 +159,9 @@ const Sidebar = ({ setRender, staffRole }) => {
                 color="inherit"
                 component="button"
                 onClick={() => setRender("Archive")}
+                sx={isActive("Archive") ? activeStyles : inactiveStyles}
               >
-                <div className="d-flex align-items-center my-3">
+                <div className="d-flex align-items-center my-1">
                   <HiArchiveBoxXMark style={{ width: "16px" }} />
                   <span className="mx-3">Archive</span>
                 </div>
@@ -147,28 +171,16 @@ const Sidebar = ({ setRender, staffRole }) => {
                 underline="hover"
                 color="inherit"
                 component="button"
-                onClick={() => setRender("MainInventory")}
+                onClick={() => setRender("Reports")}
+                sx={isActive("Reports") ? activeStyles : inactiveStyles}
               >
-                <div className="d-flex align-items-center my-3">
-                  <MdOutlineInventory2 style={{ width: "16px" }} />
-                  <span className="mx-3">Main Stock Room</span>
-                </div>
-              </Link>
-
-              <Link
-                underline="hover"
-                color="inherit"
-                component="button"
-                onClick={() => setRender("MainArchive")}
-              >
-                <div className="d-flex align-items-center my-3">
-                  <IoTrashBinOutline style={{ width: "16px" }} />
-                  <span className="mx-3">Main Archive</span>
+                <div className="d-flex align-items-center my-1">
+                  <IoIosStats />
+                  <span className="mx-3">Reports</span>
                 </div>
               </Link>
             </>
           ) : staffRole === "secretary" ? (
-            // ✅ Pharmacy Secretary role
             <>
               <div className="d-flex flex-column" style={{ marginLeft: "10px" }}>
                 <Link
@@ -176,8 +188,9 @@ const Sidebar = ({ setRender, staffRole }) => {
                   color="inherit"
                   component="button"
                   onClick={() => setRender("POS")}
+                  sx={isActive("POS") ? activeStyles : inactiveStyles}
                 >
-                  <div className="d-flex align-items-center my-2">
+                  <div className="d-flex align-items-center my-1">
                     <RiProductHuntFill style={{ width: "16px" }} />
                     <span className="mx-3">POS</span>
                   </div>
@@ -187,8 +200,9 @@ const Sidebar = ({ setRender, staffRole }) => {
                   color="inherit"
                   component="button"
                   onClick={() => setRender("PharmacySecretary")}
+                  sx={isActive("PharmacySecretary") ? activeStyles : inactiveStyles}
                 >
-                  <div className="d-flex align-items-center my-3">
+                  <div className="d-flex align-items-center my-1">
                     <FaCalendarTimes style={{ width: "16px" }} />
                     <span className="mx-3">Retrieval</span>
                   </div>
@@ -198,8 +212,9 @@ const Sidebar = ({ setRender, staffRole }) => {
                   color="inherit"
                   component="button"
                   onClick={() => setRender("StaffDashboard")}
+                  sx={isActive("StaffDashboard") ? activeStyles : inactiveStyles}
                 >
-                  <div className="d-flex align-items-center my-2">
+                  <div className="d-flex align-items-center my-1">
                     <AiFillProduct style={{ width: "16px" }} />
                     <span className="mx-3">Stocking</span>
                   </div>
@@ -210,10 +225,11 @@ const Sidebar = ({ setRender, staffRole }) => {
                   color="inherit"
                   component="button"
                   onClick={() => setRender("Inventory")}
+                  sx={isActive("Inventory") ? activeStyles : inactiveStyles}
                 >
-                  <div className="d-flex align-items-center my-3">
+                  <div className="d-flex align-items-center my-1">
                     <MdInventory2 />
-                    <span className="mx-3">Inventory</span>
+                    <span className="mx-3">Pharmacy</span>
                   </div>
                 </Link>
 
@@ -222,8 +238,9 @@ const Sidebar = ({ setRender, staffRole }) => {
                   color="inherit"
                   component="button"
                   onClick={() => setRender("Logs")}
+                  sx={isActive("Logs") ? activeStyles : inactiveStyles}
                 >
-                  <div className="d-flex align-items-center my-2">
+                  <div className="d-flex align-items-center my-1">
                     <ClipboardClock style={{ width: "16px" }} />
                     <span className="mx-3">Logs</span>
                   </div>
@@ -234,8 +251,9 @@ const Sidebar = ({ setRender, staffRole }) => {
                   color="inherit"
                   component="button"
                   onClick={() => setRender("Archive")}
+                  sx={isActive("Archive") ? activeStyles : inactiveStyles}
                 >
-                  <div className="d-flex align-items-center my-3">
+                  <div className="d-flex align-items-center my-1">
                     <HiArchiveBoxXMark style={{ width: "16px" }} />
                     <span className="mx-3">Archive</span>
                   </div>
@@ -246,8 +264,9 @@ const Sidebar = ({ setRender, staffRole }) => {
                   color="inherit"
                   component="button"
                   onClick={() => setRender("MainInventory")}
+                  sx={isActive("MainInventory") ? activeStyles : inactiveStyles}
                 >
-                  <div className="d-flex align-items-center my-3">
+                  <div className="d-flex align-items-center my-1">
                     <MdOutlineInventory2 style={{ width: "16px" }} />
                     <span className="mx-3">Main Inventory</span>
                   </div>
@@ -255,16 +274,8 @@ const Sidebar = ({ setRender, staffRole }) => {
               </div>
             </>
           ) : (
-            // ✅ Staff role = only staff links
+            // Staff role links (if any)
             <>
-              {/* <div
-                className="d-flex flex-column" // 🔹 makes children stack vertically
-                style={{ marginLeft: "10px" }}
-              >
-
-
-               
-              </div> */}
             </>
           )}
         </div>
@@ -281,15 +292,15 @@ const Sidebar = ({ setRender, staffRole }) => {
           component="button"
           onClick={() => handleLogout()}
           className="text-danger"
+          sx={inactiveStyles}
         >
-          <div className="d-flex align-items-center my-3 text-danger">
+          <div className="d-flex align-items-center my-1 text-danger">
             <CiLogout />
             <span className="mx-3">Logout</span>
           </div>
         </Link>
       </div>
 
-      {/* ✅ Add CSS for responsive behavior */}
       <style jsx>{`
         @media (max-width: 768px) {
           .sidebar-container {

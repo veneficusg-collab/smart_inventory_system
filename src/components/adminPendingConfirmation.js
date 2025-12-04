@@ -100,6 +100,7 @@ const AdminPendingConfirmations = () => {
           .from("main_stock_room_products")
           .select("*")
           .eq("product_ID", item.product_id)
+          .eq("product_expiry", item.product_expiry) // Match expiry date
           .order("product_expiry", { ascending: true }); // Ensure we get the oldest stock first
 
         if (pByBarcodeErr) {
@@ -151,6 +152,12 @@ const AdminPendingConfirmations = () => {
       try {
         const addQty = Number(item.qty ?? item.quantity ?? 0);
         if (!addQty) continue;
+
+        // Ensure product_expiry is defined
+        if (!item.product_expiry) {
+          console.error("product_expiry is undefined for item", item);
+          continue; // Skip this item if the expiry date is missing
+        }
 
         // Check if product exists in pharmacy with the same expiry date
         const { data: pByBarcode, error: pByBarcodeErr } = await supabase
@@ -208,7 +215,7 @@ const AdminPendingConfirmations = () => {
                 product_price: product.product_price,
                 product_unit: product.product_unit,
                 product_category: product.product_category,
-                product_expiry: item.product_expiry, // Insert the correct expiry date
+                product_expiry: product.product_expiry, // Insert the correct expiry date
                 product_img: product.product_img,
                 supplier_name: product.supplier_name,
                 supplier_number: product.supplier_number,

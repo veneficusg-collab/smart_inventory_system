@@ -11,7 +11,7 @@ import MainUnstock from "./MainUnstock";
 
 
 const MainInventory = ({staffRole}) => {
-  const [render, setRender] = useState('products');
+  const [render, setRender] = useState('main-products');
   const [Id, setID] = useState('');
   const [product, setProduct] = useState(null);
   return (

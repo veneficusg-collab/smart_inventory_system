@@ -148,6 +148,7 @@ const StaffRetrieval = ({
           unit: product.product_unit,
           qty: 1,
           stock: product.product_quantity,
+          expiry: product.product_expiry,
         },
       ]);
     }
@@ -284,6 +285,7 @@ const StaffRetrieval = ({
           product_name: i.product_name,
           qty: i.qty,
           unit: i.unit,
+          product_expiry: i.expiry,
         })),
         retrieved_at: timestamp,
         status: "pending",
