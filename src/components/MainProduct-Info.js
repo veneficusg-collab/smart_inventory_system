@@ -169,11 +169,15 @@ const MainProductInfo = ({ setRender, product }) => {
           supplier_number: row.supplier_number ?? null,
         };
 
+        // Debugging: Log the archiveRecord to check if all fields are present
+        console.log("Archiving Record:", archiveRecord);
+
         const { error: insertError } = await supabase
           .from("main_stock_room_archive")
           .insert([archiveRecord]);
 
         if (insertError) {
+          console.error("Failed to archive record:", insertError);
           alert("Failed to archive one entry. Delete cancelled.");
           return;
         }
@@ -189,6 +193,7 @@ const MainProductInfo = ({ setRender, product }) => {
           product_action: "Main Stock Room Archive",
           staff: staffName || "System",
         };
+
         const { error: logErr } = await supabase.from("logs").insert([logRow]);
         if (logErr) {
           console.error("Log insert (Archive) failed:", logErr);
@@ -196,13 +201,23 @@ const MainProductInfo = ({ setRender, product }) => {
         }
 
         // 3) Delete the variant row
-        await supabase.from("main_stock_room_products").delete().eq("id", row.id);
+        const { error: deleteError } = await supabase
+          .from("main_stock_room_products")
+          .delete()
+          .eq("id", row.id);
+
+        if (deleteError) {
+          console.error("Error deleting product variant:", deleteError);
+          alert("Failed to delete product variant. Delete cancelled.");
+          return;
+        }
       }
 
       alert("All product variants archived, logged, and deleted.");
       setRender("main-products");
     } catch (err) {
       console.error("Unexpected delete error:", err);
+      alert("An unexpected error occurred. Please try again.");
     }
   };
 
