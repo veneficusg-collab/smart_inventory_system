@@ -30,7 +30,7 @@ const StaffRetrieval = ({
   const [loading, setLoading] = useState(false);
   const [barcodeModalShow, setBarcodeModalShow] = useState(false);
   const [staffScannerShow, setStaffScannerShow] = useState(false);
-  
+
   // ✅ Search functionality
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState([]);
@@ -87,7 +87,7 @@ const StaffRetrieval = ({
   // ✅ Search products by name or barcode
   const handleSearch = async (query) => {
     setSearchQuery(query);
-    
+
     if (!query.trim()) {
       setSearchResults([]);
       setShowSearchResults(false);
@@ -135,9 +135,7 @@ const StaffRetrieval = ({
     if (existing) {
       setItems(
         items.map((it) =>
-          it.product_id === product.product_ID
-            ? { ...it, qty: it.qty + 1 }
-            : it
+          it.product_id === product.product_ID ? { ...it, qty: it.qty + 1 } : it
         )
       );
     } else {
@@ -153,7 +151,7 @@ const StaffRetrieval = ({
         },
       ]);
     }
-    
+
     // Clear search
     setSearchQuery("");
     setSearchResults([]);
@@ -168,8 +166,8 @@ const StaffRetrieval = ({
     setSuccess("");
     const code = (barcode || "").trim();
     if (!code) return setError("Enter a barcode first.");
-    
-    // Prevent duplicates
+
+    // Prevent duplicates (don't add a product that's already in the list)
     const existing = items.find((it) => it.product_id === code);
     if (existing) {
       setItems(
@@ -182,11 +180,14 @@ const StaffRetrieval = ({
     }
 
     try {
-      // ✅ Fetch ALL batches with this product_ID (multiple expiry dates)
+      // ✅ Fetch ALL variants for the given product_ID (multiple expiry dates)
       const { data: products, error } = await supabase
         .from("main_stock_room_products")
-        .select("id, product_ID, product_name, product_unit, product_quantity")
-        .eq("product_ID", code);
+        .select(
+          "id, product_ID, product_name, product_unit, product_quantity, product_expiry"
+        )
+        .eq("product_ID", code)
+        .order("product_expiry", { ascending: true }); // Ensure sorted by expiry (nearest first)
 
       if (error) {
         console.error("Product lookup error:", error);
@@ -197,27 +198,42 @@ const StaffRetrieval = ({
         return setError("Product not found for barcode: " + code);
       }
 
-      // ✅ Sum all quantities across all expiry dates
-      const totalStock = products.reduce(
-        (sum, p) => sum + (Number(p.product_quantity) || 0),
-        0
-      );
+      let remainingQty = 1; // Default to adding one unit initially
+      let addedStock = 0;
 
-      // Use the first product's details (they all have same ID, name, unit)
-      const product = products[0];
+      // Loop through the sorted products (variants), starting with the nearest expiry
+      for (const product of products) {
+        const availableStock = Number(product.product_quantity) || 0;
+        if (remainingQty <= 0) break; // Stop if we have met the requested quantity
 
-      setItems([
-        ...items,
-        {
-          uuid: product.id,
-          product_id: product.product_ID,
-          product_name: product.product_name,
-          unit: product.product_unit,
-          qty: 1,
-          stock: totalStock, // ✅ Total stock across all batches
-        },
-      ]);
-      setBarcode("");
+        if (availableStock > 0) {
+          const qtyToTake = Math.min(remainingQty, availableStock);
+          remainingQty -= qtyToTake;
+
+          // Update the items list with the variant information (increasing qty)
+          setItems([
+            ...items,
+            {
+              uuid: product.id,
+              product_id: product.product_ID,
+              product_name: product.product_name,
+              unit: product.product_unit,
+              qty: qtyToTake,
+              stock: availableStock,
+              expiry: product.product_expiry, // Track expiry date
+            },
+          ]);
+          addedStock += qtyToTake;
+        }
+      }
+
+      if (remainingQty > 0) {
+        // If remainingQty is still greater than 0, there isn't enough stock to fulfill the request
+        return setError(`Not enough stock available for barcode: ${code}`);
+      }
+
+      setBarcode(""); // Reset the barcode input after successful scan
+      setSuccess("Product added successfully.");
     } catch (e) {
       console.error(e);
       setError("Failed to fetch product.");
@@ -250,7 +266,9 @@ const StaffRetrieval = ({
         );
       if (it.stock < it.qty)
         return setError(
-          `Insufficient stock for ${it.product_name || it.product_id}. Available: ${it.stock}`
+          `Insufficient stock for ${
+            it.product_name || it.product_id
+          }. Available: ${it.stock}`
         );
     }
 
@@ -329,7 +347,10 @@ const StaffRetrieval = ({
 
                         <div className="w-100 mt-2">
                           {!staffName ? (
-                            <Form onSubmit={handleScanStaffQR} className="d-flex gap-2">
+                            <Form
+                              onSubmit={handleScanStaffQR}
+                              className="d-flex gap-2"
+                            >
                               <Form.Control
                                 size="sm"
                                 placeholder="Type staff QR / ID"
@@ -337,7 +358,11 @@ const StaffRetrieval = ({
                                 onChange={(e) => setStaffQR(e.target.value)}
                                 style={{ minWidth: 0 }}
                               />
-                              <Button type="submit" size="sm" variant="outline-primary">
+                              <Button
+                                type="submit"
+                                size="sm"
+                                variant="outline-primary"
+                              >
                                 Set
                               </Button>
                             </Form>
@@ -347,8 +372,15 @@ const StaffRetrieval = ({
                         <div className="mt-2" style={{ fontSize: 13 }}>
                           {staffName ? (
                             <>
-                              <div>Staff: <strong>{staffName}</strong></div>
-                              <Button size="sm" variant="outline-danger" className="mt-2" onClick={clearStaff}>
+                              <div>
+                                Staff: <strong>{staffName}</strong>
+                              </div>
+                              <Button
+                                size="sm"
+                                variant="outline-danger"
+                                className="mt-2"
+                                onClick={clearStaff}
+                              >
                                 Clear Staff
                               </Button>
                             </>
@@ -380,18 +412,21 @@ const StaffRetrieval = ({
 
                 {!staffName ? (
                   <div className="text-center text-muted my-4">
-                    Please scan staff QR to reveal retrieval form and start adding items.
+                    Please scan staff QR to reveal retrieval form and start
+                    adding items.
                   </div>
                 ) : (
                   <>
-                    <h4 className="mt-3">Staff — Retrieve Items (Main Stock Room)</h4>
+                    <h4 className="mt-3">
+                      Staff — Retrieve Items (Main Stock Room)
+                    </h4>
 
                     {error && <Alert variant="danger">{error}</Alert>}
                     {success && <Alert variant="success">{success}</Alert>}
 
                     <Form onSubmit={handleAddBarcode} className="mb-3">
                       <Form.Label>Scan Barcode or Search Product</Form.Label>
-                      
+
                       {/* ✅ Search by name */}
                       <div className="mb-3">
                         <Form.Control
@@ -401,7 +436,7 @@ const StaffRetrieval = ({
                           onChange={(e) => handleSearch(e.target.value)}
                           style={{ marginBottom: 8 }}
                         />
-                        
+
                         {/* Search Results Dropdown */}
                         {showSearchResults && searchResults.length > 0 && (
                           <div
@@ -427,44 +462,55 @@ const StaffRetrieval = ({
                                   borderBottom: "1px solid #f0f0f0",
                                 }}
                                 onMouseEnter={(e) =>
-                                  (e.currentTarget.style.backgroundColor = "#f5f5f5")
+                                  (e.currentTarget.style.backgroundColor =
+                                    "#f5f5f5")
                                 }
                                 onMouseLeave={(e) =>
-                                  (e.currentTarget.style.backgroundColor = "white")
+                                  (e.currentTarget.style.backgroundColor =
+                                    "white")
                                 }
                               >
                                 <div style={{ fontWeight: 500 }}>
                                   {product.product_name}
                                 </div>
                                 <small style={{ color: "#666" }}>
-                                  Barcode: {product.product_ID} | Stock: {product.product_quantity}
+                                  Barcode: {product.product_ID} | Stock:{" "}
+                                  {product.product_quantity}
                                 </small>
                               </div>
                             ))}
                           </div>
                         )}
-                        
-                        {showSearchResults && searchResults.length === 0 && searchQuery && !searchLoading && (
-                          <div
-                            style={{
-                              position: "absolute",
-                              zIndex: 1000,
-                              backgroundColor: "white",
-                              border: "1px solid #ddd",
-                              borderRadius: 4,
-                              padding: "10px 15px",
-                              width: "calc(100% - 30px)",
-                              boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
-                            }}
-                          >
-                            <small style={{ color: "#666" }}>No products found</small>
-                          </div>
-                        )}
+
+                        {showSearchResults &&
+                          searchResults.length === 0 &&
+                          searchQuery &&
+                          !searchLoading && (
+                            <div
+                              style={{
+                                position: "absolute",
+                                zIndex: 1000,
+                                backgroundColor: "white",
+                                border: "1px solid #ddd",
+                                borderRadius: 4,
+                                padding: "10px 15px",
+                                width: "calc(100% - 30px)",
+                                boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
+                              }}
+                            >
+                              <small style={{ color: "#666" }}>
+                                No products found
+                              </small>
+                            </div>
+                          )}
                       </div>
-                      
+
                       {/* ✅ Scan barcode */}
                       <Form.Label>Or Scan Barcode</Form.Label>
-                      <InputGroup className="mb-2" style={{ gap: 8, flexWrap: "wrap" }}>
+                      <InputGroup
+                        className="mb-2"
+                        style={{ gap: 8, flexWrap: "wrap" }}
+                      >
                         <FormControl
                           placeholder="Scan or enter barcode and press Add"
                           value={barcode}
@@ -472,7 +518,10 @@ const StaffRetrieval = ({
                           style={{ flex: 1, minWidth: 0 }}
                         />
                         <div className="d-flex" style={{ gap: 8 }}>
-                          <Button variant="outline-secondary" onClick={() => setBarcodeModalShow(true)}>
+                          <Button
+                            variant="outline-secondary"
+                            onClick={() => setBarcodeModalShow(true)}
+                          >
                             <LuScanBarcode />
                           </Button>
                           <Button type="submit" variant="outline-success">
@@ -481,11 +530,18 @@ const StaffRetrieval = ({
                         </div>
                       </InputGroup>
                       <div className="form-text mb-2">
-                        You can scan multiple barcodes. Duplicate scans increase quantity.
+                        You can scan multiple barcodes. Duplicate scans increase
+                        quantity.
                       </div>
 
                       <div className="table-responsive mb-3">
-                        <Table striped bordered hover size="sm" className="mb-0">
+                        <Table
+                          striped
+                          bordered
+                          hover
+                          size="sm"
+                          className="mb-0"
+                        >
                           <thead>
                             <tr>
                               <th>Barcode</th>
@@ -499,27 +555,40 @@ const StaffRetrieval = ({
                           <tbody>
                             {items.length === 0 && (
                               <tr>
-                                <td colSpan="6" className="text-center text-muted">
+                                <td
+                                  colSpan="6"
+                                  className="text-center text-muted"
+                                >
                                   No items added
                                 </td>
                               </tr>
                             )}
                             {items.map((it) => (
                               <tr key={it.product_id}>
-                                <td style={{ whiteSpace: "nowrap" }}>{it.product_id}</td>
-                                <td style={{ minWidth: 120 }}>{it.product_name}</td>
+                                <td style={{ whiteSpace: "nowrap" }}>
+                                  {it.product_id}
+                                </td>
+                                <td style={{ minWidth: 120 }}>
+                                  {it.product_name}
+                                </td>
                                 <td>{it.unit}</td>
                                 <td style={{ width: 120 }}>
                                   <Form.Control
                                     type="number"
                                     min="1"
                                     value={it.qty}
-                                    onChange={(e) => updateQty(it.product_id, e.target.value)}
+                                    onChange={(e) =>
+                                      updateQty(it.product_id, e.target.value)
+                                    }
                                   />
                                 </td>
                                 <td>{it.stock}</td>
                                 <td>
-                                  <Button size="sm" variant="danger" onClick={() => removeItem(it.product_id)}>
+                                  <Button
+                                    size="sm"
+                                    variant="danger"
+                                    onClick={() => removeItem(it.product_id)}
+                                  >
                                     Remove
                                   </Button>
                                 </td>
@@ -530,7 +599,11 @@ const StaffRetrieval = ({
                       </div>
 
                       <div className="d-flex flex-wrap gap-2">
-                        <Button variant="primary" onClick={handleConfirm} disabled={loading}>
+                        <Button
+                          variant="primary"
+                          onClick={handleConfirm}
+                          disabled={loading}
+                        >
                           {loading ? "Processing..." : "OK — Confirm Retrieval"}
                         </Button>
                         <Button
@@ -557,7 +630,10 @@ const StaffRetrieval = ({
             <div style={{ width: "100%", maxWidth: 1200, minWidth: 1000 }}>
               <Card className="shadow-sm">
                 <Card.Body>
-                  <RetrievalLogs staffId={staffQR || initialStaffId} limit={20} />
+                  <RetrievalLogs
+                    staffId={staffQR || initialStaffId}
+                    limit={20}
+                  />
                 </Card.Body>
               </Card>
             </div>
