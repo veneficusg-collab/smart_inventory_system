@@ -146,6 +146,42 @@ const MainProductInfo = ({ setRender, product }) => {
     setIsEditing(false);
   };
 
+  const handleDeleteVariant = async (idx, variantId) => {
+    // First, remove the variant from the editedVariants state
+    const updatedVariants = editedVariants.filter((_, i) => i !== idx);
+    setEditedVariants(updatedVariants);
+
+    // Then, delete the variant from the database
+    const { error: deleteError } = await supabase
+      .from("main_stock_room_products")
+      .delete()
+      .eq("id", variantId);
+
+    if (deleteError) {
+      console.error("Error deleting variant:", deleteError);
+      alert("Failed to delete the variant.");
+      return;
+    }
+
+    // Log the deletion action in the logs table
+    const logRow = {
+      product_id: variantId, // Product ID of the deleted variant
+      product_name: updatedVariants[idx]?.product_name || "Unknown Product", // Product name
+      product_quantity: updatedVariants[idx]?.product_quantity || 0, // Product quantity
+      product_action: "Delete", // Action performed
+      staff: staffName || "System", // Staff name who performed the action
+    };
+
+    const { error: logError } = await supabase.from("logs").insert([logRow]);
+    if (logError) {
+      console.error("Error logging deletion:", logError);
+      // Continue even if logging fails
+    }
+
+    // Optionally: Inform the user
+    alert("Variant deleted successfully.");
+  };
+
   const handleDelete = async () => {
     if (!window.confirm(`Archive and delete "${product.product_name}"?`))
       return;
@@ -168,9 +204,6 @@ const MainProductInfo = ({ setRender, product }) => {
           vat: row.vat ?? null,
           supplier_number: row.supplier_number ?? null,
         };
-
-        // Debugging: Log the archiveRecord to check if all fields are present
-        console.log("Archiving Record:", archiveRecord);
 
         const { error: insertError } = await supabase
           .from("main_stock_room_archive")
@@ -364,45 +397,6 @@ const MainProductInfo = ({ setRender, product }) => {
               )}
             </div>
 
-            {/* Supplier Price */}
-            <div className="d-flex justify-content-between align-items-center my-2">
-              <span>Supplier Price</span>
-              {isEditing ? (
-                <Form.Control
-                  type="number"
-                  size="sm"
-                  value={details.supplier_price}
-                  onChange={(e) =>
-                    handleDetailsChange(
-                      "supplier_price",
-                      parseFloat(e.target.value)
-                    )
-                  }
-                  style={{ width: "120px" }}
-                />
-              ) : (
-                <span>₱{Number(details.supplier_price).toFixed(2)}</span>
-              )}
-            </div>
-
-            {/* VAT */}
-            <div className="d-flex justify-content-between align-items-center my-2">
-              <span>VAT</span>
-              {isEditing ? (
-                <Form.Control
-                  type="number"
-                  size="sm"
-                  value={details.vat}
-                  onChange={(e) =>
-                    handleDetailsChange("vat", parseFloat(e.target.value))
-                  }
-                  style={{ width: "120px" }}
-                />
-              ) : (
-                <span>₱{Number(details.vat).toFixed(2)}</span>
-              )}
-            </div>
-
             {/* Product Price */}
             <div className="d-flex justify-content-between align-items-center my-2">
               <span>Product Price</span>
@@ -458,6 +452,7 @@ const MainProductInfo = ({ setRender, product }) => {
                 <TableCell>Supplier #</TableCell>
                 <TableCell>Supplier Price</TableCell>
                 <TableCell>VAT</TableCell>
+                <TableCell>Actions</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -524,6 +519,7 @@ const MainProductInfo = ({ setRender, product }) => {
                       v.supplier_name || "—"
                     )}
                   </TableCell>
+
                   <TableCell>
                     {isEditing ? (
                       <Form.Control
@@ -563,6 +559,7 @@ const MainProductInfo = ({ setRender, product }) => {
                       `₱${Number(v.supplier_price ?? 0).toFixed(2)}`
                     )}
                   </TableCell>
+
                   <TableCell>
                     {isEditing ? (
                       <Form.Control
@@ -581,6 +578,16 @@ const MainProductInfo = ({ setRender, product }) => {
                     ) : (
                       `₱${Number(v.vat ?? 0).toFixed(2)}`
                     )}
+                  </TableCell>
+
+                  <TableCell>
+                    <Button
+                      variant="outline-danger"
+                      size="sm"
+                      onClick={() => handleDeleteVariant(idx, v.id)}
+                    >
+                      Delete
+                    </Button>
                   </TableCell>
                 </TableRow>
               ))}
