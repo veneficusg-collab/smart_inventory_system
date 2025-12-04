@@ -220,6 +220,8 @@ const MainArchive = () => {
         supplier_name: restoreRow.supplier_name ?? null,
         supplier_price: restoreRow.supplier_price ?? null,
         product_brand: restoreRow.product_brand ?? null,
+        supplier_number: restoreRow.supplier_number ?? null,
+        vat: restoreRow.vat ?? null,
       };
 
       const { error: insertError } = await supabase
