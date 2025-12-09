@@ -210,8 +210,42 @@ const POS = () => {
     }
   };
 
+  // Function to check stock availability before submitting
+  const checkStockAvailability = async () => {
+    const stockIssues = [];
+    
+    // Check each product in the order
+    for (const order of orders) {
+      // Get total available stock for this product
+      const { data: productRows, error } = await supabase
+        .from("products")
+        .select("product_ID, product_name, product_quantity")
+        .eq("product_ID", order.product_ID);
+      
+      if (error) {
+        console.error("Error fetching stock:", error);
+        stockIssues.push(`Error checking stock for ${order.product_name}`);
+        continue;
+      }
+      
+      if (!productRows || productRows.length === 0) {
+        stockIssues.push(`${order.product_name}: Product not found in inventory`);
+        continue;
+      }
+      
+      // Sum up all quantities across batches
+      const totalAvailableStock = productRows.reduce((sum, row) => sum + (row.product_quantity || 0), 0);
+      
+      if (totalAvailableStock < order.qty) {
+        stockIssues.push(`${order.product_name}: Only ${totalAvailableStock} available, but ${order.qty} requested`);
+      }
+    }
+    
+    return stockIssues;
+  };
+
   // ----------------------------
-  // SUBMIT (with FIFO + logs)
+  // SUBMIT (with FIFO + logs + STOCK VALIDATION)
   // ----------------------------
   const handleSubmit = async () => {
     if (orders.length === 0) {
@@ -223,7 +257,26 @@ const POS = () => {
       return;
     }
 
+    // Check if total payment is sufficient
+    const discountRate = 0.2; // Assuming 20% discount if applied
+    const discountedTotal = total * (1 - discountRate); // Adjust based on your discount logic
+    const paymentTotal = payments.reduce((sum, p) => sum + (p.amount || 0), 0);
+    
+    if (paymentTotal < discountedTotal) {
+      alert(`Insufficient payment. Total: ₱${discountedTotal.toFixed(2)}, Paid: ₱${paymentTotal.toFixed(2)}`);
+      return;
+    }
+
     try {
+      // Check stock availability BEFORE processing transaction
+      const stockIssues = await checkStockAvailability();
+      
+      if (stockIssues.length > 0) {
+        // Show all stock issues in one alert
+        alert(`Insufficient stock:\n\n${stockIssues.join('\n')}`);
+        return;
+      }
+
       const {
         data: { user },
       } = await supabase.auth.getUser();

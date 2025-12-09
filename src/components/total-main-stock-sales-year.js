@@ -102,7 +102,7 @@ const MainTotalSalesPerYear = () => {
         <div className="d-flex align-items-center gap-2">
           <FaChartLine size={24} className="text-success me-2" />{" "}
           {/* 👈 Sales Icon */}
-          <h6 className="mb-0">Main Total Sales</h6>
+          <h6 className="mb-0">Good As Sold</h6>
         </div>
 
         {/* Year picker */}

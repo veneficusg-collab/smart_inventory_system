@@ -25,6 +25,9 @@ const QuickReport = ({ refreshTrigger }) => {
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [selectedAction, setSelectedAction] = useState(null); // 'void' or 'damage'
+  const [showActionConfirmation, setShowActionConfirmation] = useState(false);
+  const [selectedTransaction, setSelectedTransaction] = useState(null);
 
   // 🔹 Product metadata map for naming + images
   const [productMap, setProductMap] = useState({}); // product_ID -> { name, imgUrl }
@@ -57,7 +60,7 @@ const QuickReport = ({ refreshTrigger }) => {
     setProductMap(map);
   };
 
-  // Given a transaction, produce a “representative” product cell (image + name)
+  // Given a transaction, produce a "representative" product cell (image + name)
   const renderTxItemCell = (t) => {
     const first = t.transaction_items?.[0];
     if (!first) {
@@ -361,19 +364,22 @@ const QuickReport = ({ refreshTrigger }) => {
     return restored;
   };
 
-  const handleVoidTransaction = async (transactionId) => {
-    if (
-      !window.confirm(
-        "Are you sure you want to void this transaction? This action cannot be undone."
-      )
-    ) {
-      return;
-    }
+  const showActionModal = (transaction, actionType) => {
+    setSelectedTransaction(transaction);
+    setSelectedAction(actionType);
+    setShowActionConfirmation(true);
+  };
+
+  const handleActionConfirmation = async () => {
+    if (!selectedTransaction || !selectedAction) return;
 
     try {
       setLoading(true);
-
-      // Only completed can be voided
+      
+      const transactionId = selectedTransaction.id;
+      const actionType = selectedAction;
+      
+      // Only completed can be voided or marked as damage
       const { data: tx, error: txErr } = await supabase
         .from("transactions")
         .select("status")
@@ -381,79 +387,143 @@ const QuickReport = ({ refreshTrigger }) => {
         .single();
       if (txErr) throw txErr;
       if (!tx || tx.status !== "completed") {
-        alert("Only completed transactions can be voided.");
+        alert("Only completed transactions can be modified.");
         setLoading(false);
+        setShowActionConfirmation(false);
         return;
       }
 
-      // 1) Restore stock — and capture what we did for logging
-      const restored = await restoreStockForTransaction(transactionId);
+      // Determine new status based on action type
+      const newStatus = actionType === 'void' ? 'voided' : 'damaged';
+      
+      // Restore stock only for void action (damage doesn't restore stock)
+      if (actionType === 'void') {
+        const restored = await restoreStockForTransaction(transactionId);
+        
+        // Log the restored items
+        if (restored.length > 0) {
+          try {
+            const staffName = await getCurrentStaffName();
+            const codes = [...new Set(restored.map((r) => r.product_code))];
 
-      // 2) Mark transaction as voided
+            const { data: prodMeta, error: metaErr } = await supabase
+              .from("products")
+              .select("id, product_ID, product_name, product_category, product_unit")
+              .in("product_ID", codes);
+            if (metaErr) throw metaErr;
+
+            const metaByCode = {};
+            (prodMeta || []).forEach((p) => {
+              if (!metaByCode[p.product_ID]) metaByCode[p.product_ID] = p;
+            });
+
+            const logsPayload = restored.map((r) => {
+              const meta = metaByCode[r.product_code] || {};
+              return {
+                product_id: r.product_code,
+                product_name: meta.product_name || r.product_code,
+                product_quantity: r.qty,
+                product_category: meta.product_category || null,
+                product_unit: meta.product_unit || null,
+                product_expiry: r.product_expiry || null,
+                staff: staffName || "Unknown",
+                product_action: "Void",
+                product_uuid: meta.id || r.product_uuid || null,
+              };
+            });
+
+            if (logsPayload.length > 0) {
+              const { error: logErr } = await supabase
+                .from("logs")
+                .insert(logsPayload);
+              if (logErr) {
+                console.error("Failed to insert void logs:", logErr.message);
+              }
+            }
+          } catch (logErr) {
+            console.error("Logging (void) error:", logErr.message);
+          }
+        }
+      } else if (actionType === 'damage') {
+        // For damage returns, log as "Return as Damage" without restoring stock
+        try {
+          const staffName = await getCurrentStaffName();
+          
+          const { data: txItems, error: itemsError } = await supabase
+            .from("transaction_items")
+            .select("product_code, qty")
+            .eq("transaction_id", transactionId);
+            
+          if (itemsError) throw itemsError;
+          
+          if (txItems && txItems.length > 0) {
+            const codes = [...new Set(txItems.map((item) => item.product_code))];
+            
+            const { data: prodMeta, error: metaErr } = await supabase
+              .from("products")
+              .select("id, product_ID, product_name, product_category, product_unit")
+              .in("product_ID", codes);
+            if (metaErr) throw metaErr;
+
+            const metaByCode = {};
+            (prodMeta || []).forEach((p) => {
+              if (!metaByCode[p.product_ID]) metaByCode[p.product_ID] = p;
+            });
+
+            const logsPayload = txItems.map((item) => {
+              const meta = metaByCode[item.product_code] || {};
+              return {
+                product_id: item.product_code,
+                product_name: meta.product_name || item.product_code,
+                product_quantity: item.qty,
+                product_category: meta.product_category || null,
+                product_unit: meta.product_unit || null,
+                product_expiry: null, // Damage returns don't have expiry
+                staff: staffName || "Unknown",
+                product_action: "Return as Damage",
+                product_uuid: meta.id || null,
+              };
+            });
+
+            if (logsPayload.length > 0) {
+              const { error: logErr } = await supabase
+                .from("logs")
+                .insert(logsPayload);
+              if (logErr) {
+                console.error("Failed to insert damage logs:", logErr.message);
+              }
+            }
+          }
+        } catch (logErr) {
+          console.error("Logging (damage) error:", logErr.message);
+        }
+      }
+
+      // Update transaction status
       const { error: updateError } = await supabase
         .from("transactions")
-        .update({ status: "voided" })
+        .update({ status: newStatus })
         .eq("id", transactionId);
       if (updateError) throw updateError;
 
-      // 3) Write logs for the void items (non-blocking if it fails)
-      try {
-        const staffName = await getCurrentStaffName();
+      alert(`Transaction ${actionType === 'void' ? 'voided' : 'marked as damage'} successfully!`);
       
-
-        const codes = [...new Set(restored.map((r) => r.product_code))];
-
-        // Pull product meta to fill names/category/unit
-        const { data: prodMeta, error: metaErr } = await supabase
-          .from("products")
-          .select("id, product_ID, product_name, product_category, product_unit")
-          .in("product_ID", codes);
-        if (metaErr) throw metaErr;
-
-        const metaByCode = {};
-        (prodMeta || []).forEach((p) => {
-          if (!metaByCode[p.product_ID]) metaByCode[p.product_ID] = p;
-        });
-
-        const logsPayload = restored.map((r) => {
-          const meta = metaByCode[r.product_code] || {};
-          return {
-            product_id: r.product_code,
-            product_name: meta.product_name || r.product_code,
-            product_quantity: r.qty,
-            product_category: meta.product_category || null,
-            product_unit: meta.product_unit || null,
-            product_expiry: r.product_expiry || null, // where we placed it back
-            staff: staffName || "Unknown",
-            product_action: "Void",
-            product_uuid: meta.id || r.product_uuid || null,
-          };
-        });
-
-        if (logsPayload.length > 0) {
-          const { error: logErr } = await supabase
-            .from("logs")
-            .insert(logsPayload);
-          if (logErr) {
-            console.error("Failed to insert void logs:", logErr.message);
-          }
-        }
-      } catch (logErr) {
-        console.error("Logging (void) error:", logErr.message);
-      }
-
-      alert("Transaction voided and stock restored successfully!");
+      // Close modals
+      setShowActionConfirmation(false);
       setShowVoidModal(false);
-
+      
+      // Refresh data
       await Promise.all([fetchReportData(), fetchTransactions()]);
     } catch (err) {
       console.error(
-        "Error voiding transaction and restoring stock:",
+        `Error ${selectedAction === 'void' ? 'voiding' : 'marking as damage'} transaction:`,
         err.message
       );
-      alert("Failed to void transaction and restore stock.");
+      alert(`Failed to ${selectedAction === 'void' ? 'void' : 'mark as damage'} transaction.`);
     } finally {
       setLoading(false);
+      setSelectedAction(null);
+      setSelectedTransaction(null);
     }
   };
 
@@ -544,13 +614,89 @@ const QuickReport = ({ refreshTrigger }) => {
             View Report
           </Button>
           <Button className="mb-2" variant="danger" onClick={handleVoid}>
-            Void
+            Void / Damage Return
           </Button>
           <Button className="mb-2" variant="secondary" onClick={handleHistory}>
             History
           </Button>
         </div>
       </Container>
+
+      {/* Action Confirmation Modal */}
+      <Modal
+        show={showActionConfirmation}
+        onHide={() => {
+          if (!loading) {
+            setShowActionConfirmation(false);
+            setSelectedAction(null);
+            setSelectedTransaction(null);
+          }
+        }}
+        centered
+      >
+        <Modal.Header closeButton>
+          <Modal.Title>
+            {selectedAction === 'void' ? 'Void Transaction' : 'Return as Damage'}
+          </Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          <p className="text-warning">
+            ⚠️ Are you sure you want to {selectedAction === 'void' ? 'void' : 'return as damage'} this transaction?
+          </p>
+          <p>
+            <strong>Transaction ID:</strong> {selectedTransaction?.id}
+          </p>
+          <p>
+            <strong>Date:</strong> {selectedTransaction ? new Date(selectedTransaction.created_at).toLocaleString() : ''}
+          </p>
+          <p>
+            <strong>Total Amount:</strong> ₱{selectedTransaction?.total_amount?.toFixed(2) || '0.00'}
+          </p>
+          <div className="mt-2">
+            <strong>Items:</strong>
+            {selectedTransaction?.transaction_items?.map((item, idx) => (
+              <div key={idx}>
+                {renderLineItem(item.product_code, item.qty)}
+              </div>
+            ))}
+          </div>
+          <div className="mt-3">
+            {selectedAction === 'void' ? (
+              <div className="alert alert-info">
+                <small>
+                  <strong>Note:</strong> Voiding will restore stock to inventory and log as "Void".
+                </small>
+              </div>
+            ) : (
+              <div className="alert alert-warning">
+                <small>
+                  <strong>Note:</strong> Returning as damage will not restore stock and will be logged as "Return as Damage".
+                </small>
+              </div>
+            )}
+          </div>
+        </Modal.Body>
+        <Modal.Footer>
+          <Button 
+            variant="secondary" 
+            onClick={() => {
+              setShowActionConfirmation(false);
+              setSelectedAction(null);
+              setSelectedTransaction(null);
+            }}
+            disabled={loading}
+          >
+            Cancel
+          </Button>
+          <Button 
+            variant={selectedAction === 'void' ? 'danger' : 'warning'}
+            onClick={handleActionConfirmation}
+            disabled={loading}
+          >
+            {loading ? 'Processing...' : selectedAction === 'void' ? 'Void Transaction' : 'Return as Damage'}
+          </Button>
+        </Modal.Footer>
+      </Modal>
 
       {/* View Report (Today only) */}
       <Modal
@@ -614,6 +760,8 @@ const QuickReport = ({ refreshTrigger }) => {
                             className={`badge ${
                               t.status === "completed"
                                 ? "bg-success"
+                                : t.status === "damaged"
+                                ? "bg-warning"
                                 : "bg-danger"
                             }`}
                           >
@@ -630,18 +778,18 @@ const QuickReport = ({ refreshTrigger }) => {
         </Modal.Body>
       </Modal>
 
-      {/* Void Modal (recent list) */}
+      {/* Void/Damage Modal (recent list) */}
       <Modal
         show={showVoidModal}
         onHide={() => setShowVoidModal(false)}
         size="lg"
       >
         <Modal.Header closeButton>
-          <Modal.Title>Void Transaction</Modal.Title>
+          <Modal.Title>Void / Return as Damage</Modal.Title>
         </Modal.Header>
         <Modal.Body>
           <p className="text-warning">
-            ⚠️ Select a transaction to void. This action cannot be undone.
+            ⚠️ Select a transaction to void or return as damage.
           </p>
           <div style={{ maxHeight: 400, overflowY: "auto" }}>
             {loading ? (
@@ -650,7 +798,7 @@ const QuickReport = ({ refreshTrigger }) => {
               <Table size="small">
                 <TableHead>
                   <TableRow>
-                    <TableCell>Action</TableCell>
+                    <TableCell>Actions</TableCell>
                     <TableCell>Item</TableCell>
                     <TableCell>Date</TableCell>
                     <TableCell>Amount</TableCell>
@@ -663,14 +811,24 @@ const QuickReport = ({ refreshTrigger }) => {
                     .map((t) => (
                       <TableRow key={t.id}>
                         <TableCell>
-                          <Button
-                            size="sm"
-                            variant="danger"
-                            onClick={() => handleVoidTransaction(t.id)}
-                            disabled={loading}
-                          >
-                            Void
-                          </Button>
+                          <div className="d-flex flex-column gap-1">
+                            <Button
+                              size="sm"
+                              variant="danger"
+                              onClick={() => showActionModal(t, 'void')}
+                              disabled={loading}
+                            >
+                              Void
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="warning"
+                              onClick={() => showActionModal(t, 'damage')}
+                              disabled={loading}
+                            >
+                              Return as Damage
+                            </Button>
+                          </div>
                         </TableCell>
                         <TableCell>
                           {t.transaction_items?.map((item, idx) => (
@@ -757,6 +915,8 @@ const QuickReport = ({ refreshTrigger }) => {
                           className={`badge ${
                             t.status === "completed"
                               ? "bg-success"
+                              : t.status === "damaged"
+                              ? "bg-warning"
                               : "bg-danger"
                           }`}
                         >

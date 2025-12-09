@@ -6,6 +6,7 @@ import {
   Modal,
   Alert,
   Container,
+  Badge,
 } from "react-bootstrap";
 import { supabase } from "../supabaseClient";
 
@@ -456,6 +457,11 @@ const AdminPendingConfirmations = () => {
         <div className="mb-3 d-flex justify-content-between align-items-center">
           <div>
             <strong>Admin - Pending Confirmations</strong>
+            <span className="ms-2">
+              <Badge bg="warning" className="ms-1">
+                Pending: {groups.length}
+              </Badge>
+            </span>
           </div>
           <div>
             <Button
@@ -532,11 +538,15 @@ const AdminPendingConfirmations = () => {
                       ? new Date(g.created_at).toLocaleString()
                       : "-"}
                   </td>
-                  <td>{g.items[0]?.status}</td>
+                  <td>
+                    <Badge bg="warning">
+                      {g.items[0]?.status || "pending"}
+                    </Badge>
+                  </td>
                   <td>
                     <Button
                       size="sm"
-                      variant="primary"
+                      variant="info"  // Changed from primary to info (blue)
                       onClick={() => openGroup(g)}
                       disabled={
                         processingId === g.retrieval_id || processingAll
@@ -546,7 +556,17 @@ const AdminPendingConfirmations = () => {
                     </Button>{" "}
                     <Button
                       size="sm"
-                      variant="danger"
+                      variant="success"  // Changed from danger to success (green)
+                      onClick={() => confirmGroup(g.retrieval_id)}
+                      disabled={
+                        processingId === g.retrieval_id || processingAll
+                      }
+                    >
+                      Confirm
+                    </Button>{" "}
+                    <Button
+                      size="sm"
+                      variant="danger"  // Keep as danger (red)
                       onClick={() => declineGroup(g.retrieval_id)}
                       disabled={
                         processingId === g.retrieval_id || processingAll
@@ -602,7 +622,11 @@ const AdminPendingConfirmations = () => {
                         <td>{it.product_id}</td>
                         <td>{it.product_name}</td>
                         <td>{it.qty ?? it.quantity ?? "-"}</td>
-                        <td>{it.status || "-"}</td>
+                        <td>
+                          <Badge bg="warning">
+                            {it.status || "pending"}
+                          </Badge>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -615,7 +639,7 @@ const AdminPendingConfirmations = () => {
               Close
             </Button>
             <Button
-              variant="success"
+              variant="success"  // Changed to green for confirm
               onClick={() => selected && confirmGroup(selected.retrieval_id)}
               disabled={
                 !selected ||
@@ -626,6 +650,17 @@ const AdminPendingConfirmations = () => {
               {processingId === (selected && selected.retrieval_id)
                 ? "Confirming..."
                 : "Confirm Retrieval"}
+            </Button>
+            <Button
+              variant="danger"  // Changed to red for decline
+              onClick={() => selected && declineGroup(selected.retrieval_id)}
+              disabled={
+                !selected ||
+                processingId === (selected && selected.retrieval_id) ||
+                processingAll
+              }
+            >
+              Decline Retrieval
             </Button>
           </Modal.Footer>
         </Modal>

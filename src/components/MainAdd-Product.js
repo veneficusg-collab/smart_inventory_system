@@ -1,9 +1,9 @@
 import { Col, Container, Row } from "react-bootstrap";
-import { Form, Button, Alert, InputGroup } from "react-bootstrap";
+import { Form, Button, Alert, InputGroup, Card } from "react-bootstrap";
 import { useEffect, useState } from "react";
 import { supabase } from "../supabaseClient";
 import BarcodeModal from "./barcode-modal";
-import { LuScanBarcode, LuPlus, LuCheck, LuX } from "react-icons/lu";
+import { LuScanBarcode, LuPlus, LuCheck, LuX, LuImage, LuUpload } from "react-icons/lu";
 
 const MainAddProduct = ({ setRender }) => {
   const [dragActive, setDragActive] = useState(false);
@@ -58,10 +58,24 @@ const MainAddProduct = ({ setRender }) => {
   // Map supplier name -> most common number from products
   const [supplierPhoneByName, setSupplierPhoneByName] = useState({});
 
+  // Get today's date in YYYY-MM-DD format for min date attribute
+  const getTodayDate = () => {
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const day = String(today.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  const [minDate, setMinDate] = useState(getTodayDate());
+
   useEffect(() => {
     fetchBrands();
     fetchCategories();
     fetchSuppliers();
+    
+    // Update minDate on component mount to ensure it's always current
+    setMinDate(getTodayDate());
   }, []);
 
   useEffect(() => {
@@ -112,6 +126,17 @@ const MainAddProduct = ({ setRender }) => {
       setBuyingPrice("");
     }
   }, [supplierPrice]);
+
+  // Function to validate expiry date
+  const validateExpiryDate = (dateString) => {
+    if (!dateString) return true; // Empty is okay (optional field)
+    
+    const selectedDate = new Date(dateString);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0); // Reset time to compare dates only
+    
+    return selectedDate >= today;
+  };
 
   const getCurrentStaffName = async () => {
     try {
@@ -422,6 +447,11 @@ const MainAddProduct = ({ setRender }) => {
       if (!quantity || quantity <= 0)
         throw new Error("Valid quantity is required");
 
+      // Validate expiry date if provided
+      if (expiryDate && !validateExpiryDate(expiryDate)) {
+        throw new Error("Expiry date cannot be in the past. Please select a future date.");
+      }
+
       let imageUrl = null;
       if (selectedImage) {
         imageUrl = await uploadImage(selectedImage);
@@ -505,617 +535,575 @@ const MainAddProduct = ({ setRender }) => {
   return (
     <Container
       fluid
-      className="bg-white mx-5 my-4 rounded d-flex flex-column"
+      className="bg-white mx-5 my-4 rounded d-flex flex-column shadow-sm"
       style={{ width: "135vh", minHeight: "80vh" }}
     >
-      <div className="d-flex flex-column align-items-center mb-4">
-        <span className="mx-0 mt-5 mb-2 d-inline-block h4">Add Product</span>
-      </div>
+      <Card className="border-0 bg-transparent">
+        <Card.Header className="bg-white border-0 pb-0 pt-4">
+          <div className="d-flex justify-content-between align-items-center mb-4">
+            <div>
+              <h3 className="fw-bold text-dark mb-2">Add New Product</h3>
+              <p className="text-muted mb-0">Fill in the product details below</p>
+            </div>
+            <div className="d-flex">
+              <Button
+                variant="outline-secondary"
+                type="button"
+                size="sm"
+                className="me-2"
+                onClick={resetForm}
+                disabled={loading}
+              >
+                Reset
+              </Button>
+              <Button
+                variant="outline-secondary"
+                type="button"
+                size="sm"
+                className="me-2"
+                onClick={handleCancelButton}
+                disabled={loading}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="primary"
+                type="submit"
+                size="sm"
+                disabled={loading}
+                onClick={handleAddProductButton}
+              >
+                {loading ? "Adding Product..." : "Add Product"}
+              </Button>
+            </div>
+          </div>
 
-      {/* Success/Error Messages */}
-      {error && (
-        <Alert variant="danger" className="mx-4">
-          {error}
-        </Alert>
-      )}
-      {success && (
-        <Alert variant="success" className="mx-4">
-          {success}
-        </Alert>
-      )}
-      {brandError && (
-        <Alert variant="warning" className="mx-4">
-          {brandError}
-        </Alert>
-      )}
+          {/* Success/Error Messages */}
+          {error && (
+            <Alert variant="danger" className="py-2 mb-3">
+              <div className="d-flex align-items-center">
+                <span className="me-2">⚠️</span>
+                <span>{error}</span>
+              </div>
+            </Alert>
+          )}
+          {success && (
+            <Alert variant="success" className="py-2 mb-3">
+              <div className="d-flex align-items-center">
+                <span className="me-2">✅</span>
+                <span>{success}</span>
+              </div>
+            </Alert>
+          )}
+        </Card.Header>
 
-      {barcodeModalShow && (
-        <BarcodeModal
-          show={barcodeModalShow}
-          setBarcodeModalShow={setBarcodeModalShow}
-          setProductId={setProductId}
-        />
-      )}
+        <Card.Body className="pt-3">
+          {barcodeModalShow && (
+            <BarcodeModal
+              show={barcodeModalShow}
+              setBarcodeModalShow={setBarcodeModalShow}
+              setProductId={setProductId}
+            />
+          )}
 
-      {/* Form content - takes available space */}
-      <div className="flex-grow-1">
-        <Form onSubmit={handleAddProductButton}>
-          <Row>
-            <Col md={6}>
-              <div className="ms-5">
-                <Form.Group
-                  as={Row}
-                  className="mb-3 mt-4"
-                  controlId="formProductId"
-                >
-                  <Form.Label column sm={3} className="text-start">
-                    Product ID
-                  </Form.Label>
-                  <Col sm={9}>
-                    <InputGroup size="sm">
+          <Form onSubmit={handleAddProductButton}>
+            <Row>
+              {/* Left Column - Form Fields */}
+              <Col md={7}>
+                <Row className="g-3">
+                  {/* Product ID */}
+                  <Col md={6}>
+                    <Form.Group controlId="formProductId">
+                      <Form.Label className="fw-semibold mb-1">
+                        Product ID <span className="text-danger">*</span>
+                      </Form.Label>
+                      <InputGroup size="sm">
+                        <Form.Control
+                          type="text"
+                          placeholder="Enter product ID"
+                          value={productId}
+                          onChange={(e) => setProductId(e.target.value)}
+                          required
+                          className="border-end-0"
+                        />
+                        <Button
+                          variant="outline-primary"
+                          onClick={() => setBarcodeModalShow(true)}
+                          className="border-start-0"
+                          title="Scan barcode"
+                        >
+                          <LuScanBarcode size={16} />
+                        </Button>
+                      </InputGroup>
+                      {prodIdMsg && (
+                        <div
+                          className="mt-1 small"
+                          style={{
+                            color: prodIdStatus === "exists" ? "#dc3545" : "#198754",
+                          }}
+                        >
+                          {prodIdMsg}
+                        </div>
+                      )}
+                    </Form.Group>
+                  </Col>
+
+                  {/* Product Name */}
+                  <Col md={6}>
+                    <Form.Group controlId="formProductName">
+                      <Form.Label className="fw-semibold mb-1">
+                        Product Name <span className="text-danger">*</span>
+                      </Form.Label>
                       <Form.Control
                         type="text"
-                        placeholder="Enter product ID"
-                        value={productId}
-                        onChange={(e) => setProductId(e.target.value)}
+                        placeholder="Enter product name"
+                        size="sm"
+                        value={productName}
+                        onChange={(e) => setProductName(e.target.value)}
                         required
                       />
-                      <Button
-                        variant="outline-secondary"
-                        onClick={() => setBarcodeModalShow(true)}
-                      >
-                        <LuScanBarcode />
-                      </Button>
-                    </InputGroup>
-                    {prodIdMsg && (
-                      <div
-                        style={{
-                          fontSize: "0.8rem",
-                          marginTop: "4px",
-                          color: prodIdStatus === "exists" ? "red" : "green",
-                        }}
-                      >
-                        {prodIdMsg}
-                      </div>
-                    )}
+                    </Form.Group>
                   </Col>
-                </Form.Group>
 
-                {/* Brand Field */}
-                <Form.Group
-                  as={Row}
-                  className="mb-3 mt-4"
-                  controlId="formProductBrand"
-                >
-                  <Form.Label column sm={3} className="text-start">
-                    Product Brand
-                  </Form.Label>
-                  <Col sm={9}>
-                    {!isAddingBrand ? (
-                      <InputGroup size="sm">
-                        <Form.Select
-                          value={productBrand}
-                          onChange={(e) => setProductBrand(e.target.value)}
-                          disabled={brandLoading}
-                          required
-                        >
-                          <option value="" disabled>
-                            {brandLoading
-                              ? "Loading brands..."
-                              : "Select brand"}
-                          </option>
-                          {brandList.map((b) => (
-                            <option key={b} value={b}>
-                              {b}
+                  {/* Brand */}
+                  <Col md={6}>
+                    <Form.Group controlId="formProductBrand">
+                      <Form.Label className="fw-semibold mb-1">
+                        Brand <span className="text-danger">*</span>
+                      </Form.Label>
+                      {!isAddingBrand ? (
+                        <InputGroup size="sm">
+                          <Form.Select
+                            value={productBrand}
+                            onChange={(e) => setProductBrand(e.target.value)}
+                            disabled={brandLoading}
+                            required
+                          >
+                            <option value="" disabled>
+                              {brandLoading ? "Loading..." : "Select brand"}
                             </option>
-                          ))}
-                        </Form.Select>
-                        <Button
-                          variant="outline-secondary"
-                          title="Add a new brand"
-                          onClick={() => {
-                            setIsAddingBrand(true);
-                            setTimeout(() => {
-                              const el = document.getElementById("newBrandInput");
-                              el && el.focus();
-                            }, 0);
-                          }}
-                        >
-                          <LuPlus />
-                        </Button>
-                      </InputGroup>
-                    ) : (
-                      <InputGroup size="sm">
-                        <Form.Control
-                          id="newBrandInput"
-                          type="text"
-                          placeholder="Type new brand name"
-                          value={newBrandName}
-                          onChange={(e) => setNewBrandName(e.target.value)}
-                          disabled={brandLoading}
-                        />
-                        <Button
-                          variant="outline-success"
-                          title="Save brand"
-                          onClick={handleSaveNewBrand}
-                          disabled={brandLoading || !newBrandName.trim()}
-                        >
-                          <LuCheck />
-                        </Button>
-                        <Button
-                          variant="outline-secondary"
-                          title="Cancel"
-                          onClick={handleCancelAddBrand}
-                          disabled={brandLoading}
-                        >
-                          <LuX />
-                        </Button>
-                      </InputGroup>
-                    )}
-                  </Col>
-                </Form.Group>
-
-                {/* Category Field */}
-                <Form.Group
-                  as={Row}
-                  className="mb-3 mt-4"
-                  controlId="formCategory"
-                >
-                  <Form.Label column sm={3} className="text-start">
-                    Category
-                  </Form.Label>
-                  <Col sm={9}>
-                    {!isAddingCategory ? (
-                      <InputGroup size="sm">
-                        <Form.Select
-                          value={category}
-                          onChange={(e) => setCategory(e.target.value)}
-                          disabled={categoryLoading}
-                        >
-                          <option value="" disabled>
-                            {categoryLoading
-                              ? "Loading categories..."
-                              : "Select category"}
-                          </option>
-                          {categoryList.map((c) => (
-                            <option key={c} value={c}>
-                              {c}
-                            </option>
-                          ))}
-                        </Form.Select>
-                        <Button
-                          variant="outline-secondary"
-                          title="Add a new category"
-                          onClick={() => {
-                            setIsAddingCategory(true);
-                            setTimeout(() => {
-                              const el = document.getElementById("newCategoryInput");
-                              el && el.focus();
-                            }, 0);
-                          }}
-                        >
-                          <LuPlus />
-                        </Button>
-                      </InputGroup>
-                    ) : (
-                      <InputGroup size="sm">
-                        <Form.Control
-                          id="newCategoryInput"
-                          type="text"
-                          placeholder="Type new category name"
-                          value={newCategoryName}
-                          onChange={(e) => setNewCategoryName(e.target.value)}
-                          disabled={categoryLoading}
-                        />
-                        <Button
-                          variant="outline-success"
-                          title="Save category"
-                          onClick={handleSaveNewCategory}
-                          disabled={categoryLoading || !newCategoryName.trim()}
-                        >
-                          <LuCheck />
-                        </Button>
-                        <Button
-                          variant="outline-secondary"
-                          title="Cancel"
-                          onClick={handleCancelAddCategory}
-                          disabled={categoryLoading}
-                        >
-                          <LuX />
-                        </Button>
-                      </InputGroup>
-                    )}
-                  </Col>
-                </Form.Group>
-
-                <Form.Group
-                  as={Row}
-                  className="mb-3 mt-4"
-                  controlId="formProductName"
-                >
-                  <Form.Label column sm={3} className="text-start">
-                    Product Name
-                  </Form.Label>
-                  <Col sm={9}>
-                    <Form.Control
-                      type="text"
-                      placeholder="Enter product name"
-                      size="sm"
-                      value={productName}
-                      onChange={(e) => setProductName(e.target.value)}
-                      required
-                    />
-                  </Col>
-                </Form.Group>
-
-                <Form.Group
-                  as={Row}
-                  className="mb-3 mt-4"
-                  controlId="formSupplierPrice"
-                >
-                  <Form.Label column sm={3} className="text-start">
-                    Supplier Price
-                  </Form.Label>
-                  <Col sm={9}>
-                    <Form.Control
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      placeholder="Enter supplier price"
-                      size="sm"
-                      value={supplierPrice}
-                      onChange={(e) => setSupplierPrice(e.target.value)}
-                      required
-                    />
-                  </Col>
-                </Form.Group>
-
-                <Form.Group
-                  as={Row}
-                  className="mb-3 mt-4"
-                  controlId="formVAT"
-                >
-                  <Form.Label column sm={3} className="text-start">
-                    VAT Price (12%)
-                  </Form.Label>
-                  <Col sm={9}>
-                    <Form.Control
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      placeholder="Enter VAT price"
-                      size="sm"
-                      value={vat}
-                      onChange={(e) => setVAT(e.target.value)}
-                      required
-                    />
-                    {!supplierPrice || isNaN(parseFloat(supplierPrice)) ? (
-                      <Form.Text className="text-muted">
-                        Enter Supplier Price first to get a VAT Price suggestion (12%).
-                      </Form.Text>
-                    ) : (
-                      <Form.Text className="text-muted">
-                        Suggested VAT Price (12% added):{" "}
-                        {(
-                          parseFloat(supplierPrice) +
-                          parseFloat(supplierPrice) * 0.12
-                        ).toFixed(2)}{" "}
-                        — auto-filled above, you can override.
-                      </Form.Text>
-                    )}
-                  </Col>
-                </Form.Group>
-
-                <Form.Group
-                  as={Row}
-                  className="mb-3 mt-4"
-                  controlId="formBuyingPrice"
-                >
-                  <Form.Label column sm={3} className="text-start">
-                    SRP
-                  </Form.Label>
-                  <Col sm={9}>
-                    <Form.Control
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      placeholder="Enter SRP"
-                      size="sm"
-                      value={buyingPrice}
-                      onChange={(e) => setBuyingPrice(e.target.value)}
-                      required
-                    />
-                  </Col>
-                </Form.Group>
-
-                <Form.Group
-                  as={Row}
-                  className="mb-3 mt-4"
-                  controlId="formQuantity"
-                >
-                  <Form.Label column sm={3} className="text-start">
-                    Quantity
-                  </Form.Label>
-                  <Col sm={9}>
-                    <Form.Control
-                      type="number"
-                      min="0"
-                      placeholder="Enter quantity"
-                      size="sm"
-                      value={quantity}
-                      onChange={(e) => setQuantity(e.target.value)}
-                      required
-                    />
-                  </Col>
-                </Form.Group>
-
-                <Form.Group as={Row} className="mb-3 mt-4" controlId="formUnit">
-                  <Form.Label column sm={3} className="text-start">
-                    Unit
-                  </Form.Label>
-                  <Col sm={9}>
-                    <Form.Control
-                      type="text"
-                      placeholder="Enter product unit (e.g., kg, pcs, liters)"
-                      size="sm"
-                      value={unit}
-                      onChange={(e) => setUnit(e.target.value)}
-                    />
-                  </Col>
-                </Form.Group>
-
-                <Form.Group
-                  as={Row}
-                  className="mb-3 mt-4"
-                  controlId="formExpiryDate"
-                >
-                  <Form.Label column sm={3} className="text-start">
-                    Expiry Date
-                  </Form.Label>
-                  <Col sm={9}>
-                    <Form.Control
-                      type="date"
-                      size="sm"
-                      value={expiryDate}
-                      onChange={(e) => setExpiryDate(e.target.value)}
-                    />
-                  </Col>
-                </Form.Group>
-
-                {/* Supplier Name Field */}
-                <Form.Group
-                  as={Row}
-                  className="mb-3 mt-4"
-                  controlId="formSupplierName"
-                >
-                  <Form.Label column sm={3} className="text-start">
-                    Supplier Name
-                  </Form.Label>
-                  <Col sm={9}>
-                    {!isAddingSupplier ? (
-                      <InputGroup size="sm">
-                        <Form.Select
-                          value={supplierName}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            setSupplierName(val);
-                            const suggested = supplierPhoneByName[val];
-                            if (suggested && !supplierNumber) {
-                              setSupplierNumber(suggested);
-                            }
-                          }}
-                          disabled={supplierLoading}
-                        >
-                          <option value="" disabled>
-                            {supplierLoading
-                              ? "Loading suppliers..."
-                              : "Select supplier"}
-                          </option>
-                          {supplierList.map((s) => (
-                            <option key={s} value={s}>
-                              {s}
-                            </option>
-                          ))}
-                        </Form.Select>
-                        <Button
-                          variant="outline-secondary"
-                          title="Add a new supplier"
-                          onClick={() => {
-                            setIsAddingSupplier(true);
-                            setTimeout(() => {
-                              const el = document.getElementById("newSupplierInput");
-                              el && el.focus();
-                            }, 0);
-                          }}
-                        >
-                          <LuPlus />
-                        </Button>
-                      </InputGroup>
-                    ) : (
-                      <InputGroup size="sm">
-                        <Form.Control
-                          id="newSupplierInput"
-                          type="text"
-                          placeholder="Type new supplier name"
-                          value={newSupplierName}
-                          onChange={(e) => setNewSupplierName(e.target.value)}
-                          disabled={supplierLoading}
-                        />
-                        <Button
-                          variant="outline-success"
-                          title="Save supplier"
-                          onClick={handleSaveNewSupplier}
-                          disabled={supplierLoading || !newSupplierName.trim()}
-                        >
-                          <LuCheck />
-                        </Button>
-                        <Button
-                          variant="outline-secondary"
-                          title="Cancel"
-                          onClick={handleCancelAddSupplier}
-                          disabled={supplierLoading}
-                        >
-                          <LuX />
-                        </Button>
-                      </InputGroup>
-                    )}
-                    {supplierError && (
-                      <div className="mt-2">
-                        <Alert variant="warning" className="py-1 px-2 mb-0">
-                          {supplierError}
-                        </Alert>
-                      </div>
-                    )}
-                  </Col>
-                </Form.Group>
-
-                {/* Supplier Number Field */}
-                <Form.Group
-                  as={Row}
-                  className="mb-3 mt-4"
-                  controlId="formSupplierNumber"
-                >
-                  <Form.Label column sm={3} className="text-start">
-                    Supplier #
-                  </Form.Label>
-                  <Col sm={9}>
-                    <Form.Control
-                      type="text"
-                      placeholder="Enter supplier #"
-                      size="sm"
-                      value={supplierNumber}
-                      onChange={(e) => setSupplierNumber(e.target.value)}
-                    />
-                  </Col>
-                </Form.Group>
-              </div>
-            </Col>
-
-            <Col md={5}>
-              <div className="ms-3 mt-4">
-                <Form.Group className="mb-4">
-                  <Form.Label className="mb-3">Product Image</Form.Label>
-                  <div
-                    className={`border border-1 rounded p-4 text-center position-relative ${
-                      dragActive ? "border-primary bg-light" : "border-dark"
-                    }`}
-                    style={{ minHeight: "365px", cursor: "pointer" }}
-                    onDragEnter={handleDrag}
-                    onDragLeave={handleDrag}
-                    onDragOver={handleDrag}
-                    onDrop={handleDrop}
-                    onClick={() =>
-                      document.getElementById("imageInput").click()
-                    }
-                  >
-                    <input
-                      id="imageInput"
-                      type="file"
-                      accept="image/*"
-                      onChange={handleFileSelect}
-                      style={{ display: "none" }}
-                    />
-
-                    {imagePreview ? (
-                      <div className="d-flex flex-column align-items-center justify-content-center h-100">
-                        <div className="position-relative d-inline-block">
-                          <img
-                            src={imagePreview}
-                            alt="Preview"
-                            className="img-fluid rounded"
-                            style={{ maxHeight: "250px" }}
+                            {brandList.map((b) => (
+                              <option key={b} value={b}>
+                                {b}
+                              </option>
+                            ))}
+                          </Form.Select>
+                          <Button
+                            variant="outline-secondary"
+                            onClick={() => {
+                              setIsAddingBrand(true);
+                              setTimeout(() => {
+                                const el = document.getElementById("newBrandInput");
+                                el && el.focus();
+                              }, 0);
+                            }}
+                          >
+                            <LuPlus />
+                          </Button>
+                        </InputGroup>
+                      ) : (
+                        <InputGroup size="sm">
+                          <Form.Control
+                            id="newBrandInput"
+                            type="text"
+                            placeholder="New brand name"
+                            value={newBrandName}
+                            onChange={(e) => setNewBrandName(e.target.value)}
+                            disabled={brandLoading}
                           />
                           <Button
-                            variant="danger"
-                            size="sm"
-                            className="position-absolute top-0 end-0 m-1"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              removeImage();
-                            }}
-                            style={{ fontSize: "10px" }}
+                            variant="outline-success"
+                            onClick={handleSaveNewBrand}
+                            disabled={brandLoading || !newBrandName.trim()}
                           >
-                            ×
+                            <LuCheck />
                           </Button>
-                        </div>
-                        <div className="mt-2">
-                          <small className="text-muted">
-                            {selectedImage?.name}
-                          </small>
-                        </div>
-                      </div>
-                    ) : (
-                      <div
-                        className="d-flex flex-column align-items-center justify-content-center w-100 h-100"
-                        style={{ minHeight: "300px" }}
-                      >
-                        <svg
-                          width="48"
-                          height="48"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="1"
-                          className="text-muted mb-2"
-                        >
-                          <rect
-                            x="3"
-                            y="3"
-                            width="18"
-                            height="18"
-                            rx="2"
-                            ry="2"
+                          <Button
+                            variant="outline-secondary"
+                            onClick={handleCancelAddBrand}
+                            disabled={brandLoading}
+                          >
+                            <LuX />
+                          </Button>
+                        </InputGroup>
+                      )}
+                    </Form.Group>
+                  </Col>
+
+                  {/* Category */}
+                  <Col md={6}>
+                    <Form.Group controlId="formCategory">
+                      <Form.Label className="fw-semibold mb-1">
+                        Category
+                      </Form.Label>
+                      {!isAddingCategory ? (
+                        <InputGroup size="sm">
+                          <Form.Select
+                            value={category}
+                            onChange={(e) => setCategory(e.target.value)}
+                            disabled={categoryLoading}
+                          >
+                            <option value="" disabled>
+                              {categoryLoading ? "Loading..." : "Select category"}
+                            </option>
+                            {categoryList.map((c) => (
+                              <option key={c} value={c}>
+                                {c}
+                              </option>
+                            ))}
+                          </Form.Select>
+                          <Button
+                            variant="outline-secondary"
+                            onClick={() => {
+                              setIsAddingCategory(true);
+                              setTimeout(() => {
+                                const el = document.getElementById("newCategoryInput");
+                                el && el.focus();
+                              }, 0);
+                            }}
+                          >
+                            <LuPlus />
+                          </Button>
+                        </InputGroup>
+                      ) : (
+                        <InputGroup size="sm">
+                          <Form.Control
+                            id="newCategoryInput"
+                            type="text"
+                            placeholder="New category name"
+                            value={newCategoryName}
+                            onChange={(e) => setNewCategoryName(e.target.value)}
+                            disabled={categoryLoading}
                           />
-                          <circle cx="8.5" cy="8.5" r="1.5" />
-                          <polyline points="21,15 16,10 5,21" />
-                        </svg>
-                        <p className="mb-1 text-muted text-center">
-                          <strong>Click to upload</strong> or drag and drop
-                        </p>
-                        <p className="text-muted small text-center">
-                          PNG, JPG, GIF up to 10MB
-                        </p>
+                          <Button
+                            variant="outline-success"
+                            onClick={handleSaveNewCategory}
+                            disabled={categoryLoading || !newCategoryName.trim()}
+                          >
+                            <LuCheck />
+                          </Button>
+                          <Button
+                            variant="outline-secondary"
+                            onClick={handleCancelAddCategory}
+                            disabled={categoryLoading}
+                          >
+                            <LuX />
+                          </Button>
+                        </InputGroup>
+                      )}
+                    </Form.Group>
+                  </Col>
+
+                  {/* Price Section */}
+                  <Col md={4}>
+                    <Form.Group controlId="formSupplierPrice">
+                      <Form.Label className="fw-semibold mb-1">
+                        Supplier Price <span className="text-danger">*</span>
+                      </Form.Label>
+                      <InputGroup size="sm">
+                        <InputGroup.Text className="bg-light">₱</InputGroup.Text>
+                        <Form.Control
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          placeholder="0.00"
+                          value={supplierPrice}
+                          onChange={(e) => setSupplierPrice(e.target.value)}
+                          required
+                        />
+                      </InputGroup>
+                    </Form.Group>
+                  </Col>
+
+                  <Col md={4}>
+                    <Form.Group controlId="formVAT">
+                      <Form.Label className="fw-semibold mb-1">
+                        VAT (12%)
+                      </Form.Label>
+                      <InputGroup size="sm">
+                        <InputGroup.Text className="bg-light">₱</InputGroup.Text>
+                        <Form.Control
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          placeholder="0.00"
+                          value={vat}
+                          onChange={(e) => setVAT(e.target.value)}
+                          required
+                        />
+                      </InputGroup>
+                      <Form.Text className="text-muted small">
+                        Auto-calculated from supplier price
+                      </Form.Text>
+                    </Form.Group>
+                  </Col>
+
+                  <Col md={4}>
+                    <Form.Group controlId="formBuyingPrice">
+                      <Form.Label className="fw-semibold mb-1">
+                        SRP <span className="text-danger">*</span>
+                      </Form.Label>
+                      <InputGroup size="sm">
+                        <InputGroup.Text className="bg-light">₱</InputGroup.Text>
+                        <Form.Control
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          placeholder="0.00"
+                          value={buyingPrice}
+                          onChange={(e) => setBuyingPrice(e.target.value)}
+                          required
+                        />
+                      </InputGroup>
+                    </Form.Group>
+                  </Col>
+
+                  {/* Quantity & Unit */}
+                  <Col md={6}>
+                    <Form.Group controlId="formQuantity">
+                      <Form.Label className="fw-semibold mb-1">
+                        Quantity <span className="text-danger">*</span>
+                      </Form.Label>
+                      <Form.Control
+                        type="number"
+                        min="0"
+                        placeholder="Enter quantity"
+                        size="sm"
+                        value={quantity}
+                        onChange={(e) => setQuantity(e.target.value)}
+                        required
+                      />
+                    </Form.Group>
+                  </Col>
+
+                  <Col md={6}>
+                    <Form.Group controlId="formUnit">
+                      <Form.Label className="fw-semibold mb-1">
+                        Unit
+                      </Form.Label>
+                      <Form.Control
+                        type="text"
+                        placeholder="kg, pcs, liters, etc."
+                        size="sm"
+                        value={unit}
+                        onChange={(e) => setUnit(e.target.value)}
+                      />
+                    </Form.Group>
+                  </Col>
+
+                  {/* Expiry Date */}
+                  <Col md={6}>
+                    <Form.Group controlId="formExpiryDate">
+                      <Form.Label className="fw-semibold mb-1">
+                        Expiry Date
+                      </Form.Label>
+                      <Form.Control
+                        type="date"
+                        size="sm"
+                        value={expiryDate}
+                        onChange={(e) => setExpiryDate(e.target.value)}
+                        className="text-muted"
+                        min={minDate}
+                      />
+                      <Form.Text className="text-muted small">
+                        {expiryDate && !validateExpiryDate(expiryDate) ? (
+                          <span className="text-danger">
+                            ⚠️ Please select a future date
+                          </span>
+                        ) : (
+                          "Select a future date (optional)"
+                        )}
+                      </Form.Text>
+                    </Form.Group>
+                  </Col>
+
+                  {/* Supplier Section */}
+                  <Col md={6}>
+                    <Form.Group controlId="formSupplierName">
+                      <Form.Label className="fw-semibold mb-1">
+                        Supplier Name
+                      </Form.Label>
+                      {!isAddingSupplier ? (
+                        <InputGroup size="sm">
+                          <Form.Select
+                            value={supplierName}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setSupplierName(val);
+                              const suggested = supplierPhoneByName[val];
+                              if (suggested && !supplierNumber) {
+                                setSupplierNumber(suggested);
+                              }
+                            }}
+                            disabled={supplierLoading}
+                          >
+                            <option value="" disabled>
+                              {supplierLoading ? "Loading..." : "Select supplier"}
+                            </option>
+                            {supplierList.map((s) => (
+                              <option key={s} value={s}>
+                                {s}
+                              </option>
+                            ))}
+                          </Form.Select>
+                          <Button
+                            variant="outline-secondary"
+                            onClick={() => {
+                              setIsAddingSupplier(true);
+                              setTimeout(() => {
+                                const el = document.getElementById("newSupplierInput");
+                                el && el.focus();
+                              }, 0);
+                            }}
+                          >
+                            <LuPlus />
+                          </Button>
+                        </InputGroup>
+                      ) : (
+                        <InputGroup size="sm">
+                          <Form.Control
+                            id="newSupplierInput"
+                            type="text"
+                            placeholder="New supplier name"
+                            value={newSupplierName}
+                            onChange={(e) => setNewSupplierName(e.target.value)}
+                            disabled={supplierLoading}
+                          />
+                          <Button
+                            variant="outline-success"
+                            onClick={handleSaveNewSupplier}
+                            disabled={supplierLoading || !newSupplierName.trim()}
+                          >
+                            <LuCheck />
+                          </Button>
+                          <Button
+                            variant="outline-secondary"
+                            onClick={handleCancelAddSupplier}
+                            disabled={supplierLoading}
+                          >
+                            <LuX />
+                          </Button>
+                        </InputGroup>
+                      )}
+                    </Form.Group>
+                  </Col>
+
+                  <Col md={6}>
+                    <Form.Group controlId="formSupplierNumber">
+                      <Form.Label className="fw-semibold mb-1">
+                        Supplier Contact
+                      </Form.Label>
+                      <Form.Control
+                        type="text"
+                        placeholder="Phone number"
+                        size="sm"
+                        value={supplierNumber}
+                        onChange={(e) => setSupplierNumber(e.target.value)}
+                      />
+                    </Form.Group>
+                  </Col>
+                </Row>
+              </Col>
+
+              {/* Right Column - Image Upload */}
+              <Col md={5}>
+                <Card className="h-100 border">
+                  <Card.Body className="d-flex flex-column">
+                    <Card.Title className="fw-semibold mb-3 d-flex align-items-center">
+                      <LuImage className="me-2" />
+                      Product Image
+                    </Card.Title>
+                    
+                    <div
+                      className={`flex-grow-1 border-2 border-dashed rounded d-flex flex-column align-items-center justify-content-center p-4 ${
+                        dragActive ? "border-primary bg-light" : "border-gray-300"
+                      }`}
+                      style={{
+                        minHeight: "300px",
+                        cursor: "pointer",
+                        borderStyle: dragActive ? "solid" : "dashed",
+                      }}
+                      onDragEnter={handleDrag}
+                      onDragLeave={handleDrag}
+                      onDragOver={handleDrag}
+                      onDrop={handleDrop}
+                      onClick={() => document.getElementById("imageInput").click()}
+                    >
+                      <input
+                        id="imageInput"
+                        type="file"
+                        accept="image/*"
+                        onChange={handleFileSelect}
+                        style={{ display: "none" }}
+                      />
+
+                      {imagePreview ? (
+                        <div className="w-100 h-100 d-flex flex-column align-items-center justify-content-center">
+                          <div className="position-relative mb-3">
+                            <img
+                              src={imagePreview}
+                              alt="Preview"
+                              className="img-fluid rounded shadow-sm"
+                              style={{ maxHeight: "200px", maxWidth: "100%" }}
+                            />
+                            <Button
+                              variant="danger"
+                              size="sm"
+                              className="position-absolute top-0 end-0 rounded-circle"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                removeImage();
+                              }}
+                              style={{ width: "24px", height: "24px", padding: 0 }}
+                            >
+                              ×
+                            </Button>
+                          </div>
+                          <div className="text-center">
+                            <small className="text-muted d-block">
+                              {selectedImage?.name}
+                            </small>
+                            <small className="text-muted">
+                              Click or drag to change image
+                            </small>
+                          </div>
+                        </div>
+                      ) : (
+                        <>
+                          <div className="mb-3 p-3 bg-light rounded-circle">
+                            <LuUpload size={32} className="text-muted" />
+                          </div>
+                          <h6 className="fw-semibold mb-1">Upload Product Image</h6>
+                          <p className="text-muted text-center small mb-3">
+                            Drag & drop or click to browse
+                          </p>
+                          <p className="text-muted small text-center">
+                            Supports: PNG, JPG, GIF • Max: 10MB
+                          </p>
+                        </>
+                      )}
+                    </div>
+
+                    {!imagePreview && (
+                      <div className="mt-3 text-center">
+                        <Button
+                          variant="outline-primary"
+                          size="sm"
+                          onClick={() => document.getElementById("imageInput").click()}
+                          className="w-100"
+                        >
+                          <LuUpload className="me-1" />
+                          Browse Files
+                        </Button>
                       </div>
                     )}
-                  </div>
-                </Form.Group>
-              </div>
-            </Col>
-          </Row>
-
-          {/* Buttons fixed at bottom-right */}
-          <div className="d-flex justify-content-end align-items-end p-3">
-            <Button
-              variant="outline-secondary"
-              type="button"
-              size="sm"
-              className="me-2"
-              onClick={resetForm}
-              disabled={loading}
-            >
-              Reset
-            </Button>
-            <Button
-              variant="secondary"
-              type="button"
-              size="sm"
-              className="me-2"
-              onClick={handleCancelButton}
-              disabled={loading}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="primary"
-              type="submit"
-              size="sm"
-              disabled={loading}
-            >
-              {loading ? "Adding Product..." : "Add Product"}
-            </Button>
-          </div>
-        </Form>
-      </div>
+                  </Card.Body>
+                </Card>
+              </Col>
+            </Row>
+          </Form>
+        </Card.Body>
+      </Card>
     </Container>
   );
 };
