@@ -422,6 +422,10 @@ const POS = () => {
     } finally {
       setIsSubmitting(false); // Stop loading regardless of success/error
     }
+
+     setOrders([]);
+    setPayments([]);
+    setLastTransactionId(null);
   };
 
   return (
