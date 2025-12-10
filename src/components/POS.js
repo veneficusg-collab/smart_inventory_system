@@ -1,4 +1,4 @@
-import { Container, Row, Col, Button } from "react-bootstrap";
+import { Container, Row, Col, Button, Spinner } from "react-bootstrap";
 import { useState } from "react";
 import QuickReport from "./quick-report";
 import ProductsAndServices from "./products-and-services";
@@ -11,6 +11,7 @@ const POS = () => {
   const [payments, setPayments] = useState([]);
   const [refreshProducts, setRefreshProducts] = useState(0);
   const [lastTransactionId, setLastTransactionId] = useState(null); // store for printing
+  const [isSubmitting, setIsSubmitting] = useState(false); // Loading state for submit button
 
   const handleAddProduct = (product) => {
     setOrders((prevOrders) => {
@@ -267,6 +268,8 @@ const POS = () => {
       return;
     }
 
+    setIsSubmitting(true); // Start loading
+
     try {
       // Check stock availability BEFORE processing transaction
       const stockIssues = await checkStockAvailability();
@@ -416,6 +419,8 @@ const POS = () => {
     } catch (err) {
       console.error("Error saving transaction:", err.message);
       alert(`Failed to save transaction: ${err.message}`);
+    } finally {
+      setIsSubmitting(false); // Stop loading regardless of success/error
     }
   };
 
@@ -447,11 +452,29 @@ const POS = () => {
           <Payments total={total} payments={payments} setPayments={setPayments} />
 
           <div className="d-flex justify-content-end gap-2 p-2">
-            <Button variant="secondary" onClick={handleReset}>
+            <Button variant="secondary" onClick={handleReset} disabled={isSubmitting}>
               Reset
             </Button>
-            <Button variant="primary" onClick={handleSubmit}>
-              Submit
+            <Button 
+              variant="primary" 
+              onClick={handleSubmit}
+              disabled={isSubmitting || orders.length === 0 || payments.length === 0}
+            >
+              {isSubmitting ? (
+                <>
+                  <Spinner
+                    as="span"
+                    animation="border"
+                    size="sm"
+                    role="status"
+                    aria-hidden="true"
+                    className="me-2"
+                  />
+                  Processing...
+                </>
+              ) : (
+                "Submit"
+              )}
             </Button>
           </div>
         </Col>

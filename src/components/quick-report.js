@@ -1,11 +1,10 @@
-import { Button, Container, Modal, Form, Badge } from "react-bootstrap";
+import { Button, Container, Modal, Form, Badge, InputGroup } from "react-bootstrap";
 import {
   Table,
   TableBody,
   TableHead,
   TableRow,
   TableCell,
-  Checkbox,
 } from "@mui/material";
 import { BiSolidReport } from "react-icons/bi";
 import { FaBoxOpen } from "react-icons/fa";
@@ -29,7 +28,7 @@ const QuickReport = ({ refreshTrigger }) => {
   const [selectedAction, setSelectedAction] = useState(null); // 'void' or 'damage'
   const [showActionConfirmation, setShowActionConfirmation] = useState(false);
   const [selectedTransaction, setSelectedTransaction] = useState(null);
-  const [selectedItems, setSelectedItems] = useState([]); // Array of selected item indices
+  const [selectedItems, setSelectedItems] = useState([]); // Array of {idx, qtyToReturn}
   const [partialReturn, setPartialReturn] = useState(false);
 
   // 🔹 Product metadata map for naming + images
@@ -108,18 +107,10 @@ const QuickReport = ({ refreshTrigger }) => {
     );
   };
 
-  const renderLineItem = (code, qty, idx = null, transactionId = null, selected = false, onSelect = null) => {
+  const renderLineItem = (code, originalQty, returnQty, idx = null, selected = false, onSelect = null, onQtyChange = null) => {
     const meta = productMap[code] || { name: code, imgUrl: null };
     return (
       <div className="d-flex align-items-center mb-1" key={idx}>
-        {idx !== null && onSelect && (
-          <Checkbox
-            checked={selected}
-            onChange={() => onSelect(idx)}
-            size="small"
-            sx={{ mr: 1 }}
-          />
-        )}
         {meta.imgUrl ? (
           <img
             src={meta.imgUrl}
@@ -136,16 +127,36 @@ const QuickReport = ({ refreshTrigger }) => {
         ) : (
           <FaBoxOpen size={20} className="text-muted me-2" />
         )}
-        <span style={{ fontSize: "0.9rem" }}>
-          {meta.name} ×{qty}
-        </span>
+        <div className="d-flex align-items-center gap-2">
+          <span style={{ fontSize: "0.9rem" }}>
+            {meta.name} ×{originalQty}
+          </span>
+          {selected && onQtyChange && (
+            <>
+              <span className="text-muted">→</span>
+              <InputGroup size="sm" style={{ width: '100px' }}>
+                <Form.Control
+                  type="number"
+                  min="1"
+                  max={originalQty}
+                  value={returnQty}
+                  onChange={(e) => onQtyChange(idx, parseInt(e.target.value) || 1)}
+                  style={{ fontSize: "0.8rem" }}
+                />
+                <InputGroup.Text style={{ fontSize: "0.8rem" }}>
+                  /{originalQty}
+                </InputGroup.Text>
+              </InputGroup>
+            </>
+          )}
+        </div>
       </div>
     );
   };
 
   // -------- Fetchers --------
 
-  // Fetch report data for current staff (today)
+  // Fetch report data for current staff (today) - ALL STATUSES
   const fetchReportData = async () => {
     try {
       // 1) who am I?
@@ -175,7 +186,7 @@ const QuickReport = ({ refreshTrigger }) => {
         new Date().setHours(23, 59, 59, 999)
       ).toISOString();
 
-      // 3) fetch
+      // 3) fetch ALL transactions (not just completed)
       const { data: txs, error } = await supabase
         .from("transactions")
         .select("*")
@@ -185,6 +196,7 @@ const QuickReport = ({ refreshTrigger }) => {
 
       if (error) throw error;
 
+      // Count all transactions
       const completed = txs.filter((t) => t.status === "completed");
       const voided = txs.filter((t) => t.status === "voided");
       const damaged = txs.filter((t) => t.status === "damaged");
@@ -204,7 +216,7 @@ const QuickReport = ({ refreshTrigger }) => {
     }
   };
 
-  // Full history (used by Void + History modals)
+  // Full history (used by Void + History modals) - ALL STATUSES
   const fetchTransactions = async () => {
     setLoading(true);
     try {
@@ -227,6 +239,7 @@ const QuickReport = ({ refreshTrigger }) => {
         staffName = JSON.parse(storedUser).staff_name;
       }
 
+      // Fetch ALL transactions (not just completed)
       const { data, error } = await supabase
         .from("transactions")
         .select(
@@ -249,7 +262,7 @@ const QuickReport = ({ refreshTrigger }) => {
     }
   };
 
-  // Only today's transactions (for the View Report modal)
+  // Only today's transactions (for the View Report modal) - ALL STATUSES
   const fetchTransactionsToday = async () => {
     setLoading(true);
     try {
@@ -278,6 +291,7 @@ const QuickReport = ({ refreshTrigger }) => {
         new Date().setHours(23, 59, 59, 999)
       ).toISOString();
 
+      // Fetch ALL transactions for today (not just completed)
       const { data, error } = await supabase
         .from("transactions")
         .select(
@@ -331,7 +345,7 @@ const QuickReport = ({ refreshTrigger }) => {
 
     for (const it of itemsToRestore) {
       const code = it.product_code;
-      const qtyToRestore = Number(it.qty || 0);
+      const qtyToRestore = Number(it.qty_to_return || 0);
       if (!code || qtyToRestore <= 0) continue;
 
       // Put back to the earliest-expiring batch we currently have
@@ -376,14 +390,28 @@ const QuickReport = ({ refreshTrigger }) => {
     setShowActionConfirmation(true);
   };
 
-  const handleItemSelection = (index) => {
+  const handleItemSelection = (index, originalQty) => {
     setSelectedItems(prev => {
-      if (prev.includes(index)) {
-        return prev.filter(i => i !== index);
+      const existingIndex = prev.findIndex(item => item.idx === index);
+      
+      if (existingIndex >= 0) {
+        // Remove item from selection
+        return prev.filter(item => item.idx !== index);
       } else {
-        return [...prev, index];
+        // Add item with default return quantity = original quantity
+        return [...prev, { idx: index, originalQty, returnQty: originalQty }];
       }
     });
+  };
+
+  const handleReturnQtyChange = (index, newQty) => {
+    setSelectedItems(prev => 
+      prev.map(item => 
+        item.idx === index 
+          ? { ...item, returnQty: Math.min(Math.max(1, newQty), item.originalQty) }
+          : item
+      )
+    );
   };
 
   const toggleSelectAll = () => {
@@ -393,8 +421,12 @@ const QuickReport = ({ refreshTrigger }) => {
       // Deselect all
       setSelectedItems([]);
     } else {
-      // Select all
-      setSelectedItems(selectedTransaction.transaction_items.map((_, idx) => idx));
+      // Select all with full quantities
+      setSelectedItems(selectedTransaction.transaction_items.map((item, idx) => ({
+        idx,
+        originalQty: item.qty,
+        returnQty: item.qty
+      })));
     }
   };
 
@@ -410,8 +442,19 @@ const QuickReport = ({ refreshTrigger }) => {
       // Get items to process
       const allItems = selectedTransaction.transaction_items || [];
       const itemsToProcess = partialReturn 
-        ? selectedItems.map(idx => allItems[idx])
-        : allItems;
+        ? selectedItems.map(selected => {
+            const item = allItems[selected.idx];
+            return {
+              ...item,
+              qty_to_return: selected.returnQty,
+              remaining_qty: item.qty - selected.returnQty
+            };
+          })
+        : allItems.map(item => ({
+            ...item,
+            qty_to_return: item.qty,
+            remaining_qty: 0
+          }));
 
       if (itemsToProcess.length === 0) {
         alert("Please select at least one item to process.");
@@ -433,16 +476,39 @@ const QuickReport = ({ refreshTrigger }) => {
         return;
       }
 
-      // For partial returns, we need to create a new transaction for remaining items
+      // For partial returns where not all quantity is returned, create a new transaction
       let newTransactionId = transactionId;
-      if (partialReturn && selectedItems.length < allItems.length) {
-        // Create a new transaction with the remaining items
-        const remainingItems = allItems.filter((_, idx) => !selectedItems.includes(idx));
+      let createdNewTransaction = false;
+      let newTransactionData = null;
+      const hasPartialQuantities = itemsToProcess.some(item => item.remaining_qty > 0);
+      
+      if (partialReturn && (selectedItems.length < allItems.length || hasPartialQuantities)) {
+        // Create a new transaction with the remaining items/quantities
+        const remainingItems = [];
         
+        allItems.forEach((item, idx) => {
+          const selectedItem = itemsToProcess.find(it => it.product_code === item.product_code);
+          if (selectedItem) {
+            // Item was selected for return
+            if (selectedItem.remaining_qty > 0) {
+              // Some quantity remains
+              remainingItems.push({
+                ...item,
+                qty: selectedItem.remaining_qty,
+                subtotal: item.price * selectedItem.remaining_qty
+              });
+            }
+            // If remaining_qty === 0, item is fully returned, don't add to remaining
+          } else {
+            // Item was not selected at all
+            remainingItems.push(item);
+          }
+        });
+
         if (remainingItems.length > 0) {
           // Calculate total for remaining items
           const remainingTotal = remainingItems.reduce((sum, item) => {
-            return sum + (item.subtotal || (item.price * item.qty));
+            return sum + item.subtotal;
           }, 0);
 
           // Create new transaction record
@@ -459,13 +525,15 @@ const QuickReport = ({ refreshTrigger }) => {
             .single();
 
           if (newTxError) throw newTxError;
+          newTransactionData = newTx;
+          createdNewTransaction = true;
 
           // Create transaction items for the new transaction
           const transactionItems = remainingItems.map(item => ({
             transaction_id: newTx.id,
             qty: item.qty,
             price: item.price,
-            subtotal: item.subtotal || (item.price * item.qty),
+            subtotal: item.subtotal,
             product_code: item.product_code
           }));
 
@@ -484,7 +552,7 @@ const QuickReport = ({ refreshTrigger }) => {
             const newPayments = originalPayments.map(payment => ({
               transaction_id: newTx.id,
               method: payment.method,
-              amount: payment.amount * paymentRatio
+              amount: Math.round(payment.amount * paymentRatio * 100) / 100
             }));
 
             const { error: paymentsError } = await supabase
@@ -493,13 +561,32 @@ const QuickReport = ({ refreshTrigger }) => {
 
             if (paymentsError) throw paymentsError;
           }
+          
+          // Update original transaction items to reflect returned quantities
+          for (const itemToProcess of itemsToProcess) {
+            if (itemToProcess.remaining_qty > 0) {
+              // Update the original transaction item to have remaining quantity
+              const { error: updateItemError } = await supabase
+                .from("transaction_items")
+                .update({ qty: itemToProcess.remaining_qty, subtotal: itemToProcess.price * itemToProcess.remaining_qty })
+                .eq("id", itemToProcess.id);
+              if (updateItemError) throw updateItemError;
+            } else {
+              // Remove item completely if all quantity returned
+              const { error: deleteItemError } = await supabase
+                .from("transaction_items")
+                .delete()
+                .eq("id", itemToProcess.id);
+              if (deleteItemError) throw deleteItemError;
+            }
+          }
         }
         
-        // The original transaction will be voided/returned for selected items only
+        // The original transaction will be voided/returned for selected items/quantities only
         newTransactionId = transactionId; // Keep using original ID for the return
       }
 
-      // Process the selected items
+      // Process the selected items/quantities
       if (actionType === 'void') {
         const restored = await restoreStockForItems(itemsToProcess);
         
@@ -569,7 +656,7 @@ const QuickReport = ({ refreshTrigger }) => {
             return {
               product_id: item.product_code,
               product_name: meta.product_name || item.product_code,
-              product_quantity: item.qty,
+              product_quantity: item.qty_to_return,
               product_category: meta.product_category || null,
               product_unit: meta.product_unit || null,
               product_expiry: null, // Damage returns don't have expiry
@@ -592,39 +679,68 @@ const QuickReport = ({ refreshTrigger }) => {
         }
       }
 
-      // If partial return and not all items selected, update the original transaction
-      if (partialReturn && selectedItems.length < allItems.length) {
-        // Update the original transaction status if all items are processed
-        if (selectedItems.length === allItems.length) {
-          const { error: updateError } = await supabase
-            .from("transactions")
-            .update({ status: actionType === 'void' ? 'voided' : 'damaged' })
-            .eq("id", transactionId);
-          if (updateError) throw updateError;
-        }
-      } else {
-        // Full return - update transaction status
+      // Determine new status based on action type
+      const newStatus = actionType === 'void' ? 'voided' : 'damaged';
+      
+      // Update transaction status if ALL items are fully returned
+      const allItemsFullyReturned = itemsToProcess.every(item => item.remaining_qty === 0);
+      const allOriginalItemsSelected = selectedItems.length === allItems.length;
+      
+      if ((partialReturn && allItemsFullyReturned && allOriginalItemsSelected) || !partialReturn) {
+        // Full return - update the original transaction to voided/damaged
         const { error: updateError } = await supabase
           .from("transactions")
-          .update({ status: actionType === 'void' ? 'voided' : 'damaged' })
+          .update({ 
+            status: newStatus,
+            total_amount: itemsToProcess.reduce((sum, item) => sum + (item.price * item.qty_to_return), 0)
+          })
           .eq("id", transactionId);
         if (updateError) throw updateError;
+        
+        console.log(`Transaction ${transactionId} marked as ${newStatus}`);
+      } else if (partialReturn && (!allItemsFullyReturned || !allOriginalItemsSelected)) {
+        // Partial return - update original transaction to new status AND create new transaction
+        const returnedAmount = itemsToProcess.reduce((sum, item) => sum + (item.price * item.qty_to_return), 0);
+        
+        // Mark the original transaction as voided/damaged for the returned portion
+        const { error: updateError } = await supabase
+          .from("transactions")
+          .update({ 
+            status: newStatus,
+            total_amount: returnedAmount
+          })
+          .eq("id", transactionId);
+        if (updateError) throw updateError;
+        
+        console.log(`Transaction ${transactionId} partially marked as ${newStatus} (amount: ${returnedAmount})`);
+        
+        if (createdNewTransaction && newTransactionData) {
+          console.log(`New transaction ${newTransactionData.id} created for remaining items`);
+        }
       }
 
-      alert(`Successfully ${actionType === 'void' ? 'voided' : 'marked as damage'} ${itemsToProcess.length} item(s)!`);
+      alert(`Successfully ${actionType === 'void' ? 'voided' : 'marked as damage'} ${itemsToProcess.reduce((sum, item) => sum + item.qty_to_return, 0)} unit(s) across ${itemsToProcess.length} item(s)!`);
       
       // Close modals
       setShowActionConfirmation(false);
       setShowVoidModal(false);
       
-      // Refresh data
-      await Promise.all([fetchReportData(), fetchTransactions()]);
+      // IMPORTANT: Refresh ALL data immediately
+      await Promise.all([
+        fetchReportData(), 
+        fetchTransactions(),
+        fetchTransactionsToday() // Also refresh today's transactions
+      ]);
+      
+      // Force a complete re-render by updating the transactions state
+      setTransactions(prev => [...prev]); // This triggers a re-render
+      
     } catch (err) {
       console.error(
         `Error ${selectedAction === 'void' ? 'voiding' : 'marking as damage'} transaction:`,
         err.message
       );
-      alert(`Failed to ${selectedAction === 'void' ? 'void' : 'mark as damage'} item(s).`);
+      alert(`Failed to ${selectedAction === 'void' ? 'void' : 'mark as damage'} item(s). Error: ${err.message}`);
     } finally {
       setLoading(false);
       setSelectedAction(null);
@@ -752,7 +868,7 @@ const QuickReport = ({ refreshTrigger }) => {
         </Modal.Header>
         <Modal.Body>
           <p className="text-warning">
-            ⚠️ Select which items to {selectedAction === 'void' ? 'void' : 'return as damage'}
+            ⚠️ Select which items and quantities to {selectedAction === 'void' ? 'void' : 'return as damage'}
           </p>
           
           <div className="mb-3">
@@ -792,42 +908,57 @@ const QuickReport = ({ refreshTrigger }) => {
             <div className="alert alert-info">
               <small>
                 <strong>Note:</strong> {partialReturn 
-                  ? 'Select specific items to return. Unselected items will remain in the transaction.'
-                  : 'All items in this transaction will be processed.'}
+                  ? 'Select specific items and quantities to return. Remaining quantities will stay in the transaction.'
+                  : 'All items and quantities in this transaction will be processed.'}
               </small>
             </div>
           </div>
 
           <div className="mt-2">
-            <strong>Select Items:</strong>
+            <strong>Select Items and Quantities:</strong>
             <div style={{ maxHeight: 300, overflowY: 'auto' }}>
-              {selectedTransaction?.transaction_items?.map((item, idx) => (
-                <div key={idx} className="mb-2 p-2 border rounded">
-                  <div className="d-flex align-items-center">
-                    {partialReturn ? (
-                      <Checkbox
-                        checked={selectedItems.includes(idx)}
-                        onChange={() => handleItemSelection(idx)}
-                        size="small"
-                        sx={{ mr: 2 }}
-                      />
-                    ) : (
-                      <Badge bg="primary" className="me-2">ALL</Badge>
-                    )}
-                    {renderLineItem(
-                      item.product_code, 
-                      item.qty, 
-                      null, 
-                      null, 
-                      !partialReturn || selectedItems.includes(idx),
-                      null
-                    )}
-                    <div className="ms-auto">
-                      <strong>₱{(item.subtotal || (item.price * item.qty)).toFixed(2)}</strong>
+              {selectedTransaction?.transaction_items?.map((item, idx) => {
+                const selectedItem = selectedItems.find(si => si.idx === idx);
+                const isSelected = !!selectedItem;
+                const returnQty = selectedItem?.returnQty || item.qty;
+                
+                return (
+                  <div key={idx} className="mb-2 p-2 border rounded">
+                    <div className="d-flex align-items-center">
+                      {partialReturn ? (
+                        <Form.Check
+                          type="checkbox"
+                          id={`item-checkbox-${idx}`}
+                          checked={isSelected}
+                          onChange={() => handleItemSelection(idx, item.qty)}
+                          className="me-2"
+                        />
+                      ) : (
+                        <Badge bg="primary" className="me-2">ALL</Badge>
+                      )}
+                      {renderLineItem(
+                        item.product_code, 
+                        item.qty, 
+                        returnQty,
+                        idx,
+                        !partialReturn || isSelected,
+                        partialReturn ? handleItemSelection : null,
+                        partialReturn ? handleReturnQtyChange : null
+                      )}
+                      <div className="ms-auto">
+                        <div className="text-end">
+                          <strong>₱{(item.price * (partialReturn && isSelected ? returnQty : item.qty)).toFixed(2)}</strong>
+                          {partialReturn && isSelected && item.qty > returnQty && (
+                            <div className="text-muted small">
+                              (Remaining: ₱{(item.price * (item.qty - returnQty)).toFixed(2)})
+                            </div>
+                          )}
+                        </div>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
 
@@ -836,18 +967,18 @@ const QuickReport = ({ refreshTrigger }) => {
               <div className="alert alert-info">
                 <small>
                   <strong>Voiding will:</strong> 
-                  {partialReturn ? ' Restore selected items to inventory.' : ' Restore all items to inventory.'}
+                  {partialReturn ? ' Restore selected quantities to inventory.' : ' Restore all quantities to inventory.'}
                   {partialReturn && selectedItems.length < selectedTransaction?.transaction_items?.length && 
-                    ' The remaining items will stay in the transaction.'}
+                    ' The remaining quantities will stay in the transaction.'}
                 </small>
               </div>
             ) : (
               <div className="alert alert-warning">
                 <small>
                   <strong>Return as damage will:</strong> 
-                  {partialReturn ? ' Log selected items as damaged.' : ' Log all items as damaged.'}
+                  {partialReturn ? ' Log selected quantities as damaged.' : ' Log all quantities as damaged.'}
                   {partialReturn && selectedItems.length < selectedTransaction?.transaction_items?.length && 
-                    ' The remaining items will stay in the transaction.'}
+                    ' The remaining quantities will stay in the transaction.'}
                 </small>
               </div>
             )}
@@ -856,7 +987,7 @@ const QuickReport = ({ refreshTrigger }) => {
           {partialReturn && (
             <div className="mt-2">
               <Badge bg={selectedItems.length > 0 ? "success" : "secondary"}>
-                {selectedItems.length} item(s) selected
+                {selectedItems.reduce((sum, item) => sum + item.returnQty, 0)} unit(s) selected across {selectedItems.length} item(s)
               </Badge>
             </div>
           )}
@@ -881,26 +1012,26 @@ const QuickReport = ({ refreshTrigger }) => {
             disabled={loading || (partialReturn && selectedItems.length === 0)}
           >
             {loading ? 'Processing...' : 
-             `${selectedAction === 'void' ? 'Void' : 'Return'} ${partialReturn ? selectedItems.length + ' Item(s)' : 'Transaction'}`
+             `${selectedAction === 'void' ? 'Void' : 'Return'} ${partialReturn ? selectedItems.reduce((sum, item) => sum + item.returnQty, 0) + ' Unit(s)' : 'Transaction'}`
             }
           </Button>
         </Modal.Footer>
       </Modal>
 
-      {/* View Report (Today only) */}
+      {/* View Report (Today only) - Shows ALL transactions */}
       <Modal
         show={showReportModal}
         onHide={() => setShowReportModal(false)}
         size="lg"
       >
         <Modal.Header closeButton>
-          <Modal.Title>Daily Report</Modal.Title>
+          <Modal.Title>Daily Report - All Transactions</Modal.Title>
         </Modal.Header>
         <Modal.Body>
           <div className="mb-3">
             <h6>Summary</h6>
             <p>
-              <strong>Total Collections:</strong> ₱
+              <strong>Total Collections (Completed):</strong> ₱
               {reportData.totalCollections.toFixed(2)}
             </p>
             <p>
@@ -912,7 +1043,7 @@ const QuickReport = ({ refreshTrigger }) => {
             </p>
           </div>
 
-          <h6>Recent Transactions (Today)</h6>
+          <h6>All Transactions (Today)</h6>
           <div style={{ maxHeight: 400, overflowY: "auto" }}>
             {loading ? (
               <p>Loading...</p>
@@ -924,38 +1055,58 @@ const QuickReport = ({ refreshTrigger }) => {
                     <TableCell>Date</TableCell>
                     <TableCell>Amount</TableCell>
                     <TableCell>Status</TableCell>
+                    <TableCell>Notes</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
                   {transactions.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={4} align="center" sx={{ py: 3 }}>
+                      <TableCell colSpan={5} align="center" sx={{ py: 3 }}>
                         No transactions today
                       </TableCell>
                     </TableRow>
                   ) : (
-                    transactions.map((t) => (
-                      <TableRow key={t.id}>
-                        <TableCell>{renderTxItemCell(t)}</TableCell>
-                        <TableCell>
-                          {new Date(t.created_at).toLocaleDateString()}{" "}
-                          {new Date(t.created_at).toLocaleTimeString()}
-                        </TableCell>
-                        <TableCell>
-                          ₱{(t.total_amount || 0).toFixed(2)}
-                        </TableCell>
-                        <TableCell>
-                          <Badge 
-                            bg={
-                              t.status === "completed" ? "success" :
-                              t.status === "damaged" ? "warning" : "danger"
-                            }
-                          >
-                            {t.status}
-                          </Badge>
-                        </TableCell>
-                      </TableRow>
-                    ))
+                    transactions.map((t) => {
+                      // Check if transaction has partial returns
+                      const hasPartialReturns = t.transaction_items?.some(item => 
+                        item.qty < t.transaction_items.find(ti => ti.product_code === item.product_code)?.original_qty
+                      );
+                      
+                      return (
+                        <TableRow key={t.id}>
+                          <TableCell>{renderTxItemCell(t)}</TableCell>
+                          <TableCell>
+                            {new Date(t.created_at).toLocaleDateString()}{" "}
+                            {new Date(t.created_at).toLocaleTimeString()}
+                          </TableCell>
+                          <TableCell>
+                            ₱{(t.total_amount || 0).toFixed(2)}
+                          </TableCell>
+                          <TableCell>
+                            <Badge 
+                              bg={
+                                t.status === "completed" ? "success" :
+                                t.status === "damaged" ? "warning" :
+                                t.status === "voided" ? "danger" : "secondary"
+                              }
+                            >
+                              {t.status}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            {hasPartialReturns && (
+                              <Badge bg="info">Partial Return</Badge>
+                            )}
+                            {t.status === "damaged" && (
+                              <Badge bg="warning" className="ms-1">Damage Return</Badge>
+                            )}
+                            {t.status === "voided" && (
+                              <Badge bg="danger" className="ms-1">Voided</Badge>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })
                   )}
                 </TableBody>
               </Table>
@@ -964,7 +1115,7 @@ const QuickReport = ({ refreshTrigger }) => {
         </Modal.Body>
       </Modal>
 
-      {/* Void/Damage Modal (recent list) */}
+      {/* Void/Damage Modal (only completed transactions) */}
       <Modal
         show={showVoidModal}
         onHide={() => setShowVoidModal(false)}
@@ -975,7 +1126,7 @@ const QuickReport = ({ refreshTrigger }) => {
         </Modal.Header>
         <Modal.Body>
           <p className="text-warning">
-            ⚠️ Select a transaction to void or return as damage.
+            ⚠️ Select a completed transaction to void or return as damage.
           </p>
           <div style={{ maxHeight: 400, overflowY: "auto" }}>
             {loading ? (
@@ -1019,7 +1170,7 @@ const QuickReport = ({ refreshTrigger }) => {
                         <TableCell>
                           {t.transaction_items?.map((item, idx) => (
                             <div key={idx}>
-                              {renderLineItem(item.product_code, item.qty)}
+                              {renderLineItem(item.product_code, item.qty, item.qty)}
                             </div>
                           ))}
                         </TableCell>
@@ -1042,14 +1193,14 @@ const QuickReport = ({ refreshTrigger }) => {
         </Modal.Body>
       </Modal>
 
-      {/* History Modal */}
+      {/* History Modal - Shows ALL transactions */}
       <Modal
         show={showHistoryModal}
         onHide={() => setShowHistoryModal(false)}
         size="xl"
       >
         <Modal.Header closeButton>
-          <Modal.Title>Transaction History</Modal.Title>
+          <Modal.Title>Transaction History - All Statuses</Modal.Title>
         </Modal.Header>
         <Modal.Body>
           <div style={{ maxHeight: 500, overflowY: "auto" }}>
@@ -1065,6 +1216,7 @@ const QuickReport = ({ refreshTrigger }) => {
                     <TableCell>Items</TableCell>
                     <TableCell>Payment Methods</TableCell>
                     <TableCell>Status</TableCell>
+                    <TableCell>Notes</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -1082,7 +1234,7 @@ const QuickReport = ({ refreshTrigger }) => {
                       <TableCell>
                         {t.transaction_items?.map((item, idx) => (
                           <div key={idx}>
-                            {renderLineItem(item.product_code, item.qty)}
+                            {renderLineItem(item.product_code, item.qty, item.qty)}
                           </div>
                         ))}
                       </TableCell>
@@ -1098,11 +1250,25 @@ const QuickReport = ({ refreshTrigger }) => {
                         <Badge 
                           bg={
                             t.status === "completed" ? "success" :
-                            t.status === "damaged" ? "warning" : "danger"
+                            t.status === "damaged" ? "warning" :
+                            t.status === "voided" ? "danger" : "secondary"
                           }
                         >
                           {t.status}
                         </Badge>
+                      </TableCell>
+                      <TableCell>
+                        {t.status === "damaged" && (
+                          <Badge bg="warning" className="me-1">Damage Return</Badge>
+                        )}
+                        {t.status === "voided" && (
+                          <Badge bg="danger" className="me-1">Voided</Badge>
+                        )}
+                        {t.status === "completed" && t.transaction_items?.some(item => 
+                          item.qty < t.transaction_items?.find(ti => ti.product_code === item.product_code)?.original_qty
+                        ) && (
+                          <Badge bg="info" className="me-1">Partial Return</Badge>
+                        )}
                       </TableCell>
                     </TableRow>
                   ))}
