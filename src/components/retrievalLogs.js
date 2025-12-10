@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Table, Button } from "react-bootstrap";
+import { Table, Button, Badge } from "react-bootstrap";
 import { supabase } from "../supabaseClient";
 
 const RetrievalLogs = ({ staffId = "", limit = 20 }) => {
@@ -75,6 +75,28 @@ const RetrievalLogs = ({ staffId = "", limit = 20 }) => {
     return items
       .map((it) => `${it.product_name || it.product_id} x${it.qty}`)
       .join(", ");
+  };
+
+  // Function to get status badge color and text
+  const getStatusBadge = (status) => {
+    if (!status) return <Badge bg="secondary">-</Badge>;
+    
+    const statusLower = status.toLowerCase();
+    
+    if (statusLower.includes('confirmed')) {
+      return <Badge bg="success">{status}</Badge>;
+    }
+    
+    if (statusLower.includes('declined') || statusLower.includes('rejected')) {
+      return <Badge bg="danger">{status}</Badge>;
+    }
+    
+    if (statusLower.includes('pending')) {
+      return <Badge bg="warning" text="dark">{status}</Badge>;
+    }
+    
+    // Default for other statuses
+    return <Badge bg="secondary">{status}</Badge>;
   };
 
   return (
@@ -180,11 +202,24 @@ const RetrievalLogs = ({ staffId = "", limit = 20 }) => {
                           ? new Date(r.retrieved_at).toLocaleString()
                           : "-"}
                       </td>
-                      <td>{r.status || "-"}</td>
+                      <td>
+                        {getStatusBadge(r.status)}
+                      </td>
                     </tr>
                   ))}
               </tbody>
             </Table>
+          </div>
+
+          {/* Status Legend */}
+          <div className="mt-3 pt-3 border-top">
+            <small className="text-muted">
+              <strong>Status Legend:</strong>{" "}
+              <Badge bg="success" className="ms-2 me-1">Confirmed</Badge>
+              <Badge bg="danger" className="mx-1">Declined/Rejected</Badge>
+              <Badge bg="warning" text="dark" className="mx-1">Pending</Badge>
+              <Badge bg="secondary" className="mx-1">Other</Badge>
+            </small>
           </div>
         </div>
       </div>

@@ -1,6 +1,6 @@
 // ...existing code...
 import React, { useEffect, useState } from "react";
-import { Table, Button, Container, Modal, Form } from "react-bootstrap";
+import { Table, Button, Container, Modal, Form, Badge } from "react-bootstrap";
 import { supabase } from "../supabaseClient";
 
 const AdminRetrievalLogs = () => {
@@ -80,6 +80,28 @@ const AdminRetrievalLogs = () => {
     return items
       .map((it) => `${it.product_name || it.product_id} x${it.qty}`)
       .join(", ");
+  };
+
+  // Function to get status badge color and text
+  const getStatusBadge = (status) => {
+    if (!status) return <Badge bg="secondary">-</Badge>;
+    
+    const statusLower = status.toLowerCase();
+    
+    if (statusLower.includes('confirmed')) {
+      return <Badge bg="success">{status}</Badge>;
+    }
+    
+    if (statusLower.includes('declined') || statusLower.includes('rejected')) {
+      return <Badge bg="danger">{status}</Badge>;
+    }
+    
+    if (statusLower.includes('pending')) {
+      return <Badge bg="warning" text="dark">{status}</Badge>;
+    }
+    
+    // Default for other statuses
+    return <Badge bg="secondary">{status}</Badge>;
   };
 
   // Generate report for confirmed retrievals
@@ -440,7 +462,6 @@ const AdminRetrievalLogs = () => {
               </Button>
             </div>
             <div>
-              
               <Button
                 size="sm"
                 variant="outline-secondary"
@@ -451,6 +472,17 @@ const AdminRetrievalLogs = () => {
             </div>
           </div>
         </div>
+
+        {/* Status Legend */}
+        {/* <div className="mb-3">
+          <small className="text-muted">
+            <strong>Status Legend:</strong>{" "}
+            <Badge bg="success" className="ms-2 me-1">Confirmed</Badge>
+            <Badge bg="danger" className="mx-1">Declined/Rejected</Badge>
+            <Badge bg="warning" text="dark" className="mx-1">Pending</Badge>
+            <Badge bg="secondary" className="mx-1">Other</Badge>
+          </small>
+        </div> */}
 
         {/* Report preview modal */}
         <Modal
@@ -721,7 +753,9 @@ const AdminRetrievalLogs = () => {
                       ? new Date(r.retrieved_at).toLocaleString()
                       : "-"}
                   </td>
-                  <td>{r.status || "-"}</td>
+                  <td>
+                    {getStatusBadge(r.status)}
+                  </td>
                 </tr>
               ))}
           </tbody>
@@ -732,4 +766,3 @@ const AdminRetrievalLogs = () => {
 };
 
 export default AdminRetrievalLogs;
-// ...existing code...
