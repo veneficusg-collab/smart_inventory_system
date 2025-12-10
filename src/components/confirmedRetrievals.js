@@ -1,6 +1,13 @@
-// ...existing code...
 import React, { useEffect, useState } from "react";
-import { Table, Button, Spinner, Modal, Alert, Container } from "react-bootstrap";
+import { 
+  Table, 
+  Button, 
+  Spinner, 
+  Modal, 
+  Alert, 
+  Container, 
+  Badge 
+} from "react-bootstrap";
 import { supabase } from "../supabaseClient";
 
 const ConfirmedRetrievals = ({ staffId = "", staffName = "", limit = 50 }) => {
@@ -34,6 +41,28 @@ const ConfirmedRetrievals = ({ staffId = "", staffName = "", limit = 50 }) => {
       return { start: start.toISOString(), end: end.toISOString() };
     }
     return { start: null, end: null };
+  };
+
+  // Function to get status badge color and text - SAME AS AdminRetrievalLogs
+  const getStatusBadge = (status) => {
+    if (!status) return <Badge bg="secondary">-</Badge>;
+    
+    const statusLower = status.toLowerCase();
+    
+    if (statusLower.includes('confirmed')) {
+      return <Badge bg="success">{status}</Badge>;
+    }
+    
+    if (statusLower.includes('declined') || statusLower.includes('rejected')) {
+      return <Badge bg="danger">{status}</Badge>;
+    }
+    
+    if (statusLower.includes('pending')) {
+      return <Badge bg="warning" text="dark">{status}</Badge>;
+    }
+    
+    // Default for other statuses
+    return <Badge bg="secondary">{status}</Badge>;
   };
 
   const fetchConfirmedRetrievals = async (l = limit, p = period) => {
@@ -125,118 +154,132 @@ const ConfirmedRetrievals = ({ staffId = "", staffName = "", limit = 50 }) => {
 
   return (
     <>
-     <Container
+      <Container
         fluid
         className="bg-white m-4 p-3 rounded"
         style={{ width: "140vh" }}
       >
-      <div className="mb-3 d-flex justify-content-between align-items-center">
-        <div><strong>Confirmed Retrievals</strong></div>
-        <div className="d-flex align-items-center gap-2">
-          <div style={{ display: "flex", gap: 6 }}>
-            <Button
-              size="sm"
-              variant={period === "daily" ? "primary" : "outline-secondary"}
-              onClick={() => setPeriod("daily")}
-              aria-pressed={period === "daily"}
-            >
-              Daily
-            </Button>
-            <Button
-              size="sm"
-              variant={period === "weekly" ? "primary" : "outline-secondary"}
-              onClick={() => setPeriod("weekly")}
-              aria-pressed={period === "weekly"}
-            >
-              Weekly
-            </Button>
-            <Button
-              size="sm"
-              variant={period === "monthly" ? "primary" : "outline-secondary"}
-              onClick={() => setPeriod("monthly")}
-              aria-pressed={period === "monthly"}
-            >
-              Monthly
-            </Button>
-            <Button
-              size="sm"
-              variant={period === "all" ? "primary" : "outline-secondary"}
-              onClick={() => setPeriod("all")}
-              aria-pressed={period === "all"}
-            >
-              All
-            </Button>
-          </div>
-          <div>
-            <Button size="sm" variant="outline-secondary" onClick={() => fetchConfirmedRetrievals()}>
-              Refresh
-            </Button>
+        <div className="mb-3 d-flex justify-content-between align-items-center">
+          <div><strong>Confirmed Retrievals</strong></div>
+          <div className="d-flex align-items-center gap-2">
+            <div style={{ display: "flex", gap: 6 }}>
+              <Button
+                size="sm"
+                variant={period === "daily" ? "primary" : "outline-secondary"}
+                onClick={() => setPeriod("daily")}
+                aria-pressed={period === "daily"}
+              >
+                Daily
+              </Button>
+              <Button
+                size="sm"
+                variant={period === "weekly" ? "primary" : "outline-secondary"}
+                onClick={() => setPeriod("weekly")}
+                aria-pressed={period === "weekly"}
+              >
+                Weekly
+              </Button>
+              <Button
+                size="sm"
+                variant={period === "monthly" ? "primary" : "outline-secondary"}
+                onClick={() => setPeriod("monthly")}
+                aria-pressed={period === "monthly"}
+              >
+                Monthly
+              </Button>
+              <Button
+                size="sm"
+                variant={period === "all" ? "primary" : "outline-secondary"}
+                onClick={() => setPeriod("all")}
+                aria-pressed={period === "all"}
+              >
+                All
+              </Button>
+            </div>
+            <div>
+              <Button size="sm" variant="outline-secondary" onClick={() => fetchConfirmedRetrievals()}>
+                Refresh
+              </Button>
+            </div>
           </div>
         </div>
-      </div>
 
-      {error && <Alert variant="danger">{error}</Alert>}
-      {loading ? (
-        <div className="p-3"><Spinner animation="border" /> Loading...</div>
-      ) : (
-        <Table striped bordered hover size="sm">
-          <thead>
-            <tr>
-              <th style={{ width: 180 }}>Retrieval ID</th>
-              <th>Staff</th>
-              <th style={{ width: 360 }}>Items (summary)</th>
-              <th style={{ width: 180 }}>Retrieved At</th>
-              <th style={{ width: 140 }}>Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.length === 0 && (
+        {/* Status Legend */}
+        {/* <div className="mb-3">
+          <small className="text-muted">
+            <strong>Status Legend:</strong>{" "}
+            <Badge bg="success" className="ms-2 me-1">Confirmed</Badge>
+            <Badge bg="danger" className="mx-1">Declined/Rejected</Badge>
+            <Badge bg="warning" text="dark" className="mx-1">Pending</Badge>
+            <Badge bg="secondary" className="mx-1">Other</Badge>
+          </small>
+        </div> */}
+
+        {error && <Alert variant="danger">{error}</Alert>}
+        {loading ? (
+          <div className="p-3"><Spinner animation="border" /> Loading...</div>
+        ) : (
+          <Table striped bordered hover size="sm">
+            <thead>
               <tr>
-                <td colSpan="5" className="text-center text-muted">No confirmed retrievals found</td>
+                <th style={{ width: 180 }}>Retrieval ID</th>
+                <th>Staff</th>
+                <th style={{ width: 360 }}>Items (summary)</th>
+                <th style={{ width: 180 }}>Retrieved At</th>
+                <th style={{ width: 140 }}>Status</th>
               </tr>
-            )}
-            {rows.map((r) => (
-              <tr key={r.id} style={{ cursor: "pointer" }} onClick={() => handleRowClick(r)}>
-                <td style={{ fontSize: 12 }}>{r.id}</td>
-                <td>{r.staff_name || r.staff_id}</td>
-                <td style={{ maxWidth: 360, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                  {(r.items || []).map((it) => `${it.product_name || it.product_id} x${it.qty ?? it.quantity ?? 0}`).join(", ")}
-                </td>
-                <td>{r.retrieved_at ? new Date(r.retrieved_at).toLocaleString() : "-"}</td>
-                <td>{r.status}</td>
-              </tr>
-            ))}
-          </tbody>
-        </Table>
-      )}
+            </thead>
+            <tbody>
+              {rows.length === 0 && (
+                <tr>
+                  <td colSpan="5" className="text-center text-muted">No confirmed retrievals found</td>
+                </tr>
+              )}
+              {rows.map((r) => (
+                <tr key={r.id} style={{ cursor: "pointer" }} onClick={() => handleRowClick(r)}>
+                  <td style={{ fontSize: 12 }}>{r.id}</td>
+                  <td>{r.staff_name || r.staff_id}</td>
+                  <td style={{ maxWidth: 360, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                    {(r.items || []).map((it) => `${it.product_name || it.product_id} x${it.qty ?? it.quantity ?? 0}`).join(", ")}
+                  </td>
+                  <td>{r.retrieved_at ? new Date(r.retrieved_at).toLocaleString() : "-"}</td>
+                  <td>
+                    {getStatusBadge(r.status)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </Table>
+        )}
 
-      <Modal show={showModal} onHide={() => setShowModal(false)} size="lg" centered>
-        <Modal.Header closeButton>
-          <Modal.Title>Retrieval Details {selected ? `— ${selected.id}` : ""}</Modal.Title>
-        </Modal.Header>
-        <Modal.Body>
-          {!selected ? (
-            <div className="text-center text-muted">No selection</div>
-          ) : (
-            <>
-              <div className="mb-2"><strong>Staff:</strong> {selected.staff_name || selected.staff_id}</div>
-              <div className="mb-2"><strong>Retrieved At:</strong> {selected.retrieved_at ? new Date(selected.retrieved_at).toLocaleString() : "-"}</div>
-              <div className="mb-3"><strong>Status:</strong> {selected.status || "-"}</div>
-              <div>
-                <strong>Items</strong>
-                {renderItems(selected.items)}
-              </div>
-            </>
-          )}
-        </Modal.Body>
-        <Modal.Footer>
-          <Button variant="secondary" onClick={() => setShowModal(false)}>Close</Button>
-        </Modal.Footer>
-      </Modal>
+        <Modal show={showModal} onHide={() => setShowModal(false)} size="lg" centered>
+          <Modal.Header closeButton>
+            <Modal.Title>Retrieval Details {selected ? `— ${selected.id}` : ""}</Modal.Title>
+          </Modal.Header>
+          <Modal.Body>
+            {!selected ? (
+              <div className="text-center text-muted">No selection</div>
+            ) : (
+              <>
+                <div className="mb-2"><strong>Staff:</strong> {selected.staff_name || selected.staff_id}</div>
+                <div className="mb-2"><strong>Retrieved At:</strong> {selected.retrieved_at ? new Date(selected.retrieved_at).toLocaleString() : "-"}</div>
+                <div className="mb-3">
+                  <strong>Status:</strong> {getStatusBadge(selected.status)}
+                </div>
+                <div>
+                  <strong>Items</strong>
+                  {renderItems(selected.items)}
+                </div>
+              </>
+            )}
+          </Modal.Body>
+          <Modal.Footer>
+            <Button variant="secondary" onClick={() => setShowModal(false)}>Close</Button>
+          </Modal.Footer>
+        </Modal>
       </Container>
     </>
   );
 };
 
 export default ConfirmedRetrievals;
-// ...existing code...

@@ -1,4 +1,4 @@
-import { Button, Container, Nav, Tab, Modal } from "react-bootstrap";
+import { Button, Container, Nav, Tab, Modal, Badge } from "react-bootstrap";
 import { useEffect, useState } from "react";
 import Table from "@mui/material/Table";
 import TableBody from "@mui/material/TableBody";
@@ -47,6 +47,74 @@ const Logs = () => {
       .from(BUCKET)
       .getPublicUrl(`products/${keyOrUrl}`);
     return data?.publicUrl || null;
+  };
+
+  // Function to get color for action badge - SAME COLOR CODING AS OTHER COMPONENTS
+  const getActionBadge = (action) => {
+    if (!action) return <Badge bg="secondary">N/A</Badge>;
+    
+    const actionLower = action.toLowerCase();
+    
+    // Add/Increment actions - Green
+    if (actionLower.includes('add') || 
+        actionLower.includes('increment') || 
+        actionLower.includes('restock') ||
+        actionLower.includes('sale') || 
+        
+        actionLower.includes('receive')) {
+      return <Badge bg="success">{action}</Badge>;
+    }
+    
+    // Remove/Decrement actions - Red
+    if (actionLower.includes('remove') || 
+        actionLower.includes('decrement') || 
+        actionLower.includes('void') || 
+        actionLower.includes('take') ||
+        actionLower.includes('retrieve') ||
+        actionLower.includes('withdraw')) {
+      return <Badge bg="danger">{action}</Badge>;
+    }
+    
+    // Edit/Update actions - Blue
+    if (actionLower.includes('edit') || 
+        actionLower.includes('update') || 
+        actionLower.includes('modify') ||
+        actionLower.includes('change')) {
+      return <Badge bg="primary">{action}</Badge>;
+    }
+    
+    // Check/View actions - Info Blue
+    if (actionLower.includes('check') || 
+        actionLower.includes('view') || 
+        actionLower.includes('inspect') ||
+        actionLower.includes('audit')) {
+      return <Badge bg="info">{action}</Badge>;
+    }
+    
+    // Pending/Processing actions - Yellow/Orange
+    if (actionLower.includes('pending') || 
+        actionLower.includes('processing') || 
+        actionLower.includes('return as damage') || 
+        actionLower.includes('waiting')) {
+      return <Badge bg="warning" text="dark">{action}</Badge>;
+    }
+    
+    // Confirmed/Approved actions - Green
+    if (actionLower.includes('confirm') || 
+        actionLower.includes('approve') || 
+        actionLower.includes('accept')) {
+      return <Badge bg="success">{action}</Badge>;
+    }
+    
+    // Declined/Rejected actions - Red
+    if (actionLower.includes('decline') || 
+        actionLower.includes('reject') || 
+        actionLower.includes('deny')) {
+      return <Badge bg="danger">{action}</Badge>;
+    }
+    
+    // Default for other actions
+    return <Badge bg="secondary">{action}</Badge>;
   };
 
   const resolveProductMetaFromLog = (logRow) => {
@@ -365,7 +433,7 @@ const Logs = () => {
                     </TableCell>
                     <TableCell align="left">{product.staff || "N/A"}</TableCell>
                     <TableCell align="left">
-                      {product.product_action || "N/A"}
+                      {getActionBadge(product.product_action)}
                     </TableCell>
                   </TableRow>
                 ))

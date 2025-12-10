@@ -1,6 +1,6 @@
 // DTR.jsx
 import { useEffect, useMemo, useState, useRef } from "react";
-import { Button, Container, Row, Col, Form, Nav, Tab, Tabs } from "react-bootstrap";
+import { Button, Container, Row, Col, Form, Nav, Tab, Tabs, Badge } from "react-bootstrap";
 import {
   Table,
   TableBody,
@@ -40,6 +40,90 @@ function customToRange(startStr, endStr) {
 
 const currency = (n) =>
   `₱${Number(n || 0).toLocaleString("en-PH", { minimumFractionDigits: 2 })}`;
+
+// Function to get color for action badge - SIMILAR TO OTHER COMPONENTS
+const getActionBadge = (action) => {
+  if (!action) return <Badge bg="secondary">N/A</Badge>;
+  
+  const actionLower = action.toLowerCase();
+  
+  // Add/Increment/Sale actions - Green
+  if (actionLower.includes('add') || 
+
+      actionLower.includes('restock') ||
+      actionLower.includes('receive') ||
+      actionLower.includes('sale') ||
+      actionLower.includes('completed')) {
+    return <Badge bg="success">{action}</Badge>;
+  }
+  
+  // Remove/Decrement/Void actions - Red
+  if ( 
+
+
+
+      actionLower.includes('void') ||
+      actionLower.includes('delete') ||
+      actionLower.includes('unstock')) {
+    return <Badge bg="danger">{action}</Badge>;
+  }
+  
+  // Edit/Update/Restore actions - Blue
+  if (actionLower.includes('edit') || 
+      actionLower.includes('update') || 
+      actionLower.includes('modify') ||
+      actionLower.includes('change') ||
+      actionLower.includes('restore')) {
+    return <Badge bg="primary">{action}</Badge>;
+  }
+  
+  // Archive/Stock Room actions - Info Blue
+  if (actionLower.includes('archive') || 
+      actionLower.includes('stock room') ||
+      actionLower.includes('main stock room')) {
+    return <Badge bg="info">{action}</Badge>;
+  }
+  
+  // Pending/Processing actions - Yellow/Orange
+  if (actionLower.includes('pending') || 
+      actionLower.includes('processing') || 
+      actionLower.includes('return as damage') || 
+      actionLower.includes('waiting')) {
+    return <Badge bg="warning" text="dark">{action}</Badge>;
+  }
+  
+  // Confirmed/Approved actions - Green
+  if (actionLower.includes('confirm') || 
+      actionLower.includes('approve') || 
+      actionLower.includes('accept')) {
+    return <Badge bg="success">{action}</Badge>;
+  }
+  
+  // Default for other actions
+  return <Badge bg="secondary">{action}</Badge>;
+};
+
+// Function to get status badge color - FOR TRANSACTIONS
+const getStatusBadge = (status) => {
+  if (!status) return <Badge bg="secondary">N/A</Badge>;
+  
+  const statusLower = status.toLowerCase();
+  
+  if (statusLower.includes('completed')) {
+    return <Badge bg="success">{status}</Badge>;
+  }
+  
+  if (statusLower.includes('voided')) {
+    return <Badge bg="danger">{status}</Badge>;
+  }
+  
+  if (statusLower.includes('pending') || statusLower.includes('damaged')) {
+    return <Badge bg="warning" text="dark">{status}</Badge>;
+  }
+  
+  // Default for other statuses
+  return <Badge bg="secondary">{status}</Badge>;
+};
 
 // Helper function to categorize logs based on product_action
 const filterLogsByCategory = (logs, category) => {
@@ -285,6 +369,14 @@ const DTR = () => {
             th, td { border: 1px solid #ccc; padding: 4px; font-size: 11px; }
             th { background: #f2f2f2; }
             .text-center { text-align: center; }
+            /* Keep badges visible in print */
+            .badge { display: inline-block; padding: 2px 6px; border-radius: 4px; font-size: 10px; }
+            .badge-success { background-color: #28a745 !important; color: white !important; }
+            .badge-danger { background-color: #dc3545 !important; color: white !important; }
+            .badge-warning { background-color: #ffc107 !important; color: black !important; }
+            .badge-primary { background-color: #007bff !important; color: white !important; }
+            .badge-info { background-color: #17a2b8 !important; color: white !important; }
+            .badge-secondary { background-color: #6c757d !important; color: white !important; }
           </style>
         </head>
         <body>${printContents}</body>
@@ -424,6 +516,21 @@ const DTR = () => {
         </Col>
       </Row>
 
+      {/* Color Legend */}
+      {/* <Row className="no-print mb-3">
+        <Col xs={12}>
+          <div className="d-flex flex-wrap align-items-center" style={{ fontSize: "0.8rem" }}>
+            <span className="me-2 fw-bold">Legend:</span>
+            <Badge bg="success" className="me-2 mb-1">Completed/Sale/Add/Restock</Badge>
+            <Badge bg="danger" className="me-2 mb-1">Voided/Remove/Delete/Unstock</Badge>
+            <Badge bg="primary" className="me-2 mb-1">Edit/Update/Restore</Badge>
+            <Badge bg="info" className="me-2 mb-1">Archive/Stock Room</Badge>
+            <Badge bg="warning" text="dark" className="me-2 mb-1">Pending</Badge>
+            <Badge bg="secondary" className="mb-1">Other</Badge>
+          </div>
+        </Col>
+      </Row> */}
+
       {/* PRINTABLE CONTENT */}
       <div ref={printRef}>
         <div className="text-center mt-3">
@@ -550,7 +657,9 @@ const DTR = () => {
                           ))}
                         </TableCell>
                         <TableCell>{t.staff || "N/A"}</TableCell>
-                        <TableCell>{t.status}</TableCell>
+                        <TableCell>
+                          {getStatusBadge(t.status)}
+                        </TableCell>
                       </TableRow>
                     ))
                   )}
@@ -602,7 +711,9 @@ const DTR = () => {
                           <TableCell>{lg.product_category || "N/A"}</TableCell>
                           <TableCell align="right">{lg.product_quantity}</TableCell>
                           <TableCell>{lg.product_unit || "N/A"}</TableCell>
-                          <TableCell>{lg.product_action || "N/A"}</TableCell>
+                          <TableCell>
+                            {getActionBadge(lg.product_action)}
+                          </TableCell>
                           <TableCell>{lg.staff || "N/A"}</TableCell>
                         </TableRow>
                       );
