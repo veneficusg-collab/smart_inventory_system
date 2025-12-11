@@ -48,9 +48,9 @@ const getActionBadge = (action) => {
   const actionLower = action.toLowerCase();
   
   // Add/Increment/Sale actions - Green
-  if (actionLower.includes('add') || 
+  if (
 
-      actionLower.includes('restock') ||
+      
       actionLower.includes('receive') ||
       actionLower.includes('sale') ||
       actionLower.includes('completed')) {
@@ -61,7 +61,7 @@ const getActionBadge = (action) => {
   if ( 
 
 
-
+      actionLower.includes('archive') || 
       actionLower.includes('void') ||
       actionLower.includes('delete') ||
       actionLower.includes('unstock')) {
@@ -70,6 +70,9 @@ const getActionBadge = (action) => {
   
   // Edit/Update/Restore actions - Blue
   if (actionLower.includes('edit') || 
+      actionLower.includes('restock') ||
+      actionLower.includes('add') || 
+
       actionLower.includes('update') || 
       actionLower.includes('modify') ||
       actionLower.includes('change') ||
@@ -78,9 +81,9 @@ const getActionBadge = (action) => {
   }
   
   // Archive/Stock Room actions - Info Blue
-  if (actionLower.includes('archive') || 
-      actionLower.includes('stock room') ||
-      actionLower.includes('main stock room')) {
+  if (
+      actionLower.includes('restock') ||
+      actionLower.includes('add')) {
     return <Badge bg="info">{action}</Badge>;
   }
   
