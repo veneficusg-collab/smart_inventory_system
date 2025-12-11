@@ -82,25 +82,25 @@ const AdminRetrievalLogs = () => {
       .join(", ");
   };
 
-  // Function to get status badge color and text
+  // Function to get status badge color and text - UPDATED TEXT
   const getStatusBadge = (status) => {
     if (!status) return <Badge bg="secondary">-</Badge>;
     
     const statusLower = status.toLowerCase();
     
     if (statusLower.includes('confirmed')) {
-      return <Badge bg="success">{status}</Badge>;
+      return <Badge bg="success">Admin Confirmed</Badge>;
     }
     
     if (statusLower.includes('declined') || statusLower.includes('rejected')) {
-      return <Badge bg="danger">{status}</Badge>;
+      return <Badge bg="danger">Admin Declined</Badge>;
     }
     
     if (statusLower.includes('pending')) {
-      return <Badge bg="warning" text="dark">{status}</Badge>;
+      return <Badge bg="warning" text="dark">Admin Pending</Badge>;
     }
     
-    // Default for other statuses
+    // For other statuses, keep the original text
     return <Badge bg="secondary">{status}</Badge>;
   };
 
@@ -342,6 +342,8 @@ const AdminRetrievalLogs = () => {
           const statusLabel =
             it.status === "pharmacy_stock"
               ? "Stock"
+              : it.status === "sold"
+              ? "Sold"
               : it.status === "returned"
               ? "Returned"
               : it.status;
@@ -474,15 +476,15 @@ const AdminRetrievalLogs = () => {
         </div>
 
         {/* Status Legend */}
-        {/* <div className="mb-3">
+        <div className="mb-3">
           <small className="text-muted">
             <strong>Status Legend:</strong>{" "}
-            <Badge bg="success" className="ms-2 me-1">Confirmed</Badge>
-            <Badge bg="danger" className="mx-1">Declined/Rejected</Badge>
-            <Badge bg="warning" text="dark" className="mx-1">Pending</Badge>
+            <Badge bg="success" className="ms-2 me-1">Admin Confirmed</Badge>
+            <Badge bg="danger" className="mx-1">Admin Declined</Badge>
+            <Badge bg="warning" text="dark" className="mx-1">Admin Pending</Badge>
             <Badge bg="secondary" className="mx-1">Other</Badge>
           </small>
-        </div> */}
+        </div>
 
         {/* Report preview modal */}
         <Modal
