@@ -1,17 +1,21 @@
 import { useEffect, useState, useMemo } from "react";
-import { Container, Spinner } from "react-bootstrap";
+import { Container, Spinner, Row, Col, Badge } from "react-bootstrap";
 import Button from "@mui/material/Button";
 import Menu from "@mui/material/Menu";
 import MenuItem from "@mui/material/MenuItem";
 import { CiCalendar } from "react-icons/ci";
-import { FaChartLine } from "react-icons/fa";
+import { FaChartLine, FaShoppingCart, FaBoxOpen } from "react-icons/fa";
 import { supabase } from "../supabaseClient";
 
 const MainTotalSalesPerYear = () => {
   const [year, setYear] = useState(new Date().getFullYear());
-  const [totalValue, setTotalValue] = useState(0);
+  const [salesData, setSalesData] = useState({
+    pharmacy: 0,
+    mainStockRoom: 0,
+    total: 0,
+    itemCount: 0
+  });
   const [loading, setLoading] = useState(true);
-  const [monthlyData, setMonthlyData] = useState([]);
 
   const [anchorEl, setAnchorEl] = useState(null);
   const open = Boolean(anchorEl);
@@ -28,128 +32,236 @@ const MainTotalSalesPerYear = () => {
   }, []);
 
   useEffect(() => {
-    fetchPharmacyInventoryValue(year);
+    fetchTotalSalesValue(year);
+    
+    const channel = supabase
+      .channel('sales-changes')
+      .on('postgres_changes', 
+        { event: '*', schema: 'public', table: 'products' },
+        () => fetchTotalSalesValue(year)
+      )
+      .on('postgres_changes', 
+        { event: '*', schema: 'public', table: 'main_stock_room_products' },
+        () => fetchTotalSalesValue(year)
+      )
+      .subscribe();
+    
+    return () => supabase.removeChannel(channel);
   }, [year]);
 
-  const fetchPharmacyInventoryValue = async (selectedYear) => {
+  const fetchTotalSalesValue = async (selectedYear) => {
     setLoading(true);
     try {
-      // Step 1: Fetch products to get selling prices (product_price)
-      const { data: products, error: prodError } = await supabase
+      const { data: sellingPrices, error: priceError } = await supabase
         .from("main_stock_room_products")
         .select("product_ID, product_price");
-      if (prodError) throw prodError;
+      
+      if (priceError) throw priceError;
 
-      const productMap = {};
-      products.forEach((p) => {
-        productMap[p.product_ID] = Number(p.product_price ?? 0);
+      const priceMap = {};
+      sellingPrices.forEach((p) => {
+        priceMap[p.product_ID] = Number(p.product_price ?? 0);
       });
 
-      // Step 2: Fetch all pharmacy items (admin_confirmed = true, status = pharmacy_stock)
       const { data: pharmacyItems, error: pharmacyError } = await supabase
-        .from("pharmacy_waiting")
-        .select("product_id, quantity, created_at, status")
-        .eq("admin_confirmed", true)
-        .eq("status", "pharmacy_stock");
-
+        .from("products")
+        .select("product_ID, product_quantity");
+      
       if (pharmacyError) throw pharmacyError;
 
-      // Step 3: Calculate total current value
-      let total = 0;
-      const monthlyTotals = Array(12).fill(0);
+      const { data: stockRoomItems, error: stockRoomError } = await supabase
+        .from("main_stock_room_products")
+        .select("product_ID, product_quantity");
       
+      if (stockRoomError) throw stockRoomError;
+
+      let pharmacySalesValue = 0;
+      let mainStockRoomSalesValue = 0;
+      let totalItems = 0;
+
       pharmacyItems.forEach((item) => {
-        const sellPrice = productMap[item.product_id] ?? 0;
-        const qty = Number(item.quantity ?? 0);
-        const itemValue = sellPrice * qty;
-        
-        total += itemValue;
-        
-        // Track monthly data for the selected year
-        if (item.created_at) {
-          const itemDate = new Date(item.created_at);
-          if (itemDate.getFullYear() === selectedYear) {
-            const month = itemDate.getMonth(); // 0-11
-            monthlyTotals[month] += itemValue;
-          }
-        }
+        const sellPrice = priceMap[item.product_ID] ?? 0;
+        const qty = Number(item.product_quantity ?? 0);
+        pharmacySalesValue += sellPrice * qty;
+        totalItems += qty;
       });
 
-      setTotalValue(total);
-      setMonthlyData(monthlyTotals);
+      stockRoomItems.forEach((item) => {
+        const sellPrice = priceMap[item.product_ID] ?? 0;
+        const qty = Number(item.product_quantity ?? 0);
+        mainStockRoomSalesValue += sellPrice * qty;
+        totalItems += qty;
+      });
+
+      const totalSalesValue = pharmacySalesValue + mainStockRoomSalesValue;
+
+      setSalesData({
+        pharmacy: pharmacySalesValue,
+        mainStockRoom: mainStockRoomSalesValue,
+        total: totalSalesValue,
+        itemCount: totalItems
+      });
+
     } catch (err) {
-      console.error("Error fetching pharmacy inventory value:", err);
-      setTotalValue(0);
-      setMonthlyData([]);
+      console.error("Error fetching total sales value:", err);
+      setSalesData({
+        pharmacy: 0,
+        mainStockRoom: 0,
+        total: 0,
+        itemCount: 0
+      });
     } finally {
       setLoading(false);
     }
   };
 
-  const monthNames = [
-    "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
-  ];
-
-  const getMonthColor = (value) => {
-    const maxValue = Math.max(...monthlyData);
-    if (maxValue === 0) return "#e0e0e0";
+  const formatCurrency = (value) => {
+    if (value === 0) return "₱0.00";
     
-    const percentage = (value / maxValue) * 100;
-    if (percentage > 75) return "#28a745"; // Dark green
-    if (percentage > 50) return "#20c997"; // Medium green
-    if (percentage > 25) return "#0dcaf0"; // Light blue
-    return "#f8f9fa"; // Very light
+    if (value >= 1000000) {
+      return `₱${value.toLocaleString("en-PH", { 
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0
+      })}`;
+    } else if (value >= 1000) {
+      return `₱${value.toLocaleString("en-PH", { 
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0
+      })}`;
+    } else {
+      return `₱${value.toLocaleString("en-PH", { 
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+      })}`;
+    }
+  };
+
+  const formatCompactCurrency = (value) => {
+    if (value === 0) return "₱0";
+    
+    if (value >= 1000000) {
+      return `₱${(value / 1000000).toFixed(1)}M`;
+    } else if (value >= 1000) {
+      return `₱${(value / 1000).toFixed(1)}K`;
+    } else {
+      return `₱${value.toFixed(2)}`;
+    }
   };
 
   return (
-    <Container className="bg-white rounded p-3 m-4 shadow-sm" style={{height:"120px"}}>
-      <div className="d-flex justify-content-between align-items-center">
-        <div className="d-flex align-items-center gap-2">
-          <FaChartLine size={24} className="text-success me-2" />
-          <h6 className="mb-0">Pharmacy Inventory Value</h6>
+    <Container className="bg-white rounded p-3 m-3 m-md-4 shadow-sm" style={{ minHeight: "180px" }}>
+      {/* Header Row - COMPLETELY FIXED */}
+      <div className="d-flex justify-content-between align-items-center mb-2 mb-md-3">
+        {/* Left: Title with Icon - ALWAYS FULL TEXT */}
+        <div className="d-flex align-items-center flex-shrink-0" style={{ maxWidth: "70%" }}>
+          <FaChartLine size={20} className="text-success me-2 flex-shrink-0" />
+          <h6 className="mb-0 fw-bold text-nowrap">
+            Good as Sold
+          </h6>
         </div>
-
-        <Button
-          variant="outlined"
-          startIcon={<CiCalendar />}
-          onClick={handleMenuOpen}
-          sx={{
-            borderColor: "#6c757d !important",
-            color: "#6c757d",
-            "&:hover": { borderColor: "#495057 !important", color: "#495057" },
-          }}
-          size="small"
-        >
-          {year}
-        </Button>
-        <Menu anchorEl={anchorEl} open={open} onClose={handleMenuClose}>
-          {yearOptions.map((y) => (
-            <MenuItem
-              key={y}
-              selected={y === year}
-              onClick={() => handleYearSelect(y)}
-            >
-              {y}
-            </MenuItem>
-          ))}
-        </Menu>
+        
+        {/* Right: Year Button - ALWAYS COMPACT */}
+        <div className="flex-shrink-0">
+          <Button
+            variant="outlined"
+            onClick={handleMenuOpen}
+            sx={{
+              borderColor: "#6c757d !important",
+              color: "#6c757d",
+              "&:hover": { borderColor: "#495057 !important", color: "#495057" },
+              minWidth: "auto",
+              padding: "4px 8px",
+              fontSize: "0.75rem"
+            }}
+            size="small"
+          >
+            <CiCalendar className="me-1" />
+            <span className="d-none d-sm-inline">{year}</span>
+            <span className="d-inline d-sm-none">{year.toString().slice(2)}</span>
+          </Button>
+          <Menu anchorEl={anchorEl} open={open} onClose={handleMenuClose}>
+            {yearOptions.map((y) => (
+              <MenuItem
+                key={y}
+                selected={y === year}
+                onClick={() => handleYearSelect(y)}
+              >
+                {y}
+              </MenuItem>
+            ))}
+          </Menu>
+        </div>
       </div>
 
       {loading ? (
-        <Spinner animation="border" size="sm" className="mt-3" />
+        <div className="d-flex justify-content-center align-items-center py-3">
+          <Spinner animation="border" size="sm" />
+        </div>
       ) : (
         <>
-          <h4 className="fw-bold text-success mt-3">
-            ₱{totalValue.toLocaleString("en-PH", { minimumFractionDigits: 2 })}
-          </h4>
+          <div className="mb-2 mb-md-3">
+            <h4 className="fw-bold text-success mb-0" style={{ 
+              fontSize: "clamp(1.25rem, 3vw, 1.75rem)",
+              lineHeight: 1.2 
+            }}>
+              <span className="d-none d-md-inline">
+                {formatCurrency(salesData.total)}
+              </span>
+              <span className="d-inline d-md-none">
+                {formatCompactCurrency(salesData.total)}
+              </span>
+            </h4>
+          </div>
           
-          {/* Monthly breakdown for selected year */}
-          <div className="mt-3">
-           
-            <div className="d-flex flex-wrap gap-2">
-             
+          <Row className="g-2 mb-2">
+            <Col xs={6}>
+              <div className="d-flex align-items-center mb-1">
+                <FaShoppingCart size={14} className="text-primary me-1 flex-shrink-0" />
+                <small className="text-muted text-nowrap">Pharmacy:</small>
+              </div>
+              <div className="fw-bold text-nowrap" style={{ 
+                fontSize: "clamp(0.75rem, 2vw, 0.9rem)" 
+              }}>
+                <span className="d-none d-sm-inline">
+                  {formatCurrency(salesData.pharmacy)}
+                </span>
+                <span className="d-inline d-sm-none">
+                  {formatCompactCurrency(salesData.pharmacy)}
+                </span>
+              </div>
+            </Col>
+            <Col xs={6}>
+              <div className="d-flex align-items-center mb-1">
+                <FaBoxOpen size={14} className="text-dark me-1 flex-shrink-0" />
+                <small className="text-muted text-nowrap">Main Stock:</small>
+              </div>
+              <div className="fw-bold text-nowrap" style={{ 
+                fontSize: "clamp(0.75rem, 2vw, 0.9rem)" 
+              }}>
+                <span className="d-none d-sm-inline">
+                  {formatCurrency(salesData.mainStockRoom)}
+                </span>
+                <span className="d-inline d-sm-none">
+                  {formatCompactCurrency(salesData.mainStockRoom)}
+                </span>
+              </div>
+            </Col>
+          </Row>
+          
+          <div className="pt-2 border-top">
+            <div className="d-flex justify-content-between align-items-center">
+              <small className="text-muted text-nowrap">
+                Sellable Items: 
+              </small>
+              <Badge bg="success" pill>
+                {salesData.itemCount.toLocaleString()}
+              </Badge>
             </div>
+            {salesData.total > 0 && salesData.itemCount > 0 && (
+              <div className="text-muted text-nowrap" style={{ fontSize: "0.7rem" }}>
+                Avg. Value: {formatCurrency(salesData.total / salesData.itemCount)}
+              </div>
+            )}
           </div>
         </>
       )}

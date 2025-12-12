@@ -18,7 +18,13 @@ const LowStocks = () => {
         // 1️⃣ Fetch pharmacy low stocks (from products table)
         const { data: pharmacyData, error: pharmacyError } = await supabase
           .from("products")
-          .select("product_ID, product_name, product_quantity, product_img, source")
+          .select(`
+            product_ID,
+            product_name,
+            product_quantity,
+            product_expiry,
+            product_img
+          `)
           .lt("product_quantity", 20)
           .order("product_quantity", { ascending: true });
 
@@ -27,7 +33,13 @@ const LowStocks = () => {
         // 2️⃣ Fetch main stock room low stocks (from main_stock_room_products table)
         const { data: stockRoomData, error: stockRoomError } = await supabase
           .from("main_stock_room_products")
-          .select("product_ID, product_name, product_quantity, product_img, source")
+          .select(`
+            product_ID,
+            product_name,
+            product_quantity,
+            product_expiry,
+            product_img
+          `)
           .lt("product_quantity", 20)
           .order("product_quantity", { ascending: true });
 
@@ -49,7 +61,7 @@ const LowStocks = () => {
           return { 
             ...p, 
             imgUrl,
-            source: "pharmacy"  // Explicitly set source
+            source: "pharmacy"
           };
         });
 
@@ -69,7 +81,7 @@ const LowStocks = () => {
           return { 
             ...p, 
             imgUrl,
-            source: "stock_room"  // Explicitly set source
+            source: "stock_room"
           };
         });
 
@@ -138,7 +150,7 @@ const LowStocks = () => {
           const isCritical = item.product_quantity <= 5 && item.product_quantity > 0;
           
           // Determine badge color based on stock level
-          let badgeColor = "warning"; // Default for low stock (6-19)
+          let badgeColor = "warning";
           let badgeText = "Low";
           
           if (isOutOfStock) {
@@ -155,25 +167,65 @@ const LowStocks = () => {
               className="d-flex align-items-center justify-content-between my-2 w-100 px-2 border-top py-1"
             >
               {/* Left: Image + Info */}
-              <div className="d-flex align-items-center mt-1">
-                <Image
-                  src={item.imgUrl}
-                  style={{ width: 50, height: 50, objectFit: "cover" }}
-                  rounded
-                  onError={(e) => (e.currentTarget.src = "/fallback.png")}
-                />
-                <div className="ms-2">
-                  <div className="fw-bold">
+              <div className="d-flex align-items-center mt-1" style={{ minWidth: 0, flex: 1 }}>
+                {/* Responsive Image Container */}
+                <div 
+                  className="flex-shrink-0"
+                  style={{ 
+                    width: '45px', 
+                    height: '45px',
+                    position: 'relative'
+                  }}
+                >
+                  <Image
+                    src={item.imgUrl}
+                    style={{ 
+                      width: '100%',
+                      height: '100%',
+                      objectFit: 'cover',
+                      position: 'absolute',
+                      top: 0,
+                      left: 0
+                    }}
+                    rounded
+                    onError={(e) => (e.currentTarget.src = "/fallback.png")}
+                  />
+                </div>
+                
+                {/* Text Content - responsive */}
+                <div className="ms-2" style={{ minWidth: 0, flex: 1 }}>
+                  <div 
+                    className="fw-bold text-truncate" 
+                    style={{ 
+                      fontSize: '0.85rem',
+                      lineHeight: '1.2'
+                    }}
+                    title={item.product_name}
+                  >
                     {idx + 1}. {item.product_name}
-                    <small className="text-muted ms-1" style={{ fontSize: "0.7rem" }}>
+                    <small className="text-muted ms-1" style={{ fontSize: "0.65rem" }}>
                       ({item.source === "pharmacy" ? "P" : "S"})
                     </small>
                   </div>
-                  <small className="text-muted">
-                    Remaining: {item.product_quantity} units
-                  </small>
+                  <div 
+                    className="text-muted"
+                    style={{ fontSize: "0.75rem" }}
+                  >
+                    Remaining: <strong>{item.product_quantity}</strong> units
+                  </div>
+                  {item.source === "pharmacy" && (
+                    <div 
+                      className="text-muted"
+                      style={{ fontSize: "0.65rem" }}
+                    >
+                      Pharmacy Item
+                    </div>
+                  )}
                   {isCritical && (
-                    <div className="text-danger" style={{ fontSize: "0.7rem" }}>
+                    <div 
+                      className="text-danger"
+                      style={{ fontSize: "0.7rem" }}
+                    >
                       ⚠️ Critical level
                     </div>
                   )}
@@ -181,12 +233,19 @@ const LowStocks = () => {
               </div>
 
               {/* Right: Badge with source indicator */}
-              <div className="d-flex flex-column align-items-end">
-                <Badge bg={badgeColor} pill>
+              <div className="d-flex flex-column align-items-end flex-shrink-0 ms-2">
+                <Badge 
+                  bg={badgeColor} 
+                  pill
+                  style={{ fontSize: "0.7rem" }}
+                >
                   {badgeText}
                 </Badge>
                 {/* Small source indicator */}
-                <small className="text-muted mt-1" style={{ fontSize: "0.65rem" }}>
+                <small 
+                  className="text-muted mt-1" 
+                  style={{ fontSize: "0.65rem", whiteSpace: 'nowrap' }}
+                >
                   {item.source === "pharmacy" ? "Pharmacy" : "Stock Room"}
                 </small>
               </div>
@@ -199,11 +258,11 @@ const LowStocks = () => {
       {allItems.length > 0 && (
         <div className="border-top pt-2 px-2">
           <div className="d-flex justify-content-between align-items-center">
-            <small className="text-muted">
-              <Badge bg="danger" pill className="me-1">Critical</Badge> ≤5 units
+            <small className="text-muted" style={{ fontSize: "0.75rem" }}>
+              <Badge bg="danger" pill className="me-1" style={{ fontSize: "0.65rem" }}>Critical</Badge> ≤5 units
             </small>
-            <small className="text-muted">
-              <Badge bg="warning" pill className="me-1">Low</Badge> 6-19 units
+            <small className="text-muted" style={{ fontSize: "0.75rem" }}>
+              <Badge bg="warning" pill className="me-1" style={{ fontSize: "0.65rem" }}>Low</Badge> 6-19 units
             </small>
           </div>
         </div>

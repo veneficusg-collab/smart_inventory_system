@@ -6,7 +6,7 @@ import { FaBoxOpen } from "react-icons/fa";
 const BUCKET = "Smart-Inventory-System-(Pet Matters)";
 
 const AddedStocks = () => {
-  const [items, setItems] = useState([]); // [{ name, qty, img, action, source }]
+  const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [totalAddedToday, setTotalAddedToday] = useState(0);
 
@@ -22,80 +22,77 @@ const AddedStocks = () => {
         const endOfDay = new Date(now);
         endOfDay.setHours(23, 59, 59, 999);
 
-        // 1) Logs: today's Restock or Restore entries from both sources
-        // Note: This assumes logs table records actions for both pharmacy and stock room
-        const { data: logs, error: logErr } = await supabase
-          .from("logs")
-          .select("product_name, product_quantity, product_action, created_at")
-          .or("product_action.eq.Restock,product_action.eq.Restore,product_action.eq.Restock - Main Stock Room (New Batch),product_action.eq.Main Stock Room Add Product")
+        // 1️⃣ Fetch pharmacy stock additions (from products table - items added today)
+        const { data: pharmacyData, error: pharmacyError } = await supabase
+          .from("products")
+          .select("product_ID, product_name, product_quantity, product_img, created_at")
           .gte("created_at", startOfDay.toISOString())
           .lte("created_at", endOfDay.toISOString())
           .order("created_at", { ascending: false });
 
-        if (logErr) throw logErr;
+        if (pharmacyError) throw pharmacyError;
 
-        // 2) Get product images from BOTH tables
-        const { data: pharmacyProducts } = await supabase
-          .from("products")
-          .select("product_name, product_img");
-
-        const { data: stockRoomProducts } = await supabase
+        // 2️⃣ Fetch main stock room additions (from main_stock_room_products table - items added today)
+        const { data: stockRoomData, error: stockRoomError } = await supabase
           .from("main_stock_room_products")
-          .select("product_name, product_img");
+          .select("product_ID, product_name, product_quantity, product_img, created_at")
+          .gte("created_at", startOfDay.toISOString())
+          .lte("created_at", endOfDay.toISOString())
+          .order("created_at", { ascending: false });
 
-        // Combine and create image map
-        const allProducts = [...(pharmacyProducts || []), ...(stockRoomProducts || [])];
-        const imgMap = {};
-        
-        allProducts.forEach((p) => {
-          const key = p.product_img;
-          if (!key) {
-            imgMap[p.product_name] = ""; // mark as missing
-          } else if (String(key).startsWith("http")) {
-            imgMap[p.product_name] = key;
-          } else {
-            const { data: pub } = supabase
-              .storage
-              .from(BUCKET)
-              .getPublicUrl(`products/${key}`);
-            imgMap[p.product_name] = pub?.publicUrl || "";
+        if (stockRoomError) throw stockRoomError;
+
+        // Process pharmacy items
+        const processedPharmacy = (pharmacyData || []).map((item) => {
+          let imgUrl = "";
+          if (item.product_img) {
+            if (String(item.product_img).startsWith("http")) {
+              imgUrl = item.product_img;
+            } else {
+              const { data: pub } = supabase.storage
+                .from(BUCKET)
+                .getPublicUrl(`products/${item.product_img}`);
+              imgUrl = pub?.publicUrl || "";
+            }
           }
+          return {
+            ...item,
+            imgUrl,
+            source: "pharmacy",
+            action: "New Product (Pharmacy)",
+            timestamp: new Date(item.created_at)
+          };
         });
 
-        // 3) Format logs and add source information
-        const formatted = (logs || [])
-          .map((l) => {
-            // Determine source based on action
-            let source = "pharmacy";
-            let actionType = l.product_action;
-            
-            // Check if it's a stock room action
-            if (l.product_action.includes("Main Stock Room")) {
-              source = "stock_room";
-              // Simplify action name for display
-              if (l.product_action === "Restock - Main Stock Room (New Batch)") {
-                actionType = "Restock (Stock Room)";
-              } else if (l.product_action === "Main Stock Room Add Product") {
-                actionType = "New Product (Stock Room)";
-              }
-            } else if (l.product_action === "Restore") {
-              actionType = "Restore (Pharmacy)";
+        // Process stock room items
+        const processedStockRoom = (stockRoomData || []).map((item) => {
+          let imgUrl = "";
+          if (item.product_img) {
+            if (String(item.product_img).startsWith("http")) {
+              imgUrl = item.product_img;
+            } else {
+              const { data: pub } = supabase.storage
+                .from(BUCKET)
+                .getPublicUrl(`products/${item.product_img}`);
+              imgUrl = pub?.publicUrl || "";
             }
+          }
+          return {
+            ...item,
+            imgUrl,
+            source: "stock_room",
+            action: "New Product (Stock Room)",
+            timestamp: new Date(item.created_at)
+          };
+        });
 
-            return {
-              name: l.product_name,
-              qty: l.product_quantity,
-              action: actionType,
-              originalAction: l.product_action,
-              img: imgMap[l.product_name] || "",
-              source: source,
-              timestamp: new Date(l.created_at)
-            };
-          })
-          .slice(0, 6); // Show up to 6 items (3 from each)
+        // Combine and sort by timestamp (newest first)
+        const allItems = [...processedPharmacy, ...processedStockRoom]
+          .sort((a, b) => b.timestamp - a.timestamp)
+          .slice(0, 6); // Show up to 6 items
 
-        setItems(formatted);
-        setTotalAddedToday(formatted.length);
+        setItems(allItems);
+        setTotalAddedToday(allItems.length);
 
       } catch (err) {
         console.error("Error fetching added stocks:", err);
@@ -160,88 +157,143 @@ const AddedStocks = () => {
       ) : (
         items.map((item, idx) => (
           <div
-            key={`${item.source}-${item.name}-${idx}`}
+            key={`${item.source}-${item.product_ID}-${idx}`}
             className="d-flex align-items-center justify-content-between my-2 w-100 px-2 border-top py-1"
           >
             {/* Left: Image/Icon + Info */}
-            <div className="d-flex align-items-center mt-1">
-              {item.img ? (
-                <Image
-                  src={item.img}
-                  style={{ width: 50, height: 50, objectFit: "cover" }}
-                  rounded
-                  onError={(e) => {
-                    // Hide broken image and show the icon box
-                    e.currentTarget.style.display = "none";
-                    const sib = e.currentTarget.nextElementSibling;
-                    if (sib) sib.style.display = "flex";
-                  }}
-                />
-              ) : null}
-
-              {/* Icon fallback box (hidden if image rendered successfully) */}
-              <div
-                style={{
-                  width: 50,
-                  height: 50,
-                  borderRadius: 6,
-                  background: "#f1f3f5",
-                  border: "1px dashed #dee2e6",
-                  display: item.img ? "none" : "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                <FaBoxOpen size={20} color="#868e96" />
+            <div className="d-flex align-items-center mt-1" style={{ minWidth: 0, flex: 1 }}>
+              {/* Image Container */}
+              <div className="position-relative" style={{ width: '45px', height: '45px', flexShrink: 0 }}>
+                {item.imgUrl ? (
+                  <>
+                    <Image
+                      src={item.imgUrl}
+                      style={{
+                        width: '100%',
+                        height: '100%',
+                        objectFit: 'cover',
+                        position: 'absolute',
+                        top: 0,
+                        left: 0
+                      }}
+                      rounded
+                      onError={(e) => {
+                        // Hide broken image and show the icon box
+                        e.currentTarget.style.display = "none";
+                        const iconBox = e.currentTarget.parentElement?.querySelector('.icon-fallback');
+                        if (iconBox) iconBox.style.display = "flex";
+                      }}
+                    />
+                    {/* Icon fallback (hidden initially) */}
+                    <div
+                      className="icon-fallback"
+                      style={{
+                        width: '100%',
+                        height: '100%',
+                        borderRadius: 6,
+                        background: "#f1f3f5",
+                        border: "1px dashed #dee2e6",
+                        display: 'none',
+                        alignItems: "center",
+                        justifyContent: "center",
+                        position: 'absolute',
+                        top: 0,
+                        left: 0
+                      }}
+                    >
+                      <FaBoxOpen size={18} color="#868e96" />
+                    </div>
+                  </>
+                ) : (
+                  <div
+                    style={{
+                      width: '100%',
+                      height: '100%',
+                      borderRadius: 6,
+                      background: "#f1f3f5",
+                      border: "1px dashed #dee2e6",
+                      display: 'flex',
+                      alignItems: "center",
+                      justifyContent: "center"
+                    }}
+                  >
+                    <FaBoxOpen size={20} color="#868e96" />
+                  </div>
+                )}
               </div>
-
-              <div className="ms-2">
-                <div className="fw-bold">
-                  {idx + 1}. {item.name}
-                  <small className="text-muted ms-1" style={{ fontSize: "0.7rem" }}>
+              
+              {/* Text Content */}
+              <div className="ms-2" style={{ minWidth: 0, flex: 1 }}>
+                <div 
+                  className="fw-bold text-truncate" 
+                  style={{ 
+                    fontSize: '0.85rem',
+                    lineHeight: '1.2'
+                  }}
+                  title={item.product_name}
+                >
+                  {idx + 1}. {item.product_name}
+                  <small className="text-muted ms-1" style={{ fontSize: "0.65rem" }}>
                     ({item.source === "pharmacy" ? "P" : "S"})
                   </small>
                 </div>
-                <small className="text-muted">
-                  Added: {item.qty} units
-                </small>
+                <div 
+                  className="text-muted"
+                  style={{ fontSize: "0.75rem" }}
+                >
+                  Added: <strong>{item.product_quantity}</strong> units
+                </div>
                 <div>
-                  <small className={item.source === "pharmacy" ? "text-primary" : "text-dark"}>
+                  <small 
+                    className={item.source === "pharmacy" ? "text-primary" : "text-dark"}
+                    style={{ fontSize: "0.7rem" }}
+                  >
                     {item.action}
                   </small>
                 </div>
-                <small className="text-muted" style={{ fontSize: "0.7rem" }}>
-                  {item.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                </small>
+                <div className="text-muted" style={{ fontSize: "0.65rem" }}>
+                  {item.timestamp.toLocaleTimeString([], { 
+                    hour: '2-digit', 
+                    minute: '2-digit',
+                    hour12: true 
+                  })}
+                </div>
               </div>
             </div>
 
             {/* Right: Source indicator badge */}
-            <Badge 
-              bg={item.source === "pharmacy" ? "primary" : "dark"} 
-              pill
-              style={{ fontSize: "0.7rem" }}
-            >
-              {item.source === "pharmacy" ? "Pharmacy" : "Stock Room"}
-            </Badge>
+            <div className="d-flex flex-column align-items-end flex-shrink-0 ms-2">
+              <Badge 
+                bg={item.source === "pharmacy" ? "primary" : "dark"} 
+                pill
+                style={{ fontSize: "0.7rem" }}
+              >
+                {item.source === "pharmacy" ? "Pharmacy" : "Stock Room"}
+              </Badge>
+              <small 
+                className="text-muted mt-1" 
+                style={{ fontSize: "0.65rem", whiteSpace: 'nowrap' }}
+              >
+                {item.timestamp.toLocaleDateString()}
+              </small>
+            </div>
           </div>
         ))
       )}
       
       {/* Legend at the bottom */}
-      {/* {items.length > 0 && (
+      {items.length > 0 && (
         <div className="border-top pt-2 px-2">
-          <small className="text-muted d-block mb-1">
-            Actions: <Badge bg="primary" pill className="me-1">Restock</Badge>
-            <Badge bg="success" pill className="me-1">Restore</Badge>
-            <Badge bg="dark" pill>Stock Room Add</Badge>
-          </small>
-          <small className="text-muted d-block">
-            Source: <Badge bg="primary" pill className="me-1">P = Pharmacy</Badge>
-            <Badge bg="dark" pill>S = Stock Room</Badge>
-          </small>
+          <div className="d-flex justify-content-between align-items-center">
+            <small className="text-muted" style={{ fontSize: "0.75rem" }}>
+              <Badge bg="primary" pill className="me-1" style={{ fontSize: "0.65rem" }}>P</Badge> Pharmacy
+            </small>
+            <small className="text-muted" style={{ fontSize: "0.75rem" }}>
+              <Badge bg="dark" pill className="me-1" style={{ fontSize: "0.65rem" }}>S</Badge> Stock Room
+            </small>
+          </div>
         </div>
-      )} */}
+      )}
     </Container>
   );
 };
