@@ -308,8 +308,9 @@ const MainProducts = ({ setRender, setProduct, setID, staffRole }) => {
           </InputGroup>
 
           {/* Action buttons */}
-          {(staffRole === "admin" || staffRole === "super_admin") && (
+          {(staffRole === "admin" || staffRole === "super_admin" || staffRole === "secretary") && (
             <div className="d-flex gap-2 ms-auto">
+              {(staffRole === "admin" || staffRole === "super_admin") && (
               <Button
                 className="mx-1 mt-3"
                 size="sm"
@@ -317,6 +318,7 @@ const MainProducts = ({ setRender, setProduct, setID, staffRole }) => {
               >
                 Add Product
               </Button>
+              )}
               <Button
                 className="mx-1 mt-3"
                 size="sm"

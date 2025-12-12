@@ -43,26 +43,50 @@ const ConfirmedRetrievals = ({ staffId = "", staffName = "", limit = 50 }) => {
     return { start: null, end: null };
   };
 
-  // Function to get status badge color and text - SAME AS AdminRetrievalLogs
+  // Function to get status badge color and text - ENHANCED with Pharmacy Secretary specific statuses
   const getStatusBadge = (status) => {
     if (!status) return <Badge bg="secondary">-</Badge>;
     
     const statusLower = status.toLowerCase();
     
-    if (statusLower.includes('confirmed')) {
-      return <Badge bg="success">{status}</Badge>;
+    // First check for pharmacy-specific statuses
+    if (statusLower === "pharmacy_stock" || statusLower === "for stock" || statusLower === "for pharmacy stock") {
+      return <Badge bg="primary">{status === 'pharmacy_stock' ? 'For Stock' : status}</Badge>;
+    }
+    
+    if (statusLower.includes('returned')) {
+      return <Badge bg="info">Returned</Badge>;
+    }
+    
+    if (statusLower.includes('confirmed') || statusLower.includes('completed') || statusLower.includes('approved')) {
+      return <Badge bg="success">Confirmed</Badge>;
     }
     
     if (statusLower.includes('declined') || statusLower.includes('rejected')) {
-      return <Badge bg="danger">{status}</Badge>;
+      return <Badge bg="danger">Declined</Badge>;
     }
     
-    if (statusLower.includes('pending')) {
-      return <Badge bg="warning" text="dark">{status}</Badge>;
+    if (statusLower.includes('pending') || statusLower.includes('awaiting') || statusLower === 'pending_admin') {
+      return <Badge bg="warning" text="dark">Pending</Badge>;
     }
     
     // Default for other statuses
     return <Badge bg="secondary">{status}</Badge>;
+  };
+
+  // Helper function to get status color for sorting/filtering
+  const getStatusColor = (status) => {
+    if (!status) return "secondary";
+    
+    const statusLower = status.toLowerCase();
+    
+    if (statusLower === "pharmacy_stock" || statusLower === "for stock") return "primary";
+    if (statusLower.includes('returned')) return "info";
+    if (statusLower.includes('confirmed') || statusLower.includes('completed')) return "success";
+    if (statusLower.includes('declined') || statusLower.includes('rejected')) return "danger";
+    if (statusLower.includes('pending')) return "warning";
+    
+    return "secondary";
   };
 
   const fetchConfirmedRetrievals = async (l = limit, p = period) => {
@@ -136,6 +160,7 @@ const ConfirmedRetrievals = ({ staffId = "", staffName = "", limit = 50 }) => {
             <th>Product</th>
             <th>Qty</th>
             <th>Unit</th>
+            <th>Status</th>
           </tr>
         </thead>
         <tbody>
@@ -145,12 +170,34 @@ const ConfirmedRetrievals = ({ staffId = "", staffName = "", limit = 50 }) => {
               <td>{it.product_name}</td>
               <td>{it.qty ?? it.quantity ?? "-"}</td>
               <td>{it.unit ?? "-"}</td>
+              <td>{getStatusBadge(it.status)}</td>
             </tr>
           ))}
         </tbody>
       </Table>
     );
   };
+
+  // Status filter options
+  const statusFilters = [
+    { label: "All Status", value: "all" },
+    { label: "For Stock", value: "pharmacy_stock" },
+    { label: "Returned", value: "returned" },
+    { label: "Confirmed", value: "confirmed" },
+    { label: "Pending", value: "pending" },
+  ];
+
+  const [statusFilter, setStatusFilter] = useState("all");
+
+  // Filter rows by status
+  const filteredRows = rows.filter(row => {
+    if (statusFilter === "all") return true;
+    if (statusFilter === "pharmacy_stock") return row.status === "pharmacy_stock";
+    if (statusFilter === "returned") return row.status && row.status.toLowerCase().includes("returned");
+    if (statusFilter === "confirmed") return row.status && (row.status.toLowerCase().includes("confirmed") || row.status.toLowerCase().includes("completed"));
+    if (statusFilter === "pending") return row.status && row.status.toLowerCase().includes("pending");
+    return true;
+  });
 
   return (
     <>
@@ -162,6 +209,23 @@ const ConfirmedRetrievals = ({ staffId = "", staffName = "", limit = 50 }) => {
         <div className="mb-3 d-flex justify-content-between align-items-center">
           <div><strong>Confirmed Retrievals</strong></div>
           <div className="d-flex align-items-center gap-2">
+            {/* Status Filter */}
+            <div className="me-2">
+              <select 
+                className="form-select form-select-sm" 
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                style={{ width: '120px' }}
+              >
+                {statusFilters.map(filter => (
+                  <option key={filter.value} value={filter.value}>
+                    {filter.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            
+            {/* Period Filter */}
             <div style={{ display: "flex", gap: 6 }}>
               <Button
                 size="sm"
@@ -204,17 +268,6 @@ const ConfirmedRetrievals = ({ staffId = "", staffName = "", limit = 50 }) => {
           </div>
         </div>
 
-        {/* Status Legend */}
-        {/* <div className="mb-3">
-          <small className="text-muted">
-            <strong>Status Legend:</strong>{" "}
-            <Badge bg="success" className="ms-2 me-1">Confirmed</Badge>
-            <Badge bg="danger" className="mx-1">Declined/Rejected</Badge>
-            <Badge bg="warning" text="dark" className="mx-1">Pending</Badge>
-            <Badge bg="secondary" className="mx-1">Other</Badge>
-          </small>
-        </div> */}
-
         {error && <Alert variant="danger">{error}</Alert>}
         {loading ? (
           <div className="p-3"><Spinner animation="border" /> Loading...</div>
@@ -230,12 +283,12 @@ const ConfirmedRetrievals = ({ staffId = "", staffName = "", limit = 50 }) => {
               </tr>
             </thead>
             <tbody>
-              {rows.length === 0 && (
+              {filteredRows.length === 0 && (
                 <tr>
                   <td colSpan="5" className="text-center text-muted">No confirmed retrievals found</td>
                 </tr>
               )}
-              {rows.map((r) => (
+              {filteredRows.map((r) => (
                 <tr key={r.id} style={{ cursor: "pointer" }} onClick={() => handleRowClick(r)}>
                   <td style={{ fontSize: 12 }}>{r.id}</td>
                   <td>{r.staff_name || r.staff_id}</td>

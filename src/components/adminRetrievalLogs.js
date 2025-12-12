@@ -7,7 +7,7 @@ const AdminRetrievalLogs = () => {
   const [retrievalLogs, setRetrievalLogs] = useState([]);
   const [loading, setLoading] = useState(false);
   const [period, setPeriod] = useState("daily");
-  
+
   // Report preview / printing state
   const [reportRows, setReportRows] = useState([]);
   const [showReportModal, setShowReportModal] = useState(false);
@@ -85,26 +85,30 @@ const AdminRetrievalLogs = () => {
   // Function to get status badge color and text - UPDATED TEXT
   const getStatusBadge = (status) => {
     if (!status) return <Badge bg="secondary">-</Badge>;
-    
+
     const statusLower = status.toLowerCase();
-    
-    if (statusLower.includes('confirmed')) {
+
+    if (statusLower.includes("confirmed")) {
       return <Badge bg="success">Admin Confirmed</Badge>;
     }
-    
-    if (statusLower.includes('declined') || statusLower.includes('rejected')) {
+
+    if (statusLower.includes("declined") || statusLower.includes("rejected")) {
       return <Badge bg="danger">Admin Declined</Badge>;
     }
-    
-    if (statusLower.includes('pending')) {
-      return <Badge bg="warning" text="dark">Admin Pending</Badge>;
+
+    if (statusLower.includes("pending")) {
+      return (
+        <Badge bg="warning" text="dark">
+          Admin Pending
+        </Badge>
+      );
     }
-    
+
     // For other statuses, keep the original text
     return <Badge bg="secondary">{status}</Badge>;
   };
 
-  // Generate report for confirmed retrievals
+  // Generate report for confirmed retrievals (for modal)
   const generateReport = async (range = "daily") => {
     setReportLoading(true);
     setReportRange(range);
@@ -209,20 +213,45 @@ const AdminRetrievalLogs = () => {
     }
   };
 
-  // Print the current reportRows
-  const printReport = () => {
+  // Print the current retrievalLogs data - SAME DATA AS LOGS TABLE
+  const printRetrievalLogs = () => {
     const rangeLabel =
-      reportRange === "weekly"
+      period === "weekly"
         ? "Weekly"
-        : reportRange === "monthly"
+        : period === "monthly"
         ? "Monthly"
+        : period === "all"
+        ? "All"
         : "Daily";
-    const title = `${rangeLabel} Confirmed Retrievals - ${new Date().toLocaleDateString()}`;
+    
+    const title = `${rangeLabel} Retrieval Logs - ${new Date().toLocaleDateString()}`;
     const escapeHtml = (s) =>
       String(s ?? "")
         .replace(/&/g, "&amp;")
         .replace(/</g, "&lt;")
         .replace(/>/g, "&gt;");
+
+    // Function to get status badge HTML for printing - SAME AS getStatusBadge
+    const getStatusBadgeHtml = (status) => {
+      if (!status) return '<span class="badge badge-secondary">-</span>';
+      
+      const statusLower = status.toLowerCase();
+      let badgeClass = "badge-secondary";
+      let badgeText = status;
+      
+      if (statusLower.includes('confirmed')) {
+        badgeClass = "badge-success";
+        badgeText = "Admin Confirmed";
+      } else if (statusLower.includes('declined') || statusLower.includes('rejected')) {
+        badgeClass = "badge-danger";
+        badgeText = "Admin Declined";
+      } else if (statusLower.includes('pending')) {
+        badgeClass = "badge-warning";
+        badgeText = "Admin Pending";
+      }
+      
+      return `<span class="badge ${badgeClass}">${escapeHtml(badgeText)}</span>`;
+    };
 
     let html = `<!DOCTYPE html>
 <html>
@@ -290,8 +319,41 @@ const AdminRetrievalLogs = () => {
       margin-top: 20px;
       text-align: center;
     }
+    /* Badge styles for printing - SAME COLORS AS UI */
+    .badge {
+      display: inline-block;
+      padding: 3px 8px;
+      font-size: 10px;
+      font-weight: 600;
+      line-height: 1;
+      text-align: center;
+      white-space: nowrap;
+      vertical-align: baseline;
+      border-radius: 4px;
+    }
+    .badge-success {
+      background-color: #198754 !important;
+      color: white !important;
+    }
+    .badge-danger {
+      background-color: #dc3545 !important;
+      color: white !important;
+    }
+    .badge-warning {
+      background-color: #ffc107 !important;
+      color: #000 !important;
+    }
+    .badge-secondary {
+      background-color: #6c757d !important;
+      color: white !important;
+    }
     @media print {
       .no-print { display: none; }
+      .badge-success, .badge-danger, .badge-warning, .badge-secondary {
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+        color-adjust: exact !important;
+      }
     }
   </style>
 </head>
@@ -301,7 +363,7 @@ const AdminRetrievalLogs = () => {
       <h2 style="font-size: 16pt; margin: 8px 0;">🐾 Pet Matters</h2>
       <div style="font-size: 9pt; margin: 2px 0;">123 Main St, City</div>
       <div style="font-size: 9pt; margin: 2px 0;">Tel: 0999-999-9999</div>
-      <div style="font-size: 11pt; font-weight: bold; margin-top: 8px;">RETRIEVAL REPORT</div>
+      <div style="font-size: 11pt; font-weight: bold; margin-top: 8px;">RETRIEVAL LOGS REPORT</div>
       <div style="font-size: 9pt; margin-top: 5px;">Range: ${escapeHtml(
         rangeLabel
       )}</div>
@@ -312,75 +374,68 @@ const AdminRetrievalLogs = () => {
   </div>
 `;
 
-    if (!reportRows || reportRows.length === 0) {
-      html += `<div style="text-align:center; padding:20px; font-size:11pt;">No confirmed retrievals for this period.</div>`;
+    if (!retrievalLogs || retrievalLogs.length === 0) {
+      html += `<div style="text-align:center; padding:20px; font-size:11pt;">No retrieval logs found for this period.</div>`;
     } else {
-      let totalItems = 0;
+      let totalRetrievals = retrievalLogs.length;
 
       html += `<table>
         <thead>
           <tr>
-            <th>Ret#</th>
-            <th>Product</th>
-            <th>Qty</th>
-            <th>Status</th>
+            <th style="width: 180px">Retrieval ID</th>
             <th>Staff</th>
-            <th>Secretary</th>
+            <th>Items (Summary)</th>
+            <th style="width: 180px">Retrieved At</th>
+            <th style="width: 120px">Status</th>
           </tr>
         </thead>
         <tbody>`;
 
-      reportRows.forEach((group) => {
-        const items = group.items || [];
-        totalItems += items.length;
-        const secretary = escapeHtml(
-          group.secretary_name || group.secretary_id || "N/A"
-        );
-        const staffOfRetrieval = escapeHtml(group.staff_name || "N/A");
-
-        items.forEach((it, itemIdx) => {
-          const statusLabel =
-            it.status === "pharmacy_stock"
-              ? "Stock"
-              : it.status === "sold"
-              ? "Sold"
-              : it.status === "returned"
-              ? "Returned"
-              : it.status;
-
-          html += `<tr>`;
-
-          if (itemIdx === 0) {
-            html += `<td rowspan="${
-              items.length
-            }" style="font-weight:bold;text-align:center;">${escapeHtml(
-              group.retrieval_id
-            )}</td>`;
-          }
-
-          html += `
-            <td>${escapeHtml(it.product_name)}</td>
-            <td style="text-align:center;">${escapeHtml(
-              it.qty ?? it.quantity ?? "-"
-            )}</td>
-            <td style="text-align:center;">${escapeHtml(statusLabel)}</td>
-            `;
-
-          if (itemIdx === 0) {
-            html += `<td rowspan="${items.length}">${staffOfRetrieval}</td>`;
-          }
-
-          if (itemIdx === 0) {
-            html += `<td rowspan="${items.length}">${secretary}</td>`;
-          }
-
-          html += `</tr>`;
-        });
+      retrievalLogs.forEach((r) => {
+        // Get items summary - SAME AS renderItemsSummary
+        const itemsSummary = r.items && Array.isArray(r.items) && r.items.length > 0
+          ? r.items
+              .map((it) => `${it.product_name || it.product_id} x${it.qty}`)
+              .join(", ")
+          : "-";
+        
+        // Format date - SAME AS IN TABLE
+        const retrievedDate = r.retrieved_at_local
+          ? r.retrieved_at_local
+          : r.retrieved_at
+          ? new Date(r.retrieved_at).toLocaleString()
+          : "-";
+        
+        html += `<tr>
+          <td style="font-size: 11px">${escapeHtml(r.id || "N/A")}</td>
+          <td>${escapeHtml(r.staff_name || r.staff_id || "N/A")}</td>
+          <td style="max-width: 400px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+            ${escapeHtml(itemsSummary)}
+          </td>
+          <td>${escapeHtml(retrievedDate)}</td>
+          <td>${getStatusBadgeHtml(r.status)}</td>
+        </tr>`;
       });
 
       html += `</tbody></table>`;
 
-      html += `<div class="footer">Total Retrievals: ${reportRows.length} &nbsp; | &nbsp; Total Items: ${totalItems}</div>`;
+      // Count status types for summary
+      const confirmedCount = retrievalLogs.filter(r => r.status && r.status.toLowerCase().includes('confirmed')).length;
+      const declinedCount = retrievalLogs.filter(r => r.status && (r.status.toLowerCase().includes('declined') || r.status.toLowerCase().includes('rejected'))).length;
+      const pendingCount = retrievalLogs.filter(r => r.status && r.status.toLowerCase().includes('pending')).length;
+      const otherCount = retrievalLogs.length - confirmedCount - declinedCount - pendingCount;
+
+      html += `<div class="footer">
+        Total Retrievals: ${totalRetrievals} 
+        &nbsp; | &nbsp; 
+        <span class="badge badge-success">Admin Confirmed: ${confirmedCount}</span>
+        &nbsp; | &nbsp; 
+        <span class="badge badge-danger">Admin Declined: ${declinedCount}</span>
+        &nbsp; | &nbsp; 
+        <span class="badge badge-warning">Admin Pending: ${pendingCount}</span>
+        &nbsp; | &nbsp; 
+        <span class="badge badge-secondary">Other: ${otherCount}</span>
+      </div>`;
     }
 
     html += `<div class="no-print"><button onclick="window.print()" style="padding:10px 20px; font-size:10pt; cursor:pointer;">🖨️ Print</button><button onclick="window.close()" style="padding:10px 20px; font-size:10pt; cursor:pointer; margin-left:10px;">Close</button></div></body></html>`;
@@ -408,6 +463,13 @@ const AdminRetrievalLogs = () => {
     };
   };
 
+  // Separate print function for the modal (using reportRows)
+  const printReport = () => {
+    // This function prints the reportRows (pharmacy_waiting data)
+    // You can keep this if you still want to print that format
+    // But the main print button should use printRetrievalLogs()
+  };
+
   return (
     <>
       <Container
@@ -421,14 +483,14 @@ const AdminRetrievalLogs = () => {
           </div>
           <div className="d-flex align-items-center gap-2">
             <div style={{ display: "flex", gap: 6 }}>
+              {/* Change this button to call printRetrievalLogs instead of generateReport */}
               <Button
                 size="sm"
                 variant="primary"
-                onClick={() => generateReport(reportRange)}
-                disabled={reportLoading}
+                onClick={printRetrievalLogs}
                 className="me-2"
               >
-                {reportLoading ? "Preparing..." : "Print Retrievals"}
+                Print Retrievals
               </Button>
               <Button
                 size="sm"
@@ -479,14 +541,22 @@ const AdminRetrievalLogs = () => {
         <div className="mb-3">
           <small className="text-muted">
             <strong>Status Legend:</strong>{" "}
-            <Badge bg="success" className="ms-2 me-1">Admin Confirmed</Badge>
-            <Badge bg="danger" className="mx-1">Admin Declined</Badge>
-            <Badge bg="warning" text="dark" className="mx-1">Admin Pending</Badge>
-            <Badge bg="secondary" className="mx-1">Other</Badge>
+            <Badge bg="success" className="ms-2 me-1">
+              Admin Confirmed
+            </Badge>
+            <Badge bg="danger" className="mx-1">
+              Admin Declined
+            </Badge>
+            <Badge bg="warning" text="dark" className="mx-1">
+              Admin Pending
+            </Badge>
+            <Badge bg="secondary" className="mx-1">
+              Other
+            </Badge>
           </small>
         </div>
 
-        {/* Report preview modal */}
+        {/* Report preview modal - This shows pharmacy_waiting data */}
         <Modal
           show={showReportModal}
           onHide={() => setShowReportModal(false)}
@@ -551,7 +621,7 @@ const AdminRetrievalLogs = () => {
                   marginTop: "10px",
                 }}
               >
-                RETRIEVAL REPORT
+                CONFIRMED RETRIEVALS REPORT
               </p>
               <p style={{ fontSize: "1rem" }}>
                 Range:{" "}
@@ -755,9 +825,7 @@ const AdminRetrievalLogs = () => {
                       ? new Date(r.retrieved_at).toLocaleString()
                       : "-"}
                   </td>
-                  <td>
-                    {getStatusBadge(r.status)}
-                  </td>
+                  <td>{getStatusBadge(r.status)}</td>
                 </tr>
               ))}
           </tbody>

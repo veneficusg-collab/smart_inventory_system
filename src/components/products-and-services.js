@@ -3,6 +3,8 @@ import { Container, Spinner, Table, Button, Image, InputGroup, Form, Badge } fro
 import { useEffect, useState, useMemo } from "react";
 import { supabase } from "../supabaseClient";
 import { IoSearch } from "react-icons/io5";
+import { LuScanBarcode } from "react-icons/lu";
+import BarcodeModal from "./barcode-modal";
 
 const BUCKET = "Smart-Inventory-System-(Pet Matters)";
 
@@ -12,6 +14,7 @@ const ProductsAndServices = ({ onAddProduct, refreshTrigger }) => {
   const [imageMap, setImageMap] = useState({});
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [barcodeModalShow, setBarcodeModalShow] = useState(false);
 
   // Fetch products from both tables
   const fetchProducts = async () => {
@@ -125,10 +128,35 @@ const ProductsAndServices = ({ onAddProduct, refreshTrigger }) => {
     }
   }, [refreshTrigger]);
 
-  // 🔍 Filtered products
+  // Handle barcode scan result
+  const handleBarcodeResult = (barcode) => {
+    if (barcode) {
+      setSearch(barcode);
+      // Focus on the search field after setting barcode
+      setTimeout(() => {
+        const searchInput = document.querySelector('input[placeholder="Search..."]');
+        if (searchInput) searchInput.focus();
+      }, 100);
+    }
+    setBarcodeModalShow(false);
+  };
+
+  // 🔍 Filtered products - with barcode priority
   const filteredProducts = useMemo(() => {
     if (!search.trim()) return products;
+    
     const q = search.toLowerCase();
+    
+    // If search is a product ID (likely from barcode), prioritize exact match
+    const exactProductIdMatch = products.find(p => 
+      p.product_ID.toLowerCase() === q
+    );
+    
+    if (exactProductIdMatch) {
+      return [exactProductIdMatch];
+    }
+    
+    // Otherwise search across all fields
     return products.filter((p) =>
       [
         p.product_name,
@@ -208,146 +236,201 @@ const ProductsAndServices = ({ onAddProduct, refreshTrigger }) => {
   };
 
   return (
-    <Container className="bg-white mx-2 my-2 rounded p-3" fluid>
-      {/* Title + Search */}
-      <div className="d-flex justify-content-between align-items-center mb-3 flex-wrap">
-        <div>
-          <h5 className="fw-bold mb-2 mb-md-0">Products & Services</h5>
-          <small className="text-muted">
-            Showing total stock (Pharmacy + Main Stock Room)
-          </small>
-        </div>
-        <InputGroup style={{ maxWidth: "300px" }}>
-          <InputGroup.Text style={{ background: "none", borderRight: "none" }}>
-            <IoSearch size={18} color="gray" />
-          </InputGroup.Text>
-          <Form.Control
-            type="text"
-            placeholder="Search..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            style={{ borderLeft: "none", boxShadow: "none" }}
-            size="sm"
-          />
-        </InputGroup>
-      </div>
-
-      {/* Stock Legend */}
-      <div className="d-flex gap-3 mb-3 flex-wrap">
-        <div className="d-flex align-items-center gap-1">
-          <Badge bg="info" className="px-2 py-1">P</Badge>
-          <small>Pharmacy Stock</small>
-        </div>
-        <div className="d-flex align-items-center gap-1">
-          <Badge bg="warning" text="dark" className="px-2 py-1">S</Badge>
-          <small>Main Stock Room</small>
-        </div>
-        <div className="d-flex align-items-center gap-1">
-          <Badge bg="success" className="px-2 py-1">T</Badge>
-          <small>Total Stock</small>
-        </div>
-      </div>
-
-      {loading ? (
-        <div className="text-center p-3">
-          <Spinner animation="border" variant="primary" />
-        </div>
-      ) : filteredProducts.length > 0 ? (
-        <div style={{ maxHeight: 330, overflowY: "auto" }}>
-          <Table striped bordered hover responsive size="sm" className="align-middle">
-            <thead className="table-light" style={{ position: "sticky", top: 0, zIndex: 1 }}>
-              <tr>
-                <th>Image</th>
-                <th>Name</th>
-                <th>Category</th>
-                <th>Brand</th>
-                <th>Price (₱)</th>
-                <th>Stock</th>
-                <th>Expiry</th>
-                <th>Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredProducts.map((product) => (
-                <tr
-                  key={product.product_ID}
-                  className={product.total_quantity <= 0 ? "table-danger" : ""}
-                >
-                  <td style={{ width: "70px" }}>
-                    {imageMap[product.product_ID] ? (
-                      <Image
-                        src={imageMap[product.product_ID]}
-                        rounded
-                        style={{
-                          width: "50px",
-                          height: "50px",
-                          objectFit: "cover",
-                          border: "1px solid #ccc",
-                        }}
-                        onError={(e) => (e.currentTarget.style.display = "none")}
-                      />
-                    ) : (
-                      <div
-                        style={{
-                          width: 50,
-                          height: 50,
-                          borderRadius: 6,
-                          background: "#f1f3f5",
-                          border: "1px dashed #dee2e6",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          fontSize: 10,
-                          color: "#868e96",
-                        }}
-                      >
-                        No Image
-                      </div>
-                    )}
-                  </td>
-                  <td>
-                    <div>
-                      {product.product_name}
-                      <div className="text-muted small">{product.product_ID}</div>
-                    </div>
-                  </td>
-                  <td>{product.product_category || "—"}</td>
-                  <td>{product.product_brand || "—"}</td>
-                  <td>₱{Number(product.product_price).toFixed(2)}</td>
-                  <td>
-                    {renderTableStock(product)}
-                  </td>
-                  <td>
-                    {product.product_expiry
-                      ? new Date(product.product_expiry).toLocaleDateString("en-US")
-                      : "—"}
-                  </td>
-                  <td>
-                    <Button
-                      size="sm"
-                      variant="primary"
-                      disabled={product.total_quantity <= 0}
-                      onClick={() =>
-                        onAddProduct({
-                          product_ID: product.product_ID,
-                          name: product.product_name,
-                          price: product.product_price,
-                          available_quantity: Math.min(product.pharmacy_quantity, product.total_quantity)
-                        })
-                      }
-                    >
-                      Add
-                    </Button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </Table>
-        </div>
-      ) : (
-        <div className="text-center text-muted">No products available</div>
+    <>
+      {/* Barcode Modal */}
+      {barcodeModalShow && (
+        <BarcodeModal
+          show={barcodeModalShow}
+          setBarcodeModalShow={setBarcodeModalShow}
+          onScanResult={handleBarcodeResult}
+        />
       )}
-    </Container>
+
+      <Container className="bg-white mx-2 my-2 rounded p-3" fluid>
+        {/* Title + Search */}
+        <div className="d-flex justify-content-between align-items-center mb-3 flex-wrap">
+          <div>
+            <h5 className="fw-bold mb-2 mb-md-0">Products & Services</h5>
+            <small className="text-muted">
+              Showing total stock (Pharmacy + Main Stock Room)
+            </small>
+          </div>
+          
+          {/* Search with barcode button */}
+          <InputGroup style={{ maxWidth: "400px" }}>
+            <InputGroup.Text style={{ background: "none", borderRight: "none" }}>
+              <IoSearch size={18} color="gray" />
+            </InputGroup.Text>
+            <Form.Control
+              type="text"
+              placeholder="Search by name, ID, or scan barcode..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              style={{ borderLeft: "none", boxShadow: "none" }}
+              size="sm"
+            />
+            <Button
+              variant="outline-secondary"
+              onClick={() => setBarcodeModalShow(true)}
+              title="Scan barcode"
+            >
+              <LuScanBarcode size={18} />
+            </Button>
+          </InputGroup>
+        </div>
+
+        {/* Barcode hint */}
+        {search && filteredProducts.length === 1 && (
+          <div className="alert alert-info mb-3 py-2 d-flex align-items-center">
+            <small>
+              📷 Showing product <strong>{filteredProducts[0].product_ID}</strong> 
+              - scanned via barcode
+            </small>
+            <Button 
+              variant="link" 
+              size="sm" 
+              className="ms-auto p-0"
+              onClick={() => setSearch("")}
+            >
+              Clear
+            </Button>
+          </div>
+        )}
+
+        {/* Stock Legend */}
+        <div className="d-flex gap-3 mb-3 flex-wrap">
+          <div className="d-flex align-items-center gap-1">
+            <Badge bg="info" className="px-2 py-1">P</Badge>
+            <small>Pharmacy Stock</small>
+          </div>
+          <div className="d-flex align-items-center gap-1">
+            <Badge bg="warning" text="dark" className="px-2 py-1">S</Badge>
+            <small>Main Stock Room</small>
+          </div>
+          <div className="d-flex align-items-center gap-1">
+            <Badge bg="success" className="px-2 py-1">T</Badge>
+            <small>Total Stock</small>
+          </div>
+          <div className="d-flex align-items-center gap-1 ms-auto">
+            <small className="text-muted">
+              <LuScanBarcode size={16} className="me-1" />
+              Use barcode scanner to search
+            </small>
+          </div>
+        </div>
+
+        {loading ? (
+          <div className="text-center p-3">
+            <Spinner animation="border" variant="primary" />
+          </div>
+        ) : filteredProducts.length > 0 ? (
+          <div style={{ maxHeight: 330, overflowY: "auto" }}>
+            <Table striped bordered hover responsive size="sm" className="align-middle">
+              <thead className="table-light" style={{ position: "sticky", top: 0, zIndex: 1 }}>
+                <tr>
+                  <th>Image</th>
+                  <th>Name</th>
+                  <th>Category</th>
+                  <th>Brand</th>
+                  <th>Price (₱)</th>
+                  <th>Stock</th>
+                  <th>Expiry</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredProducts.map((product) => (
+                  <tr
+                    key={product.product_ID}
+                    className={product.total_quantity <= 0 ? "table-danger" : ""}
+                  >
+                    <td style={{ width: "70px" }}>
+                      {imageMap[product.product_ID] ? (
+                        <Image
+                          src={imageMap[product.product_ID]}
+                          rounded
+                          style={{
+                            width: "50px",
+                            height: "50px",
+                            objectFit: "cover",
+                            border: "1px solid #ccc",
+                          }}
+                          onError={(e) => (e.currentTarget.style.display = "none")}
+                        />
+                      ) : (
+                        <div
+                          style={{
+                            width: 50,
+                            height: 50,
+                            borderRadius: 6,
+                            background: "#f1f3f5",
+                            border: "1px dashed #dee2e6",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            fontSize: 10,
+                            color: "#868e96",
+                          }}
+                        >
+                          No Image
+                        </div>
+                      )}
+                    </td>
+                    <td>
+                      <div>
+                        {product.product_name}
+                        <div className="text-muted small">{product.product_ID}</div>
+                      </div>
+                    </td>
+                    <td>{product.product_category || "—"}</td>
+                    <td>{product.product_brand || "—"}</td>
+                    <td>₱{Number(product.product_price).toFixed(2)}</td>
+                    <td>
+                      {renderTableStock(product)}
+                    </td>
+                    <td>
+                      {product.product_expiry
+                        ? new Date(product.product_expiry).toLocaleDateString("en-US")
+                        : "—"}
+                    </td>
+                    <td>
+                      <Button
+                        size="sm"
+                        variant="primary"
+                        disabled={product.total_quantity <= 0}
+                        onClick={() =>
+                          onAddProduct({
+                            product_ID: product.product_ID,
+                            name: product.product_name,
+                            price: product.product_price,
+                            available_quantity: Math.min(product.pharmacy_quantity, product.total_quantity)
+                          })
+                        }
+                      >
+                        Add
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </Table>
+          </div>
+        ) : search ? (
+          <div className="text-center text-muted py-5">
+            <p>No products found for "{search}"</p>
+            <Button 
+              variant="outline-primary" 
+              size="sm"
+              onClick={() => setSearch("")}
+            >
+              Clear search
+            </Button>
+          </div>
+        ) : (
+          <div className="text-center text-muted">No products available</div>
+        )}
+      </Container>
+    </>
   );
 };
 

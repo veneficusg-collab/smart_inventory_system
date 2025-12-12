@@ -65,7 +65,7 @@ const TotalSalesPerYear = () => {
   };
 
   return (
-    <Container className="bg-white rounded p-3 m-4 shadow-sm">
+    <Container className="bg-white rounded p-3 m-4 shadow-sm" style={{height:"120px"}}>
       <div className="d-flex justify-content-between align-items-center">
         {/* Title with Icon */}
         <div className="d-flex align-items-center gap-2">

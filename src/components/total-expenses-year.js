@@ -4,7 +4,7 @@ import Button from "@mui/material/Button";
 import Menu from "@mui/material/Menu";
 import MenuItem from "@mui/material/MenuItem";
 import { CiCalendar } from "react-icons/ci";
-import { FaFileInvoiceDollar } from "react-icons/fa"; // 👈 expenses icon
+import { FaFileInvoiceDollar } from "react-icons/fa";
 import { supabase } from "../supabaseClient";
 
 const TotalExpensesPerYear = () => {
@@ -12,7 +12,6 @@ const TotalExpensesPerYear = () => {
   const [totalExpenses, setTotalExpenses] = useState(0);
   const [loading, setLoading] = useState(true);
 
-  // 🔹 Year menu state
   const [anchorEl, setAnchorEl] = useState(null);
   const open = Boolean(anchorEl);
   const handleMenuOpen = (e) => setAnchorEl(e.currentTarget);
@@ -22,7 +21,6 @@ const TotalExpensesPerYear = () => {
     handleMenuClose();
   };
 
-  // Pick last 10 years
   const yearOptions = useMemo(() => {
     const now = new Date().getFullYear();
     return Array.from({ length: 10 }, (_, i) => now - i);
@@ -35,7 +33,7 @@ const TotalExpensesPerYear = () => {
   const fetchTotalExpenses = async (selectedYear) => {
     setLoading(true);
     try {
-      // ✅ Fetch products (to get supplier_price)
+      // Step 1: Fetch products to get supplier prices
       const { data: products, error: prodError } = await supabase
         .from("products")
         .select("product_ID, supplier_price");
@@ -46,50 +44,63 @@ const TotalExpensesPerYear = () => {
         productMap[p.product_ID] = Number(p.supplier_price ?? 0);
       });
 
-      // ✅ Fetch transactions for the year
-      const { data: transactions, error: transError } = await supabase
-        .from("transactions")
-        .select(
-          `
-          id, created_at, status,
-          transaction_items ( product_code, qty )
-        `
-        )
-        .eq("status", "completed")
+      // Step 2: Fetch ALL retrievals from main_retrievals for the year
+      // These represent items that have been taken out of main inventory
+      const { data: retrievals, error: retrievalError } = await supabase
+        .from("main_retrievals")
+        .select("id, items, created_at, status")
         .gte("created_at", `${selectedYear}-01-01`)
         .lt("created_at", `${selectedYear + 1}-01-01`);
 
-      if (transError) throw transError;
+      if (retrievalError) throw retrievalError;
 
-      // ✅ Compute total expenses (supplier_price × qty)
+      // Step 3: Calculate expenses based on ALL retrievals (items taken from main inventory)
       let total = 0;
-      transactions.forEach((t) => {
-        t.transaction_items?.forEach((item) => {
-          const supplierPrice = productMap[item.product_code] ?? 0;
-          const qty = Number(item.qty ?? 0);
+      retrievals.forEach((retrieval) => {
+        // Parse items JSON string if needed
+        let items = retrieval.items;
+        if (typeof items === "string") {
+          try {
+            items = JSON.parse(items);
+          } catch (e) {
+            console.error("Failed to parse items:", e);
+            return;
+          }
+        }
+
+        // Items should be an array
+        if (!Array.isArray(items)) return;
+
+        items.forEach((item) => {
+          const productId = item.product_id;
+          const supplierPrice = productMap[productId] ?? 0;
+          const qty = Number(item.qty ?? item.quantity ?? 0);
+          
+          // ALL retrieved items are expenses (paid to supplier)
           total += supplierPrice * qty;
         });
       });
 
+      // Step 4: DON'T subtract items in inventory
+      // These are already included in the expenses when they were retrieved
+      
       setTotalExpenses(total);
     } catch (err) {
       console.error("Error fetching total expenses:", err);
+      setTotalExpenses(0);
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <Container className="bg-white rounded p-3 m-4 shadow-sm">
+    <Container className="bg-white rounded p-3 m-4 shadow-sm" style={{height:"120px"}}>
       <div className="d-flex justify-content-between align-items-center">
-        {/* Title with Icon */}
         <div className="d-flex align-items-center gap-2">
-          <FaFileInvoiceDollar size={24} className="text-danger me-2" />{" "}
-          {/* 👈 Expenses Icon */}
+          <FaFileInvoiceDollar size={24} className="text-danger me-2" />
           <h6 className="mb-0">Total Expenses</h6>
         </div>
 
-        {/* Year picker */}
         <Button
           variant="outlined"
           startIcon={<CiCalendar />}

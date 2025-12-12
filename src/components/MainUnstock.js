@@ -26,7 +26,7 @@ const MainUnstock = ({ setRender, Id }) => {
 
   const fetchProduct = async () => {
     const { data, error } = await supabase
-      .from("products")
+      .from("main_stock_room_products")
       .select(
         "product_ID, product_name, product_quantity, product_unit, product_expiry"
       )
